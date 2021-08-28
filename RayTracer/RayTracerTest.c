@@ -6,11 +6,20 @@
 #define EPSILON 0.000001
 
 struct tuple { float x, y, z, w; };
-struct point { float x, y, z; };
 
 bool equal(float a, float b) {
   if (abs(a - b) < EPSILON) return true;
   return false;
+}
+
+struct tuple createPoint(float x, float y, float z) {
+  struct tuple t = { x, y, z, 1.0f };
+  return t;
+}
+
+struct tuple createVector(float x, float y, float z) {
+  struct tuple t = { x, y, z, 0.0f };
+  return t;
 }
 
 bool tupleIsPoint(struct tuple t) { return t.w == 1.0 ? true : false; }
@@ -31,12 +40,30 @@ struct tuple tupleAdd(struct tuple t1, struct tuple t2) {
   return t3;
 }
 
-struct point tupleSub(struct point t1, struct point t2) {
-  struct point t3 = { t1.x - t2.x, t1.y - t2.y, t1.z - t2.z};
+struct tuple tupleSub(struct tuple t1, struct tuple t2) {
+  struct tuple t3 = { t1.x - t2.x, t1.y - t2.y, t1.z - t2.z};
   return t3;
 }
 
-// Pg4
+// 4 creates tuples with w=1
+void createPointTest() {
+  struct tuple t = createPoint(4.0f, -4.0f, 3.0f);
+  assert(equal(t.x, 4.0f));
+  assert(equal(t.y, -4.0f));
+  assert(equal(t.z, 3.0f));
+  assert(equal(t.w, 1.0f));
+}
+
+// 4 creates tuples with w=0
+void createVectorTest() {
+  struct tuple t = createVector(4.0f, -4.0f, 3.0f);
+  assert(equal(t.x, 4.0f));
+  assert(equal(t.y, -4.0f));
+  assert(equal(t.z, 3.0f));
+  assert(equal(t.w, 0.0f));
+}
+
+// 4 A tuple with w=1.0 is a point
 void tupleWithW0IsAPointTest()
 {
   struct tuple a = { 4.3f, -4.2f, 3.1f, 1.0f };
@@ -56,6 +83,7 @@ void tupleWithW0IsAPointTest()
   assert(tupleIsVector(b) == true);
 }
 
+// 6 Adding two tuples
 void tupleAddTest() {
   struct tuple a = { 3.0f, -2.0f, 5.0f, 1.0f };
   struct tuple b = { -2.0f, 3.0f, 1.0f, 0.0f };
@@ -66,29 +94,45 @@ void tupleAddTest() {
   assert(equal(c.w, 1.0f));
 }
 
+// 6 Subtracting two points
 void tupleSubTest() {
-  struct point a = { 3.0f, 2.0f, 1.0f };
-  struct point b = { 5.0f, 6.0f, 7.0f };
-  struct point c = tupleSub(a, b);
+  struct tuple a = { 3.0f, 2.0f, 1.0f };
+  struct tuple b = { 5.0f, 6.0f, 7.0f };
+  struct tuple c = tupleSub(a, b);
   assert(equal(c.x, -2.0f));
   assert(equal(c.y, -4.0f));
   assert(equal(c.z, -6.0f));
 }
 
-/*
-void pointSubVecPointTest() {
-  struct point p1 = { 3.0f, 2.0f, 1.0f };
-  struct point p2 = { 3.0f, -2.0f, 5.0f };
-  struct point p3 = pointSubVecPoint(p1, p2);
-  assert(equal(p3.x, -2.0f));
-  assert(equal(p3.y, -4.0f));
-  assert(equal(p3.z, -6.0f));
+// 6 Subtracting vector from a point
+void subtractVetorFromAPoint() {
+  struct tuple pt = createPoint(3.0f, 2.0f, 1.0f);
+  struct tuple vec = createVector(5.0f, 6.0f, 7.0f);
+  assert(false);
 }
-*/
+
+// 7 Subtracting two vectors
+void subtractTwoVectors() {
+  struct tuple vec1 = createVector(3.0f, 2.0f, 1.0f);
+  struct tuple vec2 = createVector(5.0f, 6.0f, 7.0f);
+  assert(false);
+}
+
+// 7 Subtracting a vector from zero vector
+void subtractVectorFromZeroVector() {
+  struct tuple vec1 = createVector(0.0f, 0.0f, 0.0f);
+  struct tuple vec2 = createVector(1.0f, -2.0f, 3.0f);
+  assert(false);
+}
 
 int main() {
+  createPointTest();
+  createPointTest();
   tupleWithW0IsAPointTest();
   tupleAddTest();
   tupleSubTest();
+  subtractVetorFromAPoint();
+  subtractTwoVectors();
+  subtractVectorFromZeroVector();
   return 0;
 }
