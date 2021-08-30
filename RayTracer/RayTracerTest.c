@@ -45,6 +45,12 @@ struct tuple tupleSub(struct tuple t1, struct tuple t2) {
   return t3;
 }
 
+struct tuple tupleNegate(struct tuple t) {
+  struct tuple neg = { 0.0f, 0.0f, 0.0f, 0.0f };
+  struct tuple ret = tupleSub(neg, t);
+  return ret;
+}
+
 // 4 creates tuples with w=1
 void createPointTest() {
   struct tuple t = createPoint(4.0f, -4.0f, 3.0f);
@@ -105,24 +111,42 @@ void tupleSubTest() {
 }
 
 // 6 Subtracting vector from a point
-void subtractVetorFromAPoint() {
+void subtractVetorFromAPointTest() {
   struct tuple pt = createPoint(3.0f, 2.0f, 1.0f);
   struct tuple vec = createVector(5.0f, 6.0f, 7.0f);
-  assert(false);
+  struct tuple ans = tupleSub(pt, vec);
+  assert(equal(ans.x, -2.0f));
+  assert(equal(ans.y, -4.0f));
+  assert(equal(ans.z, -6.0f));
 }
 
 // 7 Subtracting two vectors
-void subtractTwoVectors() {
+void subtractTwoVectorsTest() {
   struct tuple vec1 = createVector(3.0f, 2.0f, 1.0f);
   struct tuple vec2 = createVector(5.0f, 6.0f, 7.0f);
-  assert(false);
+  struct tuple vec3 = tupleSub(vec1, vec2);
+  assert(equal(vec3.x, -2.0f));
+  assert(equal(vec3.y, -4.0f));
+  assert(equal(vec3.z, -6.0f));
 }
 
 // 7 Subtracting a vector from zero vector
-void subtractVectorFromZeroVector() {
-  struct tuple vec1 = createVector(0.0f, 0.0f, 0.0f);
-  struct tuple vec2 = createVector(1.0f, -2.0f, 3.0f);
-  assert(false);
+void subtractVectorFromZeroVectorTest() {
+  struct tuple zero = createVector(0.0f, 0.0f, 0.0f);
+  struct tuple vec1 = createVector(1.0f, -2.0f, 3.0f);
+  struct tuple vec2 = tupleSub(zero, vec1);
+  assert(equal(vec2.x, -1.0f));
+  assert(equal(vec2.y,  2.0f));
+  assert(equal(vec2.z, -3.0f));
+}
+
+// 7 Negating a tuple
+void negatingTupleTest() {
+  struct tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
+  vec1 = tupleNegate(vec1);
+  assert(equal(vec1.x, -1.0f));
+  assert(equal(vec1.y,  2.0f));
+  assert(equal(vec1.z, -3.0f));
 }
 
 int main() {
@@ -131,8 +155,9 @@ int main() {
   tupleWithW0IsAPointTest();
   tupleAddTest();
   tupleSubTest();
-  subtractVetorFromAPoint();
-  subtractTwoVectors();
-  subtractVectorFromZeroVector();
+  subtractVetorFromAPointTest();
+  subtractTwoVectorsTest();
+  subtractVectorFromZeroVectorTest();
+  negatingTupleTest();
   return 0;
 }
