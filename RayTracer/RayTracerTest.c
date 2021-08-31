@@ -2,10 +2,20 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define EPSILON 0.000001
 
+#define HEIGHT 50
+#define WIDTH  50
+
 struct tuple { float x, y, z, w; };
+
+struct tuple canvas[WIDTH][HEIGHT];
+
+void writePixel(int x, int y, struct tuple color) {
+  canvas[x][y] = color;
+}
 
 bool equal(float a, float b) {
   if (abs(a - b) < EPSILON) return true;
@@ -90,6 +100,31 @@ struct tuple cross(struct tuple a, struct tuple b) {
   float z = a.x * b.y - a.y * b.x;
   struct tuple cross = createVector(x, y, z);
   return cross;
+}
+
+struct tuple hadamardProduct(struct tuple c1, struct tuple c2) {
+  struct tuple color = { c1.x * c2.x, c1.y * c2.y, c1.z * c2.z };
+  return color;
+}
+
+// TODO: Clamp the values between 0.0 and 1.0
+int colorConvert(float x) { return x * 255; }
+
+void writeCanvasToFile() {
+  FILE* fp;
+  fp = fopen("canvas.ppm", "w");
+  fprintf(fp, "P3\n");
+  fprintf(fp, "%d %d\n255\n", WIDTH, HEIGHT);
+  for (int i = 0; i < WIDTH; ++i) {
+    for (int j = 0; j < HEIGHT; ++j) {
+      int color = colorConvert(canvas[i][j].x);
+      fprintf(fp, "%d ", color);
+      color = colorConvert(canvas[i][j].y);
+      fprintf(fp, "%d ", color);
+      color = colorConvert(canvas[i][j].z);
+      fprintf(fp, "%d \n", color);
+    }
+  }
 }
 
 /*-------------------------------------------------------------*/
@@ -293,6 +328,63 @@ void crossTest() {
   assert(equal(cross2.z,  1.0f));
 }
 
+void hadamardProductTest() {
+  struct tuple col1 = createVector(1.0f, 0.2f, 0.4f);
+  struct tuple col2 = createVector(0.9f, 1.0f, 0.1f);
+  struct tuple col3 = hadamardProduct(col1, col2);
+  assert(equal(col3.x, 0.9f));
+  assert(equal(col3.x, 0.2f));
+  assert(equal(col3.x, 0.04f));
+}
+
+void writePixelTest() {
+  struct tuple red = createVector(1.0f, 0.0f, 0.0f);
+  writePixel(0, 0, red);
+
+  // horizonatal axis
+  struct tuple green = createVector(0.0f, 1.0f, 0.0f);
+  writePixel(0, 1, green);
+
+  struct tuple blue = createVector(0.0f, 0.0f, 1.0f);
+  writePixel(0, 2, blue);
+
+  // vertical axis
+  struct tuple sky = createVector(0.3f, 0.6f, 0.9f);
+  writePixel(1, 1, sky);
+
+  struct tuple orange = createVector(1.0f, 0.5f, 0.25f);
+  writePixel(1, 2, orange);
+
+  assert(equal(canvas[0][0].x, 1.0f));
+  assert(equal(canvas[0][0].y, 0.0f));
+  assert(equal(canvas[0][0].z, 0.0f));
+
+  assert(equal(canvas[0][1].x, 0.0f));
+  assert(equal(canvas[0][1].y, 1.0f));
+  assert(equal(canvas[0][1].z, 0.0f));
+
+  assert(equal(canvas[0][2].x, 0.0f));
+  assert(equal(canvas[0][2].y, 0.0f));
+  assert(equal(canvas[0][2].z, 1.0f));
+
+  assert(equal(canvas[1][1].x, 0.3f));
+  assert(equal(canvas[1][1].y, 0.6f));
+  assert(equal(canvas[1][1].z, 0.9f));
+
+  assert(equal(canvas[1][2].x, 1.0f));
+  assert(equal(canvas[1][2].y, 0.5f));
+  assert(equal(canvas[1][2].z, 0.25f));
+}
+
+void colorConvertTest() {
+  int color = colorConvert(0.0f);
+  assert(color == 0);
+  color = colorConvert(0.5f);
+  assert(color == 127);
+  color = colorConvert(1.0f);
+  assert(color == 255);
+}
+
 int main() {
   createPointTest();
   createPointTest();
@@ -310,5 +402,9 @@ int main() {
   normVecTest();
   dotTest();
   crossTest();
+  hadamardProductTest();
+  writePixelTest();
+  colorConvertTest();
+  writeCanvasToFile();
   return 0;
 }
