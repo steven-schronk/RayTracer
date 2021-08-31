@@ -107,6 +107,7 @@ struct tuple hadamardProduct(struct tuple c1, struct tuple c2) {
   return color;
 }
 
+// TODO: Merge these three matrix methods together into one.
 bool matEqual2x2(float m1[][2], float m2[][2]) {
   for (int i = 0; i < 2; ++i)
     for (int j = 0; j < 2; ++j)
@@ -121,12 +122,36 @@ bool matEqual3x3(float m1[][3], float m2[][3]) {
   return true;
 }
 
+bool matEqual4x4(float m1[][4], float m2[][4]) {
+  for (int i = 0; i < 4; ++i)
+    for (int j = 0; j < 4; ++j)
+      if (m1[i][j] != m2[i][j]) return false;
+  return true;
+}
+
 /*-------------------------------------------------------------*/
+
+void unitTest(char* msg, int assert) {
+  int msg_length = strlen(msg);
+  printf("%s", msg);
+
+  /* 74 is 80 - length of "PASSED" */
+  while (msg_length < 74) {
+    putchar('.');
+    msg_length++;
+  }
+
+  if (assert == 1) {
+    printf("PASSED\n");
+  } else {
+    printf("FAILED\n");
+  }
+}
 
 // TODO: Clamp the values between 0.0 and 1.0
 int colorConvert(float x) { return x * 255; }
 
-void writeCanvasToFile() {
+int writeCanvasToFile() {
   FILE* fp;
   fp = fopen("canvas.ppm", "w");
   fprintf(fp, "P3\n");
@@ -141,10 +166,11 @@ void writeCanvasToFile() {
       fprintf(fp, "%d \n", color);
     }
   }
+  return 1;
 }
 
 // 4 creates tuples with w=1
-void createPointTest() {
+int createPointTest() {
   struct tuple t = createPoint(4.0f, -4.0f, 3.0f);
   assert(equal(t.x, 4.0f));
   assert(equal(t.y, -4.0f));
@@ -153,7 +179,7 @@ void createPointTest() {
 }
 
 // 4 creates tuples with w=0
-void createVectorTest() {
+int createVectorTest() {
   struct tuple t = createVector(4.0f, -4.0f, 3.0f);
   assert(equal(t.x, 4.0f));
   assert(equal(t.y, -4.0f));
@@ -162,7 +188,7 @@ void createVectorTest() {
 }
 
 // 4 A tuple with w=1.0 is a point
-void tupleWithW0IsAPointTest()
+int tupleWithW0IsAPointTest()
 {
   struct tuple a = { 4.3f, -4.2f, 3.1f, 1.0f };
   assert(equal(a.x,  4.3f));
@@ -182,7 +208,7 @@ void tupleWithW0IsAPointTest()
 }
 
 // 6 Adding two tuples
-void tupleAddTest() {
+int tupleAddTest() {
   struct tuple a = { 3.0f, -2.0f, 5.0f, 1.0f };
   struct tuple b = { -2.0f, 3.0f, 1.0f, 0.0f };
   struct tuple c = tupleAdd(a, b);
@@ -193,7 +219,7 @@ void tupleAddTest() {
 }
 
 // 6 Subtracting two points
-void tupleSubTest() {
+int tupleSubTest() {
   struct tuple a = { 3.0f, 2.0f, 1.0f };
   struct tuple b = { 5.0f, 6.0f, 7.0f };
   struct tuple c = tupleSub(a, b);
@@ -203,7 +229,7 @@ void tupleSubTest() {
 }
 
 // 6 Subtracting vector from a point
-void subtractVetorFromAPointTest() {
+int subtractVetorFromAPointTest() {
   struct tuple pt = createPoint(3.0f, 2.0f, 1.0f);
   struct tuple vec = createVector(5.0f, 6.0f, 7.0f);
   struct tuple ans = tupleSub(pt, vec);
@@ -213,7 +239,7 @@ void subtractVetorFromAPointTest() {
 }
 
 // 7 Subtracting two vectors
-void subtractTwoVectorsTest() {
+int subtractTwoVectorsTest() {
   struct tuple vec1 = createVector(3.0f, 2.0f, 1.0f);
   struct tuple vec2 = createVector(5.0f, 6.0f, 7.0f);
   struct tuple vec3 = tupleSub(vec1, vec2);
@@ -223,7 +249,7 @@ void subtractTwoVectorsTest() {
 }
 
 // 7 Subtracting a vector from zero vector
-void subtractVectorFromZeroVectorTest() {
+int subtractVectorFromZeroVectorTest() {
   struct tuple zero = createVector(0.0f, 0.0f, 0.0f);
   struct tuple vec1 = createVector(1.0f, -2.0f, 3.0f);
   struct tuple vec2 = tupleSub(zero, vec1);
@@ -233,7 +259,7 @@ void subtractVectorFromZeroVectorTest() {
 }
 
 // 7 Negating a tuple
-void negatingTupleTest() {
+int negatingTupleTest() {
   struct tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
   vec1 = tupleNegate(vec1);
   assert(equal(vec1.x, -1.0f));
@@ -242,7 +268,7 @@ void negatingTupleTest() {
 }
 
 // 8 Multiply tuple by a scalar
-void tupleMultScalarTest() {
+int tupleMultScalarTest() {
   struct tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
   float scalar = 3.5f;
   vec1 = tupleMultScalar(vec1, scalar);
@@ -253,7 +279,7 @@ void tupleMultScalarTest() {
 }
 
 // 8 Multiply tuple by a fraction
-void tupleMultScalarFractionTest() {
+int tupleMultScalarFractionTest() {
   struct tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
   float scalar = 0.5f;
   vec1 = tupleMultScalar(vec1, scalar);
@@ -264,7 +290,7 @@ void tupleMultScalarFractionTest() {
 }
 
 // 8 Divide a tuple by a scalar
-void tupleDivScalarTest() {
+int tupleDivScalarTest() {
   struct tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
   float scalar = 2.0f;
   vec1 = tupleDivScalar(vec1, scalar);
@@ -275,7 +301,7 @@ void tupleDivScalarTest() {
 }
 
 // 8 Computing the magnitude of vector(1, 0, 0)
-void tupleMagVecTest() {
+int tupleMagVecTest() {
   struct tuple vec1 = createVector(1.0f, 0.0f, 0.0f);
   float mag = tupleMagVec(vec1);
   assert(equal(mag, 1.0f));
@@ -298,7 +324,7 @@ void tupleMagVecTest() {
 }
 
 // 10 Normalizing vector(4,0,0) gives (1,0,0)
-void normVecTest() {
+int normVecTest() {
   struct tuple vec1 = createVector(4.0f, 0.0f, 0.0f);
   struct tuple norm = normVec(vec1);
   assert(equal(norm.x, 1.0f));
@@ -321,7 +347,7 @@ void normVecTest() {
 }
 
 // 10 dot rpoduct of two tuples
-void dotTest() {
+int dotTest() {
   struct tuple vec1 = createVector(1.0f, 2.0f, 3.0f);
   struct tuple vec2 = createVector(2.0f, 3.0f, 4.0f);
   float dotProd = dot(vec1, vec2);
@@ -329,7 +355,7 @@ void dotTest() {
 }
 
 // 11 cross product of two vectors
-void crossTest() {
+int crossTest() {
   struct tuple vec1 = createVector(1.0f, 2.0f, 3.0f);
   struct tuple vec2 = createVector(2.0f, 3.0f, 4.0f);
   struct tuple cross1 = cross(vec1, vec2);
@@ -342,7 +368,7 @@ void crossTest() {
   assert(equal(cross2.z,  1.0f));
 }
 
-void hadamardProductTest() {
+int hadamardProductTest() {
   struct tuple col1 = createVector(1.0f, 0.2f, 0.4f);
   struct tuple col2 = createVector(0.9f, 1.0f, 0.1f);
   struct tuple col3 = hadamardProduct(col1, col2);
@@ -351,7 +377,7 @@ void hadamardProductTest() {
   assert(equal(col3.x, 0.04f));
 }
 
-void writePixelTest() {
+int writePixelTest() {
   struct tuple red = createVector(1.0f, 0.0f, 0.0f);
   writePixel(0, 0, red);
 
@@ -390,16 +416,17 @@ void writePixelTest() {
   assert(equal(canvas[1][2].z, 0.25f));
 }
 
-void colorConvertTest() {
+int colorConvertTest() {
   int color = colorConvert(0.0f);
   assert(color == 0);
   color = colorConvert(0.5f);
   assert(color == 127);
   color = colorConvert(1.0f);
   assert(color == 255);
+  return 1;
 }
 
-void matEqualTest() {
+int matEqualTest() {
   float oldValue;
   float mat2x2a[2][2] = { { 0.0f, 1.0f }, { 2.0f, 3.0f } };
   float mat2x2b[2][2] = { { 0.0f, 1.0f }, { 2.0f, 3.0f } };
@@ -434,29 +461,47 @@ void matEqualTest() {
       mat3x3a[i][j] = oldValue;
     }
   }
+
+  float mat4x4a[4][4] = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f }, { 9.0f, 10.0f, 11.0f } };
+  float mat4x4b[4][4] = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f }, { 9.0f, 10.0f, 11.0f } };
+  bool test3 = matEqual4x4(mat4x4a, mat4x4b);
+  assert(true == test3);
+
+  // set each element of the first array different one at a time.
+  // verify that method catches it
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      oldValue = mat4x4a[i][j];
+      mat4x4a[i][j] = 12.0f;
+      test3 = matEqual4x4(mat4x4a, mat4x4b);
+      assert(false == test3);
+      mat4x4a[i][j] = oldValue;
+    }
+  }
+  return 1;
 }
 
 int main() {
-  createPointTest();
-  createPointTest();
-  tupleWithW0IsAPointTest();
-  tupleAddTest();
-  tupleSubTest();
-  subtractVetorFromAPointTest();
-  subtractTwoVectorsTest();
-  subtractVectorFromZeroVectorTest();
-  negatingTupleTest();
-  tupleMultScalarTest();
-  tupleMultScalarFractionTest();
-  tupleDivScalarTest();
-  tupleMagVecTest();
-  normVecTest();
-  dotTest();
-  crossTest();
-  hadamardProductTest();
-  writePixelTest();
-  colorConvertTest();
-  matEqualTest();
-  writeCanvasToFile();
+  unitTest("Create Point Test", createPointTest());
+  unitTest("Create Vector Test", createVectorTest());
+  unitTest("Tuple With 0 Is A Point Test", tupleWithW0IsAPointTest());
+  unitTest("Tuple Add Test", tupleAddTest());
+  unitTest("Tuple Subtract Test", tupleSubTest());
+  unitTest("Subtract Vector From A Point Test", subtractVetorFromAPointTest());
+  unitTest("Subtract Two Vectors Test", subtractTwoVectorsTest());
+  unitTest("Subtract Vector From Zero Vector Test", subtractVectorFromZeroVectorTest());
+  unitTest("Negative Tuple Test", negatingTupleTest());
+  unitTest("Tuple Multiplication Scalar Test", tupleMultScalarTest());
+  unitTest("Tuple Multiplication Scalar Fraction Test", tupleMultScalarFractionTest());
+  unitTest("Tuple Division Scalar Test", tupleDivScalarTest());
+  unitTest("Tuple Magnigude Vector Test", tupleMagVecTest());
+  unitTest("Normal Vector Test", normVecTest());
+  unitTest("Dot Product Test", dotTest());
+  unitTest("Cross Product Test", crossTest());
+  unitTest("Hadamard Product Test", hadamardProductTest());
+  unitTest("Write Pixel Test", writePixelTest());
+  unitTest("Color Conversion Test", colorConvertTest());
+  unitTest("Matrix Equality Test", matEqualTest());
+  unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
