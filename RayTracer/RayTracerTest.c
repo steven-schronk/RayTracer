@@ -107,6 +107,22 @@ struct tuple hadamardProduct(struct tuple c1, struct tuple c2) {
   return color;
 }
 
+bool matEqual2x2(float m1[][2], float m2[][2]) {
+  for (int i = 0; i < 2; ++i)
+    for (int j = 0; j < 2; ++j)
+      if (m1[i][j] != m2[i][j]) return false;
+  return true;
+}
+
+bool matEqual3x3(float m1[][3], float m2[][3]) {
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j)
+      if (m1[i][j] != m2[i][j]) return false;
+  return true;
+}
+
+/*-------------------------------------------------------------*/
+
 // TODO: Clamp the values between 0.0 and 1.0
 int colorConvert(float x) { return x * 255; }
 
@@ -126,8 +142,6 @@ void writeCanvasToFile() {
     }
   }
 }
-
-/*-------------------------------------------------------------*/
 
 // 4 creates tuples with w=1
 void createPointTest() {
@@ -385,6 +399,43 @@ void colorConvertTest() {
   assert(color == 255);
 }
 
+void matEqualTest() {
+  float oldValue;
+  float mat2x2a[2][2] = { { 0.0f, 1.0f }, { 2.0f, 3.0f } };
+  float mat2x2b[2][2] = { { 0.0f, 1.0f }, { 2.0f, 3.0f } };
+  bool test1 = matEqual2x2(mat2x2a, mat2x2b);
+  assert(true == test1);
+
+  // set each element of the first array different one at a time.
+  // verify that method catches it
+  for (int i = 0; i < 2; ++i) {
+    for (int j = 0; j < 2; ++j) {
+      oldValue = mat2x2a[i][j];
+      mat2x2a[i][j] = 9.0f;
+      test1 = matEqual2x2(mat2x2a, mat2x2b);
+      assert(false == test1);
+      mat2x2a[i][j] = oldValue;
+    }
+  }
+
+  float mat3x3a[3][3] = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f } };
+  float mat3x3b[3][3] = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f } };
+  bool test2 = matEqual3x3(mat3x3a, mat3x3b);
+  assert(true == test2);
+
+  // set each element of the first array different one at a time.
+  // verify that method catches it
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      oldValue = mat3x3a[i][j];
+      mat3x3a[i][j] = 9.0f;
+      test2 = matEqual3x3(mat3x3a, mat3x3b);
+      assert(false == test2);
+      mat3x3a[i][j] = oldValue;
+    }
+  }
+}
+
 int main() {
   createPointTest();
   createPointTest();
@@ -405,6 +456,7 @@ int main() {
   hadamardProductTest();
   writePixelTest();
   colorConvertTest();
+  matEqualTest();
   writeCanvasToFile();
   return 0;
 }
