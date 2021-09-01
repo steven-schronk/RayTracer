@@ -152,6 +152,16 @@ void mat4x4MulTuple(const Mat4x4 a, const struct tuple b, struct tuple *c) {
     c->w = b.x * a[3][0] + b.y * a[3][1] + b.z * a[3][2] + b.w * a[3][3];
 }
 
+void mat4x4Transpose(Mat4x4 a) {
+  float temp;
+  for (int i = 0; i < 4; ++i) {
+    for (int j = i; j < 4; ++j) {
+      temp = a[i][j];
+      a[i][j] = a[j][i];
+      a[j][i] = temp;
+    }
+  }
+}
 
 /*-------------------------------------------------------------*/
 
@@ -559,7 +569,11 @@ int mat4x4MultIdentTest() {
 
 // 33 Transpose a matrix
 int mat4x4TransposeTest() {
-
+  Mat4x4 a = { { 0.0f, 9.0f, 3.0f, 0.0f },{ 9.0f, 8.0f, 0.0f, 8.0f },{ 1.0f, 8.0f, 5.0f, 3.0f}, { 0.0f, 0.0f, 5.0f, 8.0f } };
+  Mat4x4 b = { { 0.0f, 9.0f, 1.0f, 0.0f },{ 9.0f, 8.0f, 8.0f, 0.0f },{ 3.0f, 0.0f, 5.0f, 5.0f}, { 0.0f, 8.0f, 3.0f, 8.0f } };
+  mat4x4Transpose(&a);
+  assert(mat4x4Equal(a, b));
+  return 1;
 }
 
 int main() {
@@ -586,6 +600,7 @@ int main() {
   unitTest("4x4 Matrix Multiply Test", mat4x4MulTest());
   unitTest("4x4 Matrix Multiply By Tuple", mat4x4MulTupleTest());
   unitTest("4x4 Matrix Multiply By Identity", mat4x4MultIdentTest());
+  unitTest("4x4 Matrix Transposition", mat4x4TransposeTest());
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
