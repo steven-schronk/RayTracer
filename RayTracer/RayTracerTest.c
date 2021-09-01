@@ -11,6 +11,10 @@
 
 struct tuple { float x, y, z, w; };
 
+typedef float Mat2x2[2][2];
+typedef float Mat3x3[3][3];
+typedef float Mat4x4[4][4];
+
 struct tuple canvas[WIDTH][HEIGHT];
 
 void writePixel(int x, int y, struct tuple color) {
@@ -108,26 +112,46 @@ struct tuple hadamardProduct(struct tuple c1, struct tuple c2) {
 }
 
 // TODO: Merge these three matrix methods together into one.
-bool matEqual2x2(float m1[][2], float m2[][2]) {
+bool mat2x2Equal(Mat2x2 m1, Mat2x2 m2) {
   for (int i = 0; i < 2; ++i)
     for (int j = 0; j < 2; ++j)
       if (m1[i][j] != m2[i][j]) return false;
   return true;
 }
 
-bool matEqual3x3(float m1[][3], float m2[][3]) {
+bool mat3x3Equal(float m1[][3], float m2[][3]) {
   for (int i = 0; i < 3; ++i)
     for (int j = 0; j < 3; ++j)
       if (m1[i][j] != m2[i][j]) return false;
   return true;
 }
 
-bool matEqual4x4(float m1[][4], float m2[][4]) {
+bool mat4x4Equal(float m1[][4], float m2[][4]) {
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j)
       if (m1[i][j] != m2[i][j]) return false;
   return true;
 }
+
+void mat4x4Mul(const Mat4x4 a, const Mat4x4 b, Mat4x4 m) {
+  for (int row = 0; row < 4; ++row) {
+    for (int col = 0; col < 4; ++col) {
+      m[row][col] =
+        a[row][0] * b[0][col] +
+        a[row][1] * b[1][col] +
+        a[row][2] * b[2][col] +
+        a[row][3] * b[3][col];
+    }
+  }
+}
+
+void mat4x4MulTuple(const Mat4x4 a, const struct tuple b, struct tuple *c) {
+    c->x = b.x * a[0][0] + b.y * a[0][1] + b.z * a[0][2] + b.w * a[0][3];
+    c->y = b.x * a[1][0] + b.y * a[1][1] + b.z * a[1][2] + b.w * a[1][3];
+    c->z = b.x * a[2][0] + b.y * a[2][1] + b.z * a[2][2] + b.w * a[2][3];
+    c->w = b.x * a[3][0] + b.y * a[3][1] + b.z * a[3][2] + b.w * a[3][3];
+}
+
 
 /*-------------------------------------------------------------*/
 
@@ -428,9 +452,10 @@ int colorConvertTest() {
 
 int matEqualTest() {
   float oldValue;
-  float mat2x2a[2][2] = { { 0.0f, 1.0f }, { 2.0f, 3.0f } };
-  float mat2x2b[2][2] = { { 0.0f, 1.0f }, { 2.0f, 3.0f } };
-  bool test1 = matEqual2x2(mat2x2a, mat2x2b);
+  Mat2x2 mat2x2a = { { 0.0f, 1.0f }, { 2.0f, 3.0f } };
+  Mat2x2 mat2x2b = { { 0.0f, 1.0f }, { 2.0f, 3.0f } };
+
+  bool test1 = mat2x2Equal(mat2x2a, mat2x2b);
   assert(true == test1);
 
   // set each element of the first array different one at a time.
@@ -439,15 +464,15 @@ int matEqualTest() {
     for (int j = 0; j < 2; ++j) {
       oldValue = mat2x2a[i][j];
       mat2x2a[i][j] = 9.0f;
-      test1 = matEqual2x2(mat2x2a, mat2x2b);
+      test1 = mat2x2Equal(mat2x2a, mat2x2b);
       assert(false == test1);
       mat2x2a[i][j] = oldValue;
     }
   }
 
-  float mat3x3a[3][3] = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f } };
-  float mat3x3b[3][3] = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f } };
-  bool test2 = matEqual3x3(mat3x3a, mat3x3b);
+  Mat3x3 mat3x3a = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f } };
+  Mat3x3 mat3x3b = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f } };
+  bool test2 = mat3x3Equal(mat3x3a, mat3x3b);
   assert(true == test2);
 
   // set each element of the first array different one at a time.
@@ -456,15 +481,15 @@ int matEqualTest() {
     for (int j = 0; j < 3; ++j) {
       oldValue = mat3x3a[i][j];
       mat3x3a[i][j] = 9.0f;
-      test2 = matEqual3x3(mat3x3a, mat3x3b);
+      test2 = mat3x3Equal(mat3x3a, mat3x3b);
       assert(false == test2);
       mat3x3a[i][j] = oldValue;
     }
   }
 
-  float mat4x4a[4][4] = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f }, { 9.0f, 10.0f, 11.0f } };
-  float mat4x4b[4][4] = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f }, { 9.0f, 10.0f, 11.0f } };
-  bool test3 = matEqual4x4(mat4x4a, mat4x4b);
+  Mat4x4 mat4x4a = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f }, { 9.0f, 10.0f, 11.0f } };
+  Mat4x4 mat4x4b = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f }, { 9.0f, 10.0f, 11.0f } };
+  bool test3 = mat4x4Equal(mat4x4a, mat4x4b);
   assert(true == test3);
 
   // set each element of the first array different one at a time.
@@ -473,12 +498,68 @@ int matEqualTest() {
     for (int j = 0; j < 4; ++j) {
       oldValue = mat4x4a[i][j];
       mat4x4a[i][j] = 12.0f;
-      test3 = matEqual4x4(mat4x4a, mat4x4b);
+      test3 = mat4x4Equal(mat4x4a, mat4x4b);
       assert(false == test3);
       mat4x4a[i][j] = oldValue;
     }
   }
   return 1;
+}
+
+int mat4x4MulTest() {
+  Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f }, { 5.0f, 6.0f, 7.0f, 8.0f }, { 9.0f, 8.0f, 7.0f, 6.0f }, { 5.0f, 4.0f, 3.0f, 2.0f } };
+  Mat4x4 b = { { -2.0f, 1.0f, 2.0f, 3.0f }, { 3.0f, 2.0f, 1.0f, -1.0f }, { 4.0f, 3.0f, 6.0f, 5.0f }, { 1.0f, 2.0f, 7.0f, 8.0f } };
+  Mat4x4 m;
+  mat4x4Mul(a, b, m);
+  assert(equal(m[0][0],  20.0f));
+  assert(equal(m[0][1],  22.0f));
+  assert(equal(m[0][2],  50.0f));
+  assert(equal(m[0][3],  48.0f));
+  assert(equal(m[1][0],  44.0f));
+  assert(equal(m[1][1],  54.0f));
+  assert(equal(m[1][2], 114.0f));
+  assert(equal(m[1][3], 108.0f));
+  assert(equal(m[2][0],  40.0f));
+  assert(equal(m[2][1],  58.0f));
+  assert(equal(m[2][2], 110.0f));
+  assert(equal(m[2][3], 102.0f));
+  assert(equal(m[3][0],  16.0f));
+  assert(equal(m[3][1],  26.0f));
+  assert(equal(m[3][2],  46.0f));
+  assert(equal(m[3][3],  42.0f));
+  return 1;
+}
+
+// 30 Matrix multipled by a tuple
+int mat4x4MulTupleTest() {
+  Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f }, { 2.0f, 4.0f, 4.0f, 2.0f }, { 8.0f, 6.0f, 4.0f, 1.0f }, { 0.0f, 0.0f, 0.0f, 1.0f } };
+  struct tuple b = createPoint(1.0f, 2.0f, 3.0f, 1.0f);
+  struct tuple c = createPoint(0.0f, 0.0f, 0.0f, 0.0f);
+  mat4x4MulTuple(a, b, &c);
+  assert(equal(c.x, 18.0f));
+  assert(equal(c.y, 24.0f));
+  assert(equal(c.z, 33.0f));
+  assert(equal(c.w,  1.0f));
+  return 1;
+}
+
+// 32 Multiply matrix by identity matrix
+int mat4x4MultIdentTest() {
+  Mat4x4 ident = { { 1.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 1.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 1.0f, 0.0f}, { 0.0f, 0.0f, 0.0f, 1.0f } };
+  Mat4x4 a = { { 0.0f, 1.0f, 2.0f, 4.0f }, { 1.0f, 2.0f, 4.0f, 8.0f }, { 2.0f, 4.0f, 8.0f, 16.0f }, { 4.0f, 8.0f, 16.0f, 32.0f } };  
+  Mat4x4 b = { { 0.0f, 1.0f, 2.0f, 4.0f }, { 1.0f, 2.0f, 4.0f, 8.0f }, { 2.0f, 4.0f, 8.0f, 16.0f }, { 4.0f, 8.0f, 16.0f, 32.0f } };
+  mat4x4Mul(a, ident, a);
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      assert(equal(a[i][j], b[i][j]));
+    }
+  }
+  return 1;
+}
+
+// 33 Transpose a matrix
+int mat4x4TransposeTest() {
+
 }
 
 int main() {
@@ -502,6 +583,9 @@ int main() {
   unitTest("Write Pixel Test", writePixelTest());
   unitTest("Color Conversion Test", colorConvertTest());
   unitTest("Matrix Equality Test", matEqualTest());
+  unitTest("4x4 Matrix Multiply Test", mat4x4MulTest());
+  unitTest("4x4 Matrix Multiply By Tuple", mat4x4MulTupleTest());
+  unitTest("4x4 Matrix Multiply By Identity", mat4x4MultIdentTest());
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
