@@ -163,6 +163,10 @@ void mat4x4Transpose(Mat4x4 a) {
   }
 }
 
+float mat2x2Det(Mat2x2 a) {
+  float det = a[0][0] * a[1][1] - a[0][1] * a[1][0];
+}
+
 /*-------------------------------------------------------------*/
 
 void unitTest(char* msg, int assert) {
@@ -576,6 +580,13 @@ int mat4x4TransposeTest() {
   return 1;
 }
 
+// 34 Calculating the determinant of a 2x2 matrix
+int mat2x2DetTest() {
+  Mat2x2 a = { { 1.0f, 5.0f },{ -3.0f, 2.0f } };
+  float det = mat2x2Det(a);
+  assert(equal(det, 17.0f));
+}
+
 int main() {
   unitTest("Create Point Test", createPointTest());
   unitTest("Create Vector Test", createVectorTest());
@@ -601,6 +612,7 @@ int main() {
   unitTest("4x4 Matrix Multiply By Tuple", mat4x4MulTupleTest());
   unitTest("4x4 Matrix Multiply By Identity", mat4x4MultIdentTest());
   unitTest("4x4 Matrix Transposition", mat4x4TransposeTest());
+  unitTest("2x2 Matrix Determinant", mat2x2DetTest());
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
