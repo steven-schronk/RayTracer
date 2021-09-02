@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define EPSILON 0.000001
+#define EPSILON 0.00000000000000001
 
 #define HEIGHT 50
 #define WIDTH  50
@@ -22,6 +22,8 @@ void writePixel(int x, int y, struct tuple color) {
 }
 
 bool equal(float a, float b) {
+  assert(!isnan(a)); // Indicates a problem before getting here.
+  assert(!isnan(b));
   if (abs(a - b) < EPSILON) return true;
   return false;
 }
@@ -173,7 +175,7 @@ void printMat(int rows, int cols, float* mat) {
 }
 
 float mat2x2Det(Mat2x2 a) {
-  float det = a[0][0] * a[1][1] - a[0][1] * a[1][0];
+  return a[0][0] * a[1][1] - a[0][1] * a[1][0];
 }
 
 // TODO: Make these more generic
@@ -205,6 +207,12 @@ void mat4x4Submat3x3(Mat4x4 a, Mat3x3 b, int row, int col) {
       b[current_row][current_col] = a[i][j];
     }
   }
+}
+
+float mat3x3Minor(Mat3x3 a) {
+  Mat2x2 b = { { 0.0f, 0.0f }, { 0.0f, 0.0f } };
+  mat3x3Submat2x2(a, b, 1, 0);
+  return mat2x2Det(b);
 }
 
 /*-------------------------------------------------------------*/
@@ -541,8 +549,10 @@ int matEqualTest() {
     }
   }
 
-  Mat4x4 mat4x4a = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f }, { 9.0f, 10.0f, 11.0f } };
-  Mat4x4 mat4x4b = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f }, { 6.0f, 7.0f, 8.0f }, { 9.0f, 10.0f, 11.0f } };
+  Mat4x4 mat4x4a = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f },\
+    { 6.0f, 7.0f, 8.0f }, { 9.0f, 10.0f, 11.0f } };
+  Mat4x4 mat4x4b = { { 0.0f, 1.0f, 2.0f }, { 3.0f, 4.0f, 5.0f },\
+    { 6.0f, 7.0f, 8.0f }, { 9.0f, 10.0f, 11.0f } };
   bool test3 = mat4x4Equal(mat4x4a, mat4x4b);
   assert(true == test3);
 
@@ -561,8 +571,10 @@ int matEqualTest() {
 }
 
 int mat4x4MulTest() {
-  Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f }, { 5.0f, 6.0f, 7.0f, 8.0f }, { 9.0f, 8.0f, 7.0f, 6.0f }, { 5.0f, 4.0f, 3.0f, 2.0f } };
-  Mat4x4 b = { { -2.0f, 1.0f, 2.0f, 3.0f }, { 3.0f, 2.0f, 1.0f, -1.0f }, { 4.0f, 3.0f, 6.0f, 5.0f }, { 1.0f, 2.0f, 7.0f, 8.0f } };
+  Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f }, { 5.0f, 6.0f, 7.0f, 8.0f },\
+    { 9.0f, 8.0f, 7.0f, 6.0f }, { 5.0f, 4.0f, 3.0f, 2.0f } };
+  Mat4x4 b = { { -2.0f, 1.0f, 2.0f, 3.0f }, { 3.0f, 2.0f, 1.0f, -1.0f },\
+    { 4.0f, 3.0f, 6.0f, 5.0f }, { 1.0f, 2.0f, 7.0f, 8.0f } };
   Mat4x4 m;
   mat4x4Mul(a, b, m);
   assert(equal(m[0][0],  20.0f));
@@ -586,7 +598,8 @@ int mat4x4MulTest() {
 
 // 30 Matrix multipled by a tuple
 int mat4x4MulTupleTest() {
-  Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f }, { 2.0f, 4.0f, 4.0f, 2.0f }, { 8.0f, 6.0f, 4.0f, 1.0f }, { 0.0f, 0.0f, 0.0f, 1.0f } };
+  Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f }, { 2.0f, 4.0f, 4.0f, 2.0f },\
+    { 8.0f, 6.0f, 4.0f, 1.0f }, { 0.0f, 0.0f, 0.0f, 1.0f } };
   struct tuple b = createPoint(1.0f, 2.0f, 3.0f, 1.0f);
   struct tuple c = createPoint(0.0f, 0.0f, 0.0f, 0.0f);
   mat4x4MulTuple(a, b, &c);
@@ -599,9 +612,12 @@ int mat4x4MulTupleTest() {
 
 // 32 Multiply matrix by identity matrix
 int mat4x4MultIdentTest() {
-  Mat4x4 ident = { { 1.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 1.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 1.0f, 0.0f}, { 0.0f, 0.0f, 0.0f, 1.0f } };
-  Mat4x4 a = { { 0.0f, 1.0f, 2.0f, 4.0f }, { 1.0f, 2.0f, 4.0f, 8.0f }, { 2.0f, 4.0f, 8.0f, 16.0f }, { 4.0f, 8.0f, 16.0f, 32.0f } };  
-  Mat4x4 b = { { 0.0f, 1.0f, 2.0f, 4.0f }, { 1.0f, 2.0f, 4.0f, 8.0f }, { 2.0f, 4.0f, 8.0f, 16.0f }, { 4.0f, 8.0f, 16.0f, 32.0f } };
+  Mat4x4 ident = { { 1.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 1.0f, 0.0f, 0.0f },\
+    { 0.0f, 0.0f, 1.0f, 0.0f}, { 0.0f, 0.0f, 0.0f, 1.0f } };
+  Mat4x4 a = { { 0.0f, 1.0f, 2.0f, 4.0f }, { 1.0f, 2.0f, 4.0f, 8.0f },\
+    { 2.0f, 4.0f, 8.0f, 16.0f }, { 4.0f, 8.0f, 16.0f, 32.0f } };  
+  Mat4x4 b = { { 0.0f, 1.0f, 2.0f, 4.0f }, { 1.0f, 2.0f, 4.0f, 8.0f },\
+    { 2.0f, 4.0f, 8.0f, 16.0f }, { 4.0f, 8.0f, 16.0f, 32.0f } };
   mat4x4Mul(a, ident, a);
   for (int i = 0; i < 4; ++i) {
     for (int j = 0; j < 4; ++j) {
@@ -638,8 +654,10 @@ void mat4x4ResetToZero(Mat4x4 mat) {
 
 // 33 Transpose a matrix
 int mat4x4TransposeTest() {
-  Mat4x4 a = { { 0.0f, 9.0f, 3.0f, 0.0f },{ 9.0f, 8.0f, 0.0f, 8.0f },{ 1.0f, 8.0f, 5.0f, 3.0f}, { 0.0f, 0.0f, 5.0f, 8.0f } };
-  Mat4x4 b = { { 0.0f, 9.0f, 1.0f, 0.0f },{ 9.0f, 8.0f, 8.0f, 0.0f },{ 3.0f, 0.0f, 5.0f, 5.0f}, { 0.0f, 8.0f, 3.0f, 8.0f } };
+  Mat4x4 a = { { 0.0f, 9.0f, 3.0f, 0.0f },{ 9.0f, 8.0f, 0.0f, 8.0f },\
+    { 1.0f, 8.0f, 5.0f, 3.0f}, { 0.0f, 0.0f, 5.0f, 8.0f } };
+  Mat4x4 b = { { 0.0f, 9.0f, 1.0f, 0.0f },{ 9.0f, 8.0f, 8.0f, 0.0f },\
+    { 3.0f, 0.0f, 5.0f, 5.0f}, { 0.0f, 8.0f, 3.0f, 8.0f } };
   mat4x4Transpose(&a);
   assert(mat4x4Equal(a, b));
   return 1;
@@ -650,6 +668,27 @@ int mat2x2DetTest() {
   Mat2x2 a = { { 1.0f, 5.0f },{ -3.0f, 2.0f } };
   float det = mat2x2Det(a);
   assert(equal(det, 17.0f));
+
+  Mat2x2 b = { { 5.0f, 0.0f },{ -1.0f, 5.0f } };
+  det = mat2x2Det(b);
+  assert(equal(det, 25.0f));
+
+  mat2x2ResetToZero(b);
+  det = mat2x2Det(b);
+  assert(equal(det, 0.0f));
+
+  Mat2x2 c = { { 1.0f, 0.0f },{ 0.0f, -1.0f } };
+  det = mat2x2Det(c);
+  assert(equal(det, -1.0f));
+
+  Mat2x2 d = { { -1.0f, -1.0f },{ -1.0f, -1.0f } };
+  det = mat2x2Det(d);
+  assert(equal(det, 0.0f));
+
+  Mat2x2 e = { { 1.0f, 2.0f },{ 3.0f, 4.0f } };
+  det = mat2x2Det(e);
+  assert(equal(det, -2.0f));
+  return 1;
 }
 
 // 35 Submatrix of 3x3 matrix is a 2x2 matrix
@@ -671,7 +710,6 @@ int mat3x3Submat2x2Test() {
 
   mat2x2ResetToZero(b);
   mat3x3Submat2x2(a, b, 1, 1);
-  printMat(2, 2, b);
   assert(equal(b[0][0], 1.0f));
   assert(equal(b[0][1], 3.0f));
   assert(equal(b[1][0], 7.0f));
@@ -680,7 +718,8 @@ int mat3x3Submat2x2Test() {
 
 // 35 Submatrix of 4x4 matrix is a 3x3 matrix
 int mat4x4Submat3x3Test() {
-  Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f },{ 5.0f, 6.0f, 7.0f, 8.0f },{ 9.0f, 10.0f, 11.0f, 12.0f},{ 13.0f, 14.0f, 15.0f, 16.0f } };
+  Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f },{ 5.0f, 6.0f, 7.0f, 8.0f },\
+    { 9.0f, 10.0f, 11.0f, 12.0f},{ 13.0f, 14.0f, 15.0f, 16.0f } };
   Mat3x3 b = { { 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f } };
 
   mat4x4Submat3x3(a, b, 0, 0);
@@ -719,6 +758,12 @@ int mat4x4Submat3x3Test() {
   assert(equal(b[2][2], 11.0f));
 }
 
+int mat3x3MinorTest() {
+  Mat3x3 a = { { 3.0f, 5.0f, 0.0f },{ 2.0f, -1.0f, -7.0f },{ 6.0f, -1.0f, 5.0f } };
+  float minor = mat3x3Minor(a);
+  assert(equal(minor, 25.0f));
+}
+
 int main() {
   unitTest("Create Point Test", createPointTest());
   unitTest("Create Vector Test", createVectorTest());
@@ -741,12 +786,13 @@ int main() {
   unitTest("Color Conversion Test", colorConvertTest());
   unitTest("Matrix Equality Test", matEqualTest());
   unitTest("4x4 Matrix Multiply Test", mat4x4MulTest());
-  unitTest("4x4 Matrix Multiply By Tuple", mat4x4MulTupleTest());
-  unitTest("4x4 Matrix Multiply By Identity", mat4x4MultIdentTest());
-  unitTest("4x4 Matrix Transposition", mat4x4TransposeTest());
-  unitTest("2x2 Matrix Determinant", mat2x2DetTest());
-  unitTest("2x2 Submatrix From 3x3 Matrix",mat3x3Submat2x2Test());
-  unitTest("3x3 Submatrix From 4x4 Matrix", mat4x4Submat3x3Test());
+  unitTest("4x4 Matrix Multiply By Tuple Test", mat4x4MulTupleTest());
+  unitTest("4x4 Matrix Multiply By Identity Test", mat4x4MultIdentTest());
+  unitTest("4x4 Matrix Transposition Test", mat4x4TransposeTest());
+  unitTest("2x2 Matrix Determinant Test", mat2x2DetTest());
+  unitTest("2x2 Submatrix From 3x3 Matrix Test",mat3x3Submat2x2Test());
+  unitTest("3x3 Submatrix From 4x4 Matrix Test", mat4x4Submat3x3Test());
+  unitTest("3x3 Matrix Minor Test", mat3x3MinorTest());
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
