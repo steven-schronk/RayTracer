@@ -178,6 +178,27 @@ float mat2x2Det(Mat2x2 a) {
   return a[0][0] * a[1][1] - a[0][1] * a[1][0];
 }
 
+float mat3x3Det(Mat3x3 m) {
+  float a = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]);
+  float b = m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]);
+  float c = m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  float ans = a - b + c;
+  return ans;
+}
+
+float mat4x4Det(Mat4x4 m, int size) {
+  float detVal = 0.0f;
+  if (size == 2) {
+    detVal = m[0][0] * m[1][1] - m[0][1] * m[1][0];
+  } else {
+    for (int column = 0; column < size; ++column) {
+      float mat3Cof = mat4x4Cofactor(m, 0, column);
+      detVal = detVal + m[0][column] * mat3Cof;
+    }
+  }
+  return detVal;
+}
+
 // TODO: Make these more generic
 void mat3x3Submat2x2(Mat3x3 a, Mat2x2 b, int row, int col) {
   int current_row = -1;
@@ -215,8 +236,20 @@ float mat3x3Minor(Mat3x3 a, int row, int col) {
   return mat2x2Det(b);
 }
 
+float mat4x4Minor(Mat4x4 a, int row, int col) {
+  Mat3x3 b = { { 0.0f, 0.0f }, { 0.0f, 0.0f }, { 0.0f, 0.0f } };
+  mat4x4Submat3x3(a, b, row, col);
+  return mat3x3Det(b);
+}
+
 float mat3x3Cofactor(Mat3x3 a, int row, int col) {
   float minor = mat3x3Minor(a, row, col);
+  if ((row + col) % 2 != 0) { minor *= -1; }
+  return minor;
+}
+
+float mat4x4Cofactor(Mat4x4 a, int row, int col) {
+  float minor = mat4x4Minor(a, row, col);
   if ((row + col) % 2 != 0) { minor *= -1; }
   return minor;
 }
@@ -764,12 +797,14 @@ int mat4x4Submat3x3Test() {
   assert(equal(b[2][2], 11.0f));
 }
 
+// 35 Calculating a minor of a 3x3 matrix
 int mat3x3MinorTest() {
   Mat3x3 a = { { 3.0f, 5.0f, 0.0f },{ 2.0f, -1.0f, -7.0f },{ 6.0f, -1.0f, 5.0f } };
   float minor = mat3x3Minor(a, 1, 0);
   assert(equal(minor, 25.0f));
 }
 
+// 36 Calculating a cofactor of a 3x3 matrix
 int mat3x3CofactorTest() {
   Mat3x3 a = { { 3.0f, 5.0f, 0.0f },{ 2.0f, -1.0f, -7.0f },{ 6.0f, -1.0f, 5.0f } };
   float minor = mat3x3Minor(a, 0.0f, 0.0f);
@@ -783,6 +818,39 @@ int mat3x3CofactorTest() {
 
   cofactor = mat3x3Cofactor(a, 1, 0);
   assert(equal(cofactor, -25.0f));
+}
+
+// 37 Calculating the determinant of a 3x3 matrix
+int mat3x3DetTest() {
+  Mat3x3 a = { { 1.0f, 2.0f, 6.0f },{ -5.0f, 8.0f, -4.0f },{ 2.0f, 6.0f, 4.0f } };
+  float cofactor = mat3x3Cofactor(a, 0.0f, 0.0f);
+  assert(equal(cofactor, 56.0f));
+
+  cofactor = mat3x3Cofactor(a, 0.0f, 1.0f);
+  assert(equal(cofactor, 12.0f));
+
+  cofactor = mat3x3Cofactor(a, 0.0f, 2.0f);
+  assert(equal(cofactor, -46.0f));
+
+  float det = mat3x3Det(a);
+  assert(equal(det, -196.0f));
+}
+
+// 37 Calculating the determinant of a 4x4 matrix
+int mat4x4DetTest() {
+  Mat4x4 a = { { -2.0f, -8.0f, 3.0f, 5.0f },{ -3.0f, 1.0f, 7.0f, 3.0f },\
+    { 1.0f, 2.0f, -9.0f, 6.0f},{ -6.0f, 7.0f, 7.0f, -9.0f } };
+  float cofactor = mat4x4Cofactor(a, 0, 0);
+  assert(equal(cofactor, 690.0f));
+  cofactor = mat4x4Cofactor(a, 0, 1);
+  assert(equal(cofactor, 447.0f));
+  cofactor = mat4x4Cofactor(a, 0, 2);
+  assert(equal(cofactor, 210.0f));
+  cofactor = mat4x4Cofactor(a, 0, 3);
+  assert(equal(cofactor, 51.0f));
+
+  float det = mat4x4Det(a, 4);
+  assert(equal(det, -4071.0f));
 }
 
 int main() {
@@ -815,6 +883,8 @@ int main() {
   unitTest("3x3 Submatrix From 4x4 Matrix Test", mat4x4Submat3x3Test());
   unitTest("3x3 Matrix Minor Test", mat3x3MinorTest());
   unitTest("3x3 Matrix Cofactor Test", mat3x3CofactorTest());
+  unitTest("3x3 Matrix Determinant Test", mat3x3DetTest());
+  unitTest("4x4 Matrix Determinant Test", mat4x4DetTest());
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
