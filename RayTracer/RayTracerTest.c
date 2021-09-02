@@ -163,8 +163,48 @@ void mat4x4Transpose(Mat4x4 a) {
   }
 }
 
+void printMat(int rows, int cols, float* mat) {
+  for (int i = 0; i < rows; ++i) {
+    for (int j = 0; j < cols; ++j) {
+      printf("%.2f\t", mat[i * cols + j]);
+    }
+    printf("\n");
+  }
+}
+
 float mat2x2Det(Mat2x2 a) {
   float det = a[0][0] * a[1][1] - a[0][1] * a[1][0];
+}
+
+// TODO: Make these more generic
+void mat3x3Submat2x2(Mat3x3 a, Mat2x2 b, int row, int col) {
+  int current_row = -1;
+  int current_col = -1;
+  for (int i = 0; i < 3; ++i) {
+    if (i == row) { continue; }
+    else { ++current_row; }
+    current_col = -1;
+    for (int j = 0; j < 3; ++j) {
+      if (j == col) { continue; }
+      else { ++current_col; }
+      b[current_row][current_col] = a[i][j];
+    }
+  }
+}
+
+void mat4x4Submat3x3(Mat4x4 a, Mat3x3 b, int row, int col) {
+  int current_row = -1;
+  int current_col = -1;
+  for (int i = 0; i < 4; ++i) {
+    if (i == row) { continue; }
+    else { ++current_row; }
+    current_col = -1;
+    for (int j = 0; j < 4; ++j) {
+      if (j == col) { continue; }
+      else { ++current_col; }
+      b[current_row][current_col] = a[i][j];
+    }
+  }
 }
 
 /*-------------------------------------------------------------*/
@@ -571,6 +611,31 @@ int mat4x4MultIdentTest() {
   return 1;
 }
 
+// TODO: Make these more generic
+void mat2x2ResetToZero(Mat2x2 mat) {
+  for (int i = 0; i < 2; ++i) {
+    for (int j = 0; j < 2; ++j) {
+      mat[i][j] = 0.0f;
+    }
+  }
+}
+
+void mat3x3ResetToZero(Mat3x3 mat) {
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      mat[i][j] = 0.0f;
+    }
+  }
+}
+
+void mat4x4ResetToZero(Mat4x4 mat) {
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      mat[i][j] = 0.0f;
+    }
+  }
+}
+
 // 33 Transpose a matrix
 int mat4x4TransposeTest() {
   Mat4x4 a = { { 0.0f, 9.0f, 3.0f, 0.0f },{ 9.0f, 8.0f, 0.0f, 8.0f },{ 1.0f, 8.0f, 5.0f, 3.0f}, { 0.0f, 0.0f, 5.0f, 8.0f } };
@@ -585,6 +650,73 @@ int mat2x2DetTest() {
   Mat2x2 a = { { 1.0f, 5.0f },{ -3.0f, 2.0f } };
   float det = mat2x2Det(a);
   assert(equal(det, 17.0f));
+}
+
+// 35 Submatrix of 3x3 matrix is a 2x2 matrix
+int mat3x3Submat2x2Test() {
+  Mat3x3 a = { { 1.0f, 2.0f, 3.0f },{ 4.0f, 5.0f, 6.0f },{ 7.0f, 8.0f, 9.0f } };
+  Mat2x2 b = { { 0.0f, 0.0f },{ 0.0f, 0.0f } };
+  mat3x3Submat2x2(a, b, 0, 0);
+  assert(equal(b[0][0], 5.0f));
+  assert(equal(b[0][1], 6.0f));
+  assert(equal(b[1][0], 8.0f));
+  assert(equal(b[1][1], 9.0f));
+
+  mat2x2ResetToZero(b);
+  mat3x3Submat2x2(a, b, 0, 2);
+  assert(equal(b[0][0], 4.0f));
+  assert(equal(b[0][1], 5.0f));
+  assert(equal(b[1][0], 7.0f));
+  assert(equal(b[1][1], 8.0f));
+
+  mat2x2ResetToZero(b);
+  mat3x3Submat2x2(a, b, 1, 1);
+  printMat(2, 2, b);
+  assert(equal(b[0][0], 1.0f));
+  assert(equal(b[0][1], 3.0f));
+  assert(equal(b[1][0], 7.0f));
+  assert(equal(b[1][1], 9.0f));
+}
+
+// 35 Submatrix of 4x4 matrix is a 3x3 matrix
+int mat4x4Submat3x3Test() {
+  Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f },{ 5.0f, 6.0f, 7.0f, 8.0f },{ 9.0f, 10.0f, 11.0f, 12.0f},{ 13.0f, 14.0f, 15.0f, 16.0f } };
+  Mat3x3 b = { { 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f } };
+
+  mat4x4Submat3x3(a, b, 0, 0);
+  assert(equal(b[0][0], 6.0f));
+  assert(equal(b[0][1], 7.0f));
+  assert(equal(b[0][2], 8.0f));
+  assert(equal(b[1][0], 10.0f));
+  assert(equal(b[1][1], 11.0f));
+  assert(equal(b[1][2], 12.0f));
+  assert(equal(b[2][0], 14.0f));
+  assert(equal(b[2][1], 15.0f));
+  assert(equal(b[2][2], 16.0f));
+
+  mat3x3ResetToZero(b);
+  mat4x4Submat3x3(a, b, 2, 1);
+  assert(equal(b[0][0],  1.0f));
+  assert(equal(b[0][1],  3.0f));
+  assert(equal(b[0][2],  4.0f));
+  assert(equal(b[1][0],  5.0f));
+  assert(equal(b[1][1],  7.0f));
+  assert(equal(b[1][2],  8.0f));
+  assert(equal(b[2][0], 13.0f));
+  assert(equal(b[2][1], 15.0f));
+  assert(equal(b[2][2], 16.0f));
+
+  mat3x3ResetToZero(b);
+  mat4x4Submat3x3(a, b, 3, 3);
+  assert(equal(b[0][0], 1.0f));
+  assert(equal(b[0][1], 2.0f));
+  assert(equal(b[0][2], 3.0f));
+  assert(equal(b[1][0], 5.0f));
+  assert(equal(b[1][1], 6.0f));
+  assert(equal(b[1][2], 7.0f));
+  assert(equal(b[2][0], 9.0f));
+  assert(equal(b[2][1], 10.0f));
+  assert(equal(b[2][2], 11.0f));
 }
 
 int main() {
@@ -613,6 +745,8 @@ int main() {
   unitTest("4x4 Matrix Multiply By Identity", mat4x4MultIdentTest());
   unitTest("4x4 Matrix Transposition", mat4x4TransposeTest());
   unitTest("2x2 Matrix Determinant", mat2x2DetTest());
+  unitTest("2x2 Submatrix From 3x3 Matrix",mat3x3Submat2x2Test());
+  unitTest("3x3 Submatrix From 4x4 Matrix", mat4x4Submat3x3Test());
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
