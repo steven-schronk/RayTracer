@@ -209,10 +209,16 @@ void mat4x4Submat3x3(Mat4x4 a, Mat3x3 b, int row, int col) {
   }
 }
 
-float mat3x3Minor(Mat3x3 a) {
+float mat3x3Minor(Mat3x3 a, int row, int col) {
   Mat2x2 b = { { 0.0f, 0.0f }, { 0.0f, 0.0f } };
-  mat3x3Submat2x2(a, b, 1, 0);
+  mat3x3Submat2x2(a, b, row, col);
   return mat2x2Det(b);
+}
+
+float mat3x3Cofactor(Mat3x3 a, int row, int col) {
+  float minor = mat3x3Minor(a, row, col);
+  if ((row + col) % 2 != 0) { minor *= -1; }
+  return minor;
 }
 
 /*-------------------------------------------------------------*/
@@ -760,8 +766,23 @@ int mat4x4Submat3x3Test() {
 
 int mat3x3MinorTest() {
   Mat3x3 a = { { 3.0f, 5.0f, 0.0f },{ 2.0f, -1.0f, -7.0f },{ 6.0f, -1.0f, 5.0f } };
-  float minor = mat3x3Minor(a);
+  float minor = mat3x3Minor(a, 1, 0);
   assert(equal(minor, 25.0f));
+}
+
+int mat3x3CofactorTest() {
+  Mat3x3 a = { { 3.0f, 5.0f, 0.0f },{ 2.0f, -1.0f, -7.0f },{ 6.0f, -1.0f, 5.0f } };
+  float minor = mat3x3Minor(a, 0.0f, 0.0f);
+  assert(equal(minor, -12.0f));
+
+  float cofactor = mat3x3Cofactor(a, 0.0f, 0.0f);
+  assert(equal(cofactor, -12.0f));
+
+  minor = mat3x3Minor(a, 1.0f, 0.0f);
+  assert(equal(minor, 25.0f));
+
+  cofactor = mat3x3Cofactor(a, 1, 0);
+  assert(equal(cofactor, -25.0f));
 }
 
 int main() {
@@ -793,6 +814,7 @@ int main() {
   unitTest("2x2 Submatrix From 3x3 Matrix Test",mat3x3Submat2x2Test());
   unitTest("3x3 Submatrix From 4x4 Matrix Test", mat4x4Submat3x3Test());
   unitTest("3x3 Matrix Minor Test", mat3x3MinorTest());
+  unitTest("3x3 Matrix Cofactor Test", mat3x3CofactorTest());
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
