@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define EPSILON 0.0000001
+#define EPSILON 0.000001
 
 #define HEIGHT 50
 #define WIDTH  50
@@ -115,6 +115,7 @@ struct tuple hadamardProduct(struct tuple c1, struct tuple c2) {
 }
 
 // TODO: Merge these three matrix methods together into one.
+// TODO: Might should use the equal method.
 bool mat2x2Equal(Mat2x2 m1, Mat2x2 m2) {
   for (int i = 0; i < 2; ++i)
     for (int j = 0; j < 2; ++j)
@@ -132,7 +133,7 @@ bool mat3x3Equal(float m1[][3], float m2[][3]) {
 bool mat4x4Equal(float m1[][4], float m2[][4]) {
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j)
-      if (m1[i][j] != m2[i][j]) return false;
+      if (!equal(m1[i][j],m2[i][j])) return false;
   return true;
 }
 
@@ -169,7 +170,7 @@ void mat4x4Transpose(Mat4x4 a) {
 void printMat(int rows, int cols, float* mat) {
   for (int i = 0; i < rows; ++i) {
     for (int j = 0; j < cols; ++j) {
-      printf("%.2f\t", mat[i * cols + j]);
+      printf("%.8f\t", mat[i * cols + j]);
     }
     printf("\n");
   }
@@ -252,20 +253,22 @@ float mat4x4Det(Mat4x4 m, int size) {
   return detVal;
 }
 
-/*
-float mat4x4Det(Mat4x4 m, int size) {
-  float detVal = 0.0f;
-  if (size == 2) {
-    detVal = m[0][0] * m[1][1] - m[0][1] * m[1][0];
-  } else {
-    for (int column = 0; column < size - 1; ++column) {
-      float mat3Cof = mat4x4Cofactor(m, 0, column);
-      detVal = detVal + m[0][column] * mat3Cof;
+bool invertableMatrix(Mat4x4 m) {
+  if(equal(mat4x4Det(m, 4),0)) { return false; }
+  return true;
+}
+
+bool mat4x4Inverse(const Mat4x4 a, Mat4x4 b) {
+  bool invert = invertableMatrix(a);
+  if (!invert) { return false; }
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      float c = mat4x4Cofactor(a, i, j);
+      b[j][i] = c / mat4x4Det(a, 4);
     }
   }
-  return detVal;
+  return true;
 }
-*/
 
 /*-------------------------------------------------------------*/
 
@@ -891,6 +894,86 @@ int mat4x4DetTest() {
   return 1;
 }
 
+// 39 Testing an invertable matrix for invertability
+int invertableMatrixTest() {
+  Mat4x4 a = { { 6.0f, 4.0f, 4.0f, 4.0f },{ 5.0f, 5.0f, 7.0f, 6.0f },\
+    { 4.0f, -9.0f, 3.0f, -7.0f},{ 9.0f, 1.0f, 7.0f, -6.0f } };
+  bool inv = invertableMatrix(a);
+  assert(inv == true);
+
+  Mat4x4 b = { { -4.0f, 2.0f, -2.0f, -3.0f },{ 9.0f, 6.0f, 2.0f, 6.0f },\
+    { 0.0f, -5.0f, 1.0f, -5.0f},{ 0.0f, 0.0f, 0.0f, 0.0f } };
+  inv = invertableMatrix(b);
+  assert(inv == false);
+  return 1;
+}
+
+// 39 Calculating the inverse of a matrix
+int inverseMatrixTest() {
+  Mat4x4 a = { { -5.0f, 2.0f, 6.0f, -8.0f },{ 1.0f, -5.0f, 1.0f, 8.0f },\
+      { 7.0f, 7.0f, -6.0f, -7.0f},{ 1.0f, -3.0f, 7.0f, 4.0f } };
+  Mat4x4 b = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f },\
+    { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f } };
+  Mat4x4 c = { { 0.21804512f, 0.45112783f, 0.24060151f, -0.04511278f },{ -0.80827069f, -1.45676696f, -0.44360903f, 0.52067667f },\
+    { -0.07894737f, -0.22368421f, -0.05263158f, 0.19736843f},{ -0.52255636f, -0.81390977f, -0.30075186f, 0.30639097f } };
+
+  bool inversable = mat4x4Inverse(a, b);
+  assert(inversable == true);
+  float det = mat4x4Det(a, 4);
+  assert(equal(det, 532.0f));
+  float cof = mat4x4Cofactor(a, 2, 3);
+  assert(equal(cof, -160.0f));
+  assert(equal(b[3][2], -160.0f/532.0f));
+  cof = mat4x4Cofactor(a, 3, 2);
+  assert(equal(b[2][3], 105.0f/532.0f));
+  assert(mat4x4Equal(b, c) == true);
+
+  Mat4x4 d = { { 8.0f, -5.0f, 9.0f, 2.0f },{ 7.0f, 5.0f, 6.0f, 1.0f },\
+        { -6.0f, 0.0f, 9.0f, 6.0f},{ -3.0f, 0.0f, -9.0f, -4.0f } };
+  Mat4x4 e = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f },\
+    { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f } };
+  Mat4x4 f = { { -0.15384616f, -0.15384616f, -0.28205130f, -0.53846157f },{ -0.07692308f, 0.12307692f, 0.02564103f, 0.03076923f },\
+      { 0.35897437f, 0.35897437f, 0.43589744f, 0.92307693f},{ -0.69230771f, -0.69230771f, -0.76923078f, -1.92307687f } };
+
+  inversable = mat4x4Inverse(d, e);
+  assert(inversable == true);
+  assert(mat4x4Equal(e, f) == true);
+
+  Mat4x4 g = { { 9.0f, 3.0f, 0.0f, 9.0f },{ -5.0f, -2.0f, -6.0f, -3.0f },\
+        { -4.0f, 9.0f, 6.0f, 4.0f},{ -7.0f, 6.0f, 6.0f, 2.0f } };
+  Mat4x4 h = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f },\
+    { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f } };
+  Mat4x4 i = { { -0.04074074f, -0.07777778f, 0.14444445f, -0.22222222f },{ -0.07777778f, 0.03333334f, 0.36666667f, -0.33333334f },\
+      { -0.02901234f, -0.14629629f, -0.10925926f, 0.12962963f },{ 0.17777778f, 0.06666667f, -0.26666668f, 0.33333334f } };
+
+  inversable = mat4x4Inverse(g, h);
+  assert(inversable == true);
+  assert(mat4x4Equal(e, f) == true);
+  return 1;
+}
+
+// 41 Multiply product by its inverse
+int MultProdByInverseTest() {
+  Mat4x4 a = { { 3.0f, -9.0f, 7.0f, 3.0f },{ 3.0f, -8.0f, 2.0f, -9.0f },\
+      { -4.0f, 4.0f, 4.0f, 1.0f},{ -6.0f, 5.0f, -1.0f, 1.0f } };
+  Mat4x4 b = { { 8.0f, 2.0f, 2.0f, 2.0f },{ 3.0f, -1.0f, 7.0f, 0.0f },\
+    { 7.0f, 0.0f, 5.0f, 4.0f },{ 6.0f, -2.0f, 0.0f, 5.0f } };
+  Mat4x4 c = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f },\
+    { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f } };
+
+  mat4x4Mul(a, b, c);
+  Mat4x4 t;
+  bool inversable = mat4x4Inverse(b, t);
+  Mat4x4 u;
+  mat4x4Mul(c, t, u);
+  assert(inversable == true);
+  assert(equal(u[0][0], a[0][0]));
+  assert(equal(u[0][1], a[0][1]));
+  assert(equal(u[0][2], a[0][2]));
+  assert(equal(u[0][3], a[0][3]));
+  return 1;
+}
+
 int main() {
   unitTest("Create Point Test", createPointTest());
   unitTest("Create Vector Test", createVectorTest());
@@ -923,6 +1006,9 @@ int main() {
   unitTest("3x3 Matrix Cofactor Test", mat3x3CofactorTest());
   unitTest("3x3 Matrix Determinant Test", mat3x3DetTest());
   unitTest("4x4 Matrix Determinant Test", mat4x4DetTest());
+  unitTest("Invertable Matrix Test", invertableMatrixTest());
+  unitTest("4x4 Matrix Invert Test", inverseMatrixTest());
+  unitTest("Multiply Product By Its Inverse Test", MultProdByInverseTest());
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
