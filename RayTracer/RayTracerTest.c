@@ -9,11 +9,11 @@
 #define HEIGHT 50
 #define WIDTH  50
 
-struct tuple { float x, y, z, w; };
+struct tuple { double x, y, z, w; };
 
-typedef float Mat2x2[2][2];
-typedef float Mat3x3[3][3];
-typedef float Mat4x4[4][4];
+typedef double Mat2x2[2][2];
+typedef double Mat3x3[3][3];
+typedef double Mat4x4[4][4];
 
 struct tuple canvas[WIDTH][HEIGHT];
 
@@ -22,19 +22,19 @@ void writePixel(int x, int y, struct tuple color) {
 }
 
 // 5 Comparing floating point numbers
-bool equal(float a, float b) {
+bool equal(double a, double b) {
   assert(!isnan(a)); // Indicates a problem before getting here.
   assert(!isnan(b));
-  if (fabsf(a - b) < EPSILON) return true;
+  if (fabs(a - b) < EPSILON) return true;
   return false;
 }
 
-struct tuple createPoint(float x, float y, float z) {
+struct tuple createPoint(double x, double y, double z) {
   struct tuple t = { x, y, z, 1.0f };
   return t;
 }
 
-struct tuple createVector(float x, float y, float z) {
+struct tuple createVector(double x, double y, double z) {
   struct tuple t = { x, y, z, 0.0f };
   return t;
 }
@@ -68,43 +68,43 @@ struct tuple tupleNegate(struct tuple t) {
   return ret;
 }
 
-struct tuple tupleMultScalar(struct tuple t, float s) {
+struct tuple tupleMultScalar(struct tuple t, double s) {
   struct tuple ret = { t.x * s, t.y * s, t.z * s, t.w *s };
   return ret;
 }
 
-struct tuple tupleDivScalar(struct tuple t, float s) {
+struct tuple tupleDivScalar(struct tuple t, double s) {
   struct tuple ret = { t.x / s, t.y / s, t.z / s, t.w / s };
   return ret;
 }
 
-float tupleMagVec(struct tuple t) {
-  float magx = powf(t.x, 2);
-  float magy = powf(t.y, 2);
-  float magz = powf(t.z, 2);
-  float mag = sqrtf( magx + magy + magz);
+double tupleMagVec(struct tuple t) {
+  double magx = pow(t.x, 2);
+  double magy = pow(t.y, 2);
+  double magz = pow(t.z, 2);
+  double mag = sqrt( magx + magy + magz);
   return mag;
 }
 
 struct tuple normVec(struct tuple t) {
-  float mag = tupleMagVec(t);
+  double mag = tupleMagVec(t);
   struct tuple ret = { t.x / mag, t.y / mag, t.z / mag};
   return ret;
 }
 
-float dot(struct tuple t1, struct tuple t2) {
-  float prod1 = t1.x * t2.x;
-  float prod2 = t1.y * t2.y;
-  float prod3 = t1.z * t2.z;
-  float prod4 = t1.w * t2.w;
-  float dot = prod1 + prod2 + prod3 + prod4;
+double dot(struct tuple t1, struct tuple t2) {
+  double prod1 = t1.x * t2.x;
+  double prod2 = t1.y * t2.y;
+  double prod3 = t1.z * t2.z;
+  double prod4 = t1.w * t2.w;
+  double dot = prod1 + prod2 + prod3 + prod4;
   return dot;
 }
 
 struct tuple cross(struct tuple a, struct tuple b) {
-  float x = a.y * b.z - a.z * b.y;
-  float y = a.z * b.x - a.x * b.z;
-  float z = a.x * b.y - a.y * b.x;
+  double x = a.y * b.z - a.z * b.y;
+  double y = a.z * b.x - a.x * b.z;
+  double z = a.x * b.y - a.y * b.x;
   struct tuple cross = createVector(x, y, z);
   return cross;
 }
@@ -123,14 +123,14 @@ bool mat2x2Equal(Mat2x2 m1, Mat2x2 m2) {
   return true;
 }
 
-bool mat3x3Equal(float m1[][3], float m2[][3]) {
+bool mat3x3Equal(double m1[][3], double m2[][3]) {
   for (int i = 0; i < 3; ++i)
     for (int j = 0; j < 3; ++j)
       if (m1[i][j] != m2[i][j]) return false;
   return true;
 }
 
-bool mat4x4Equal(float m1[][4], float m2[][4]) {
+bool mat4x4Equal(double m1[][4], double m2[][4]) {
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j)
       if (!equal(m1[i][j],m2[i][j])) return false;
@@ -157,7 +157,7 @@ void mat4x4MulTuple(const Mat4x4 a, const struct tuple b, struct tuple *c) {
 }
 
 void mat4x4Transpose(Mat4x4 a) {
-  float temp;
+  double temp;
   for (int i = 0; i < 4; ++i) {
     for (int j = i; j < 4; ++j) {
       temp = a[i][j];
@@ -167,7 +167,7 @@ void mat4x4Transpose(Mat4x4 a) {
   }
 }
 
-void printMat(int rows, int cols, float* mat) {
+void printMat(int rows, int cols, double* mat) {
   for (int i = 0; i < rows; ++i) {
     for (int j = 0; j < cols; ++j) {
       printf("%.8f\t", mat[i * cols + j]);
@@ -176,15 +176,15 @@ void printMat(int rows, int cols, float* mat) {
   }
 }
 
-float mat2x2Det(Mat2x2 a) {
+double mat2x2Det(Mat2x2 a) {
   return a[0][0] * a[1][1] - a[0][1] * a[1][0];
 }
 
-float mat3x3Det(Mat3x3 m) {
-  float a = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]);
-  float b = m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]);
-  float c = m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
-  float ans = a - b + c;
+double mat3x3Det(Mat3x3 m) {
+  double a = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]);
+  double b = m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]);
+  double c = m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  double ans = a - b + c;
   return ans;
 }
 
@@ -219,33 +219,33 @@ void mat4x4Submat3x3(Mat4x4 a, Mat3x3 b, int row, int col) {
   }
 }
 
-float mat3x3Minor(Mat3x3 a, int row, int col) {
+double mat3x3Minor(Mat3x3 a, int row, int col) {
   Mat2x2 b = { { 0.0f, 0.0f }, { 0.0f, 0.0f } };
   mat3x3Submat2x2(a, b, row, col);
   return mat2x2Det(b);
 }
 
-float mat4x4Minor(Mat4x4 a, int row, int col) {
+double mat4x4Minor(Mat4x4 a, int row, int col) {
   Mat3x3 b = { { 0.0f, 0.0f }, { 0.0f, 0.0f }, { 0.0f, 0.0f } };
   mat4x4Submat3x3(a, b, row, col);
   return mat3x3Det(b);
 }
 
-float mat3x3Cofactor(Mat3x3 a, int row, int col) {
-  float minor = mat3x3Minor(a, row, col);
+double mat3x3Cofactor(Mat3x3 a, int row, int col) {
+  double minor = mat3x3Minor(a, row, col);
   if ((row + col) % 2 != 0) { minor *= -1; }
   return minor;
 }
 
-float mat4x4Cofactor(Mat4x4 a, int row, int col) {
-  float minor = mat4x4Minor(a, row, col);
+double mat4x4Cofactor(Mat4x4 a, int row, int col) {
+  double minor = mat4x4Minor(a, row, col);
   if ((row + col) % 2 != 0) { minor *= -1; }
   return minor;
 }
 
-float mat4x4Det(Mat4x4 m, int size) {
-  float detVal = 0.0f;
-  float mat3Cof = 0.0f;
+double mat4x4Det(Mat4x4 m, int size) {
+  double detVal = 0.0f;
+  double mat3Cof = 0.0f;
   for (int column = 0; column < size; ++column) {
     mat3Cof = mat4x4Cofactor(m, 0, column);
     detVal = detVal + m[0][column] * mat3Cof;
@@ -263,7 +263,7 @@ bool mat4x4Inverse(const Mat4x4 a, Mat4x4 b) {
   if (!invert) { return false; }
   for (int i = 0; i < 4; ++i) {
     for (int j = 0; j < 4; ++j) {
-      float c = mat4x4Cofactor(a, i, j);
+      double c = mat4x4Cofactor(a, i, j);
       b[j][i] = c / mat4x4Det(a, 4);
     }
   }
@@ -290,7 +290,7 @@ void unitTest(char* msg, int assert) {
 }
 
 // TODO: Clamp the values between 0.0 and 1.0
-int colorConvert(float x) { return x * 255; }
+int colorConvert(double x) { return x * 255; }
 
 int writeCanvasToFile() {
   FILE* fp;
@@ -420,7 +420,7 @@ int negatingTupleTest() {
 // 8 Multiply tuple by a scalar
 int tupleMultScalarTest() {
   struct tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
-  float scalar = 3.5f;
+  double scalar = 3.5f;
   vec1 = tupleMultScalar(vec1, scalar);
   assert(equal(vec1.x,   3.5f));
   assert(equal(vec1.y,  -7.0f));
@@ -432,7 +432,7 @@ int tupleMultScalarTest() {
 // 8 Multiply tuple by a fraction
 int tupleMultScalarFractionTest() {
   struct tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
-  float scalar = 0.5f;
+  double scalar = 0.5f;
   vec1 = tupleMultScalar(vec1, scalar);
   assert(equal(vec1.x, 0.5f));
   assert(equal(vec1.y, -1.0f));
@@ -444,7 +444,7 @@ int tupleMultScalarFractionTest() {
 // 8 Divide a tuple by a scalar
 int tupleDivScalarTest() {
   struct tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
-  float scalar = 2.0f;
+  double scalar = 2.0f;
   vec1 = tupleDivScalar(vec1, scalar);
   assert(equal(vec1.x, 0.5f));
   assert(equal(vec1.y, -1.0f));
@@ -456,7 +456,7 @@ int tupleDivScalarTest() {
 // 8 Computing the magnitude of vector(1, 0, 0)
 int tupleMagVecTest() {
   struct tuple vec1 = createVector(1.0f, 0.0f, 0.0f);
-  float mag = tupleMagVec(vec1);
+  double mag = tupleMagVec(vec1);
   assert(equal(mag, 1.0f));
 
   struct tuple vec2 = createVector(0.0f, 1.0f, 0.0f);
@@ -487,16 +487,16 @@ int normVecTest() {
 
   struct tuple vec2 = createVector(1.0f, 2.0f, 3.0f);
   norm = normVec(vec2);
-  float ans1 = 1 / sqrtf(14);
-  float ans2 = 2 / sqrtf(14);
-  float ans3 = 3 / sqrtf(14);
+  double ans1 = 1 / sqrt(14);
+  double ans2 = 2 / sqrt(14);
+  double ans3 = 3 / sqrt(14);
   assert(equal(norm.x, ans1));
   assert(equal(norm.y, ans2));
   assert(equal(norm.z, ans3));
 
   struct tuple vec3 = createVector(1.0f, 2.0f, 3.0f);
   norm = normVec(vec3);
-  float mag = tupleMagVec(norm);
+  double mag = tupleMagVec(norm);
   assert(equal(mag, 1.0f));
   return 1;
 }
@@ -505,7 +505,7 @@ int normVecTest() {
 int dotTest() {
   struct tuple vec1 = createVector(1.0f, 2.0f, 3.0f);
   struct tuple vec2 = createVector(2.0f, 3.0f, 4.0f);
-  float dotProd = dot(vec1, vec2);
+  double dotProd = dot(vec1, vec2);
   assert(equal(dotProd, 20.0f));
   return 1;
 }
@@ -587,7 +587,7 @@ int colorConvertTest() {
 }
 
 int matEqualTest() {
-  float oldValue;
+  double oldValue;
   Mat2x2 mat2x2a = { { 0.0f, 1.0f }, { 2.0f, 3.0f } };
   Mat2x2 mat2x2b = { { 0.0f, 1.0f }, { 2.0f, 3.0f } };
 
@@ -740,7 +740,7 @@ int mat4x4TransposeTest() {
 // 34 Calculating the determinant of a 2x2 matrix
 int mat2x2DetTest() {
   Mat2x2 a = { { 1.0f, 5.0f },{ -3.0f, 2.0f } };
-  float det = mat2x2Det(a);
+  double det = mat2x2Det(a);
   assert(equal(det, 17.0f));
 
   Mat2x2 b = { { 5.0f, 0.0f },{ -1.0f, 5.0f } };
@@ -837,7 +837,7 @@ int mat4x4Submat3x3Test() {
 // 35 Calculating a minor of a 3x3 matrix
 int mat3x3MinorTest() {
   Mat3x3 a = { { 3.0f, 5.0f, 0.0f },{ 2.0f, -1.0f, -7.0f },{ 6.0f, -1.0f, 5.0f } };
-  float minor = mat3x3Minor(a, 1, 0);
+  double minor = mat3x3Minor(a, 1, 0);
   assert(equal(minor, 25.0f));
   return 1;
 }
@@ -845,10 +845,10 @@ int mat3x3MinorTest() {
 // 36 Calculating a cofactor of a 3x3 matrix
 int mat3x3CofactorTest() {
   Mat3x3 a = { { 3.0f, 5.0f, 0.0f },{ 2.0f, -1.0f, -7.0f },{ 6.0f, -1.0f, 5.0f } };
-  float minor = mat3x3Minor(a, 0, 0);
+  double minor = mat3x3Minor(a, 0, 0);
   assert(equal(minor, -12.0f));
 
-  float cofactor = mat3x3Cofactor(a, 0, 0);
+  double cofactor = mat3x3Cofactor(a, 0, 0);
   assert(equal(cofactor, -12.0f));
 
   minor = mat3x3Minor(a, 1, 0);
@@ -862,7 +862,7 @@ int mat3x3CofactorTest() {
 // 37 Calculating the determinant of a 3x3 matrix
 int mat3x3DetTest() {
   Mat3x3 a = { { 1.0f, 2.0f, 6.0f },{ -5.0f, 8.0f, -4.0f },{ 2.0f, 6.0f, 4.0f } };
-  float cofactor = mat3x3Cofactor(a, 0, 0);
+  double cofactor = mat3x3Cofactor(a, 0, 0);
   assert(equal(cofactor, 56.0f));
 
   cofactor = mat3x3Cofactor(a, 0, 1);
@@ -871,7 +871,7 @@ int mat3x3DetTest() {
   cofactor = mat3x3Cofactor(a, 0, 2);
   assert(equal(cofactor, -46.0f));
 
-  float det = mat3x3Det(a);
+  double det = mat3x3Det(a);
   assert(equal(det, -196.0f));
   return 1;
 }
@@ -881,7 +881,7 @@ int mat4x4DetTest() {
   Mat4x4 a = { { -2.0f, -8.0f, 3.0f, 5.0f },{ -3.0f, 1.0f, 7.0f, 3.0f },\
     { 1.0f, 2.0f, -9.0f, 6.0f},{ -6.0f, 7.0f, 7.0f, -9.0f } };
 
-  float cofactor = mat4x4Cofactor(a, 0, 0);
+  double cofactor = mat4x4Cofactor(a, 0, 0);
   assert(equal(cofactor, 690.0f));
   cofactor = mat4x4Cofactor(a, 0, 1);
   assert(equal(cofactor, 447.0f));
@@ -889,7 +889,7 @@ int mat4x4DetTest() {
   assert(equal(cofactor, 210.0f));
   cofactor = mat4x4Cofactor(a, 0, 3);
   assert(equal(cofactor, 51.0f));
-  float det = mat4x4Det(a, 4);
+  double det = mat4x4Det(a, 4);
   assert(equal(det, -4071.0f));
   return 1;
 }
@@ -919,9 +919,9 @@ int inverseMatrixTest() {
 
   bool inversable = mat4x4Inverse(a, b);
   assert(inversable == true);
-  float det = mat4x4Det(a, 4);
+  double det = mat4x4Det(a, 4);
   assert(equal(det, 532.0f));
-  float cof = mat4x4Cofactor(a, 2, 3);
+  double cof = mat4x4Cofactor(a, 2, 3);
   assert(equal(cof, -160.0f));
   assert(equal(b[3][2], -160.0f/532.0f));
   cof = mat4x4Cofactor(a, 3, 2);
