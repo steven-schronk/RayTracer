@@ -39,18 +39,17 @@ struct tuple createVector(double x, double y, double z) {
   return t;
 }
 
-bool tupleIsPoint(struct tuple t) { return t.w == 1.0 ? true : false; }
-bool tupleIsPoint2(struct tuple t) { 
-  if (t.w == 1.0) { return true; }
-  return false;
+/*
+Mat4x4 *Mat4x4Create() {
+  Mat4x4 mat = { { 3.0f, -9.0f, 7.0f, 3.0f },{ 3.0f, -8.0f, 2.0f, -9.0f },\
+      { -4.0f, 4.0f, 4.0f, 1.0f},{ -6.0f, 5.0f, -1.0f, 1.0f } };
+  return mat;
 }
+*/
+
+bool tupleIsPoint(struct tuple t) { return t.w == 1.0 ? true : false; }
 
 bool tupleIsVector(struct tuple t) { return t.w == 0.0 ? true : false; }
-
-bool tupleIsVector2(struct tuple t) { 
-  if (t.w == 0.0) { return true;  }
-  return false;
-}
 
 struct tuple tupleAdd(struct tuple t1, struct tuple t2) {
   struct tuple t3 = { t1.x + t2.x, t1.y + t2.y, t1.z + t2.z, t1.w + t2.w };
@@ -167,6 +166,11 @@ void mat4x4Transpose(Mat4x4 a) {
   }
 }
 
+
+void printTuple(struct tuple t) {
+  printf("{ %.8f, %.8f, %.8f, %.8f }\n", t.x, t.y, t.z, t.w);
+}
+
 void printMat(int rows, int cols, double* mat) {
   for (int i = 0; i < rows; ++i) {
     for (int j = 0; j < cols; ++j) {
@@ -268,6 +272,14 @@ bool mat4x4Inverse(const Mat4x4 a, Mat4x4 b) {
     }
   }
   return true;
+}
+
+struct tuple pointTranslate(double x, double y, double z, struct tuple point) {
+  struct tuple transPoint = { 0.0f, 0.0f, 0.0f, 0.0f };
+  Mat4x4 trans = { { 1.0f, 0.0f, 0.0f, x },{ 0.0f, 1.0f, 0.0f, y },\
+      { 0.0f, 0.0f, 1.0f, z},{ 0.0f, 0.0f, 0.0f, 1.0f } };
+  mat4x4MulTuple(trans, point, &transPoint);
+  return transPoint;
 }
 
 /*-------------------------------------------------------------*/
@@ -974,6 +986,48 @@ int MultProdByInverseTest() {
   return 1;
 }
 
+// 45 Multiply by a translation matrix
+int PointTransTest() {
+  struct tuple point = createPoint(-3.0f, 4.0f, 5.0f);
+  Mat4x4 trans = { { 1.0f, 0.0f, 0.0f, 5.0f },{ 0.0f, 1.0f, 0.0f, -3.0f },\
+      { 0.0f, 0.0f, 1.0f, 2.0f},{ 0.0f, 0.0f, 0.0f, 1.0f } };
+  point = pointTranslate(5.0f, -3.0f, 2.0f, point);
+  assert(equal(point.x, 2.0f));
+  assert(equal(point.y, 1.0f));
+  assert(equal(point.z, 7.0f));
+  assert(equal(point.w, 1.0f));
+  return 1;
+}
+
+// 45 Multiply by the inverse of a traslation matrix
+int pointMultInverseTranslationTest() {
+  Mat4x4 trans = { { 1.0f, 0.0f, 0.0f, 5.0f },{ 0.0f, 1.0f, 0.0f, -3.0f },\
+      { 0.0f, 0.0f, 1.0f, 2.0f},{ 0.0f, 0.0f, 0.0f, 1.0f } };
+  Mat4x4 transInverse = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f },\
+      { 0.0f, 0.0f, 0.0f, 0.0f},{ 0.0f, 0.0f, 0.0f, 0.0f } };
+  struct tuple p1 = createPoint(-3.0f, 4.0f, 5.0f);
+  struct tuple p2 = createPoint( 0.0f, 0.0f, 0.0f);
+  mat4x4Inverse(trans, transInverse);
+  mat4x4MulTuple(transInverse, p1, &p2);
+  assert(equal(p2.x, -8.0f));
+  assert(equal(p2.y,  7.0f));
+  assert(equal(p2.z,  3.0f));
+  assert(equal(p2.w,  1.0f));
+}
+
+// 45 Translation does not affect vectors
+int vectorTranslationHasNoEffectTest() {
+  Mat4x4 trans = { { 1.0f, 0.0f, 0.0f, 5.0f },{ 0.0f, 1.0f, 0.0f, -3.0f },\
+      { 0.0f, 0.0f, 1.0f, 2.0f},{ 0.0f, 0.0f, 0.0f, 1.0f } };
+  struct tuple v1 = createVector(-3.0f, 4.0f, 5.0f);
+  struct tuple v2 = createPoint(0.0f, 0.0f, 0.0f);
+  mat4x4MulTuple(trans, v1, &v2);
+  assert(equal(v2.x, -3.0f));
+  assert(equal(v2.y,  4.0f));
+  assert(equal(v2.z,  5.0f));
+  assert(equal(v2.w,  0.0f));
+}
+
 int main() {
   unitTest("Create Point Test", createPointTest());
   unitTest("Create Vector Test", createVectorTest());
@@ -1009,6 +1063,10 @@ int main() {
   unitTest("Invertable Matrix Test", invertableMatrixTest());
   unitTest("4x4 Matrix Invert Test", inverseMatrixTest());
   unitTest("Multiply Product By Its Inverse Test", MultProdByInverseTest());
+  unitTest("Multiply By Translation Matrix Test", PointTransTest());
+  unitTest("Multiply By Inverse Of Translation Matrix Test", pointMultInverseTranslationTest());
+  unitTest("Vector Translation Has No Effect Test", vectorTranslationHasNoEffectTest());
+
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
