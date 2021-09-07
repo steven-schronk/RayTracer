@@ -171,13 +171,18 @@ void printTuple(struct tuple t) {
   printf("{ %.8f, %.8f, %.8f, %.8f }\n", t.x, t.y, t.z, t.w);
 }
 
-void printMat(int rows, int cols, double* mat) {
+void printMat(const int rows, const int cols, const double* mat) {
+  printf("{ ");
   for (int i = 0; i < rows; ++i) {
+    printf(" { ");
     for (int j = 0; j < cols; ++j) {
-      printf("%.8f\t", mat[i * cols + j]);
+      printf("%.3f", mat[i * cols + j]);
+      if (j < cols-1) { printf(", "); }
     }
-    printf("\n");
+    printf(" }");
+    if (i < rows - 1) { printf(", "); }
   }
+  printf("}\n");
 }
 
 double mat2x2Det(Mat2x2 a) {
@@ -274,13 +279,35 @@ bool mat4x4Inverse(const Mat4x4 a, Mat4x4 b) {
   return true;
 }
 
-struct tuple pointTranslate(double x, double y, double z, struct tuple point) {
+void genTranslateMatrix(const double x, const double y, const double z, Mat4x4 m) {
+  m[0][0] = 1.0f; m[0][1] = 0.0f; m[0][2] = 0.0f; m[0][3] = x;
+  m[1][0] = 0.0f; m[1][1] = 1.0f; m[1][2] = 0.0f; m[1][3] = y;
+  m[2][0] = 0.0f; m[2][1] = 0.0f; m[2][2] = 1.0f; m[2][3] = z;
+  m[3][0] = 0.0f; m[3][1] = 0.0f; m[3][2] = 0.0f; m[3][3] = 1.0f;
+}
+
+void genScaleMatrix(const double x, const double y, const double z, Mat4x4 m) {
+  m[0][0] = x;    m[0][1] = 0.0f; m[0][2] = 0.0f; m[0][3] = 0.0f;
+  m[1][0] = 0.0f; m[1][1] = y;    m[1][2] = 0.0f; m[1][3] = 0.0f;
+  m[2][0] = 0.0f; m[2][1] = 0.0f; m[2][2] = z;    m[2][3] = 0.0f;
+  m[3][0] = 0.0f; m[3][1] = 0.0f; m[3][2] = 0.0f; m[3][3] = 1.0f;
+}
+
+/*
+struct tuple pointTranslate(const double x, const double y, const double z, const struct tuple point) {
   struct tuple transPoint = { 0.0f, 0.0f, 0.0f, 0.0f };
   Mat4x4 trans = { { 1.0f, 0.0f, 0.0f, x },{ 0.0f, 1.0f, 0.0f, y },\
       { 0.0f, 0.0f, 1.0f, z},{ 0.0f, 0.0f, 0.0f, 1.0f } };
   mat4x4MulTuple(trans, point, &transPoint);
   return transPoint;
 }
+
+void pointScaleMat4x4(const double x, const double y, const double z, const struct tuple pointIn, struct tuple* pointOut) {
+  Mat4x4 scale = { { x, 0.0f, 0.0f, 0.0 },{ 0.0f, y, 0.0f, 0.0f },\
+      { 0.0f, 0.0f, z, 0.0f},{ 0.0f, 0.0f, 0.0f, 1.0f } };
+  mat4x4MulTuple(scale, pointIn, pointOut);
+}
+*/
 
 /*-------------------------------------------------------------*/
 
@@ -988,26 +1015,26 @@ int MultProdByInverseTest() {
 
 // 45 Multiply by a translation matrix
 int PointTransTest() {
-  struct tuple point = createPoint(-3.0f, 4.0f, 5.0f);
-  Mat4x4 trans = { { 1.0f, 0.0f, 0.0f, 5.0f },{ 0.0f, 1.0f, 0.0f, -3.0f },\
-      { 0.0f, 0.0f, 1.0f, 2.0f},{ 0.0f, 0.0f, 0.0f, 1.0f } };
-  point = pointTranslate(5.0f, -3.0f, 2.0f, point);
-  assert(equal(point.x, 2.0f));
-  assert(equal(point.y, 1.0f));
-  assert(equal(point.z, 7.0f));
-  assert(equal(point.w, 1.0f));
+  struct tuple point1 = createPoint(-3.0f, 4.0f, 5.0f);
+  struct tuple point2 = createPoint( 0.0f, 0.0f, 0.0f);
+  Mat4x4 trans;
+  genTranslateMatrix(5.0f, -3.0f, 2.0f, &trans);
+  mat4x4MulTuple(trans, point1, &point2);
+  assert(equal(point2.x, 2.0f));
+  assert(equal(point2.y, 1.0f));
+  assert(equal(point2.z, 7.0f));
+  assert(equal(point2.w, 1.0f));
   return 1;
 }
 
 // 45 Multiply by the inverse of a traslation matrix
 int pointMultInverseTranslationTest() {
-  Mat4x4 trans = { { 1.0f, 0.0f, 0.0f, 5.0f },{ 0.0f, 1.0f, 0.0f, -3.0f },\
-      { 0.0f, 0.0f, 1.0f, 2.0f},{ 0.0f, 0.0f, 0.0f, 1.0f } };
-  Mat4x4 transInverse = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f },\
-      { 0.0f, 0.0f, 0.0f, 0.0f},{ 0.0f, 0.0f, 0.0f, 0.0f } };
-  struct tuple p1 = createPoint(-3.0f, 4.0f, 5.0f);
-  struct tuple p2 = createPoint( 0.0f, 0.0f, 0.0f);
+  Mat4x4 trans;
+  Mat4x4 transInverse;
+  genTranslateMatrix(5.0f, -3.0f, 2.0f, &trans);
   mat4x4Inverse(trans, transInverse);
+  struct tuple p1 = createPoint(-3.0f, 4.0f, 5.0f);
+  struct tuple p2 = createPoint(0.0f, 0.0f, 0.0f);
   mat4x4MulTuple(transInverse, p1, &p2);
   assert(equal(p2.x, -8.0f));
   assert(equal(p2.y,  7.0f));
@@ -1017,8 +1044,8 @@ int pointMultInverseTranslationTest() {
 
 // 45 Translation does not affect vectors
 int vectorTranslationHasNoEffectTest() {
-  Mat4x4 trans = { { 1.0f, 0.0f, 0.0f, 5.0f },{ 0.0f, 1.0f, 0.0f, -3.0f },\
-      { 0.0f, 0.0f, 1.0f, 2.0f},{ 0.0f, 0.0f, 0.0f, 1.0f } };
+  Mat4x4 trans;
+  genTranslateMatrix(5.0f, -3.0f, 2.0f, &trans);
   struct tuple v1 = createVector(-3.0f, 4.0f, 5.0f);
   struct tuple v2 = createPoint(0.0f, 0.0f, 0.0f);
   mat4x4MulTuple(trans, v1, &v2);
@@ -1027,6 +1054,48 @@ int vectorTranslationHasNoEffectTest() {
   assert(equal(v2.z,  5.0f));
   assert(equal(v2.w,  0.0f));
 }
+
+// 46 Scaling matrix applied to a point
+int pointScaleMat4x4Test() {
+  struct tuple p1 = createPoint(-4.0f, 6.0f, 8.0f);
+  struct tuple p2 = createPoint(0.0f, 0.0f, 0.0f);
+  Mat4x4 scaleMat;
+  genScaleMatrix(2.0f, 3.0f, 4.0f, scaleMat);
+  mat4x4MulTuple(scaleMat, p1, &p2);
+  assert(equal(p2.x, -8.0f));
+  assert(equal(p2.y, 18.0f));
+  assert(equal(p2.z, 32.0f));
+  assert(equal(p2.w,  1.0f));
+}
+
+// 46 Scaling matrix applied to a vector
+int vecScaleMat4x4Test() {
+  struct tuple p1 = createVector(-4.0f, 6.0f, 8.0f);
+  struct tuple p2 = createVector(0.0f, 0.0f, 0.0f);
+  Mat4x4 scaleMat;
+  genScaleMatrix(2.0f, 3.0f, 4.0f, scaleMat);
+  mat4x4MulTuple(scaleMat, p1, &p2);
+  assert(equal(p2.x, -8.0f));
+  assert(equal(p2.y, 18.0f));
+  assert(equal(p2.z, 32.0f));
+  assert(equal(p2.w,  0.0f));
+}
+
+// 46 Multiply inverse of scaling matrix
+int multInverseScaleMatrixTest() {
+  Mat4x4 scaleMat;
+  Mat4x4 scaleMatInv;
+  struct tuple p1 = createVector(-4.0f, 6.0f, 8.0f);
+  struct tuple p2 = createVector(0.0f, 0.0f, 0.0f);
+  genScaleMatrix(2.0f, 3.0f, 4.0f, scaleMat);
+  mat4x4Inverse(scaleMat, scaleMatInv);
+  mat4x4MulTuple(scaleMatInv, p1, &p2);
+  assert(equal(p2.x, -2.0f));
+  assert(equal(p2.y,  2.0f));
+  assert(equal(p2.z,  2.0f));
+  assert(equal(p2.w,  0.0f));
+}
+
 
 int main() {
   unitTest("Create Point Test", createPointTest());
@@ -1066,6 +1135,9 @@ int main() {
   unitTest("Multiply By Translation Matrix Test", PointTransTest());
   unitTest("Multiply By Inverse Of Translation Matrix Test", pointMultInverseTranslationTest());
   unitTest("Vector Translation Has No Effect Test", vectorTranslationHasNoEffectTest());
+  unitTest("Scaling Matrix Applied To A Point Test", pointScaleMat4x4Test());
+  unitTest("Scaling Matrix Applied To A Vector Test", vecScaleMat4x4Test());
+  unitTest("Multiply Inverse Of Scaling Matrix Test", multInverseScaleMatrixTest());
 
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
