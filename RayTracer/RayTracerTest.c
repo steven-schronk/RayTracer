@@ -4,6 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #define EPSILON 0.000001
 
 #define HEIGHT 50
@@ -308,6 +312,27 @@ void pointScaleMat4x4(const double x, const double y, const double z, const stru
   mat4x4MulTuple(scale, pointIn, pointOut);
 }
 */
+
+void genRotationMatrixX(const float rad, Mat4x4 m) {
+  m[0][0] = 1.0f; m[0][1] = 0.0f;     m[0][2] = 0.0f;      m[0][3] = 0.0f;
+  m[1][0] = 0.0f; m[1][1] = cos(rad); m[1][2] = -sin(rad); m[1][3] = 0.0f;
+  m[2][0] = 0.0f; m[2][1] = sin(rad); m[2][2] = cos(rad);  m[2][3] = 0.0f;
+  m[3][0] = 0.0f; m[3][1] = 0.0f;     m[3][2] = 0.0f;      m[3][3] = 1.0f;
+}
+
+void genRotationMatrixY(const float rad, Mat4x4 m) {
+  m[0][0] = cos(rad);  m[0][1] = 0.0f; m[0][2] = sin(rad); m[0][3] = 0.0f;
+  m[1][0] = 0.0f;      m[1][1] = 1.0f; m[1][2] = 0.0f;     m[1][3] = 0.0f;
+  m[2][0] = -sin(rad); m[2][1] = 0.0f; m[2][2] = cos(rad); m[2][3] = 0.0f;
+  m[3][0] = 0.0f;      m[3][1] = 0.0f; m[3][2] = 0.0f;     m[3][3] = 1.0f;
+}
+
+void genRotationMatrixZ(const float rad, Mat4x4 m) {
+  m[0][0] = cos(rad); m[0][1] = -sin(rad); m[0][2] = 0.0f; m[0][3] = 0.0f;
+  m[1][0] = sin(rad); m[1][1] = cos(rad);  m[1][2] = 0.0f; m[1][3] = 0.0f;
+  m[2][0] = 0.0f;     m[2][1] = 0.0f;      m[2][2] = 1.0f; m[2][3] = 0.0f;
+  m[3][0] = 0.0f;     m[3][1] = 0.0f;      m[3][2] = 0.0f; m[3][3] = 1.0f;
+}
 
 /*-------------------------------------------------------------*/
 
@@ -1096,6 +1121,85 @@ int multInverseScaleMatrixTest() {
   assert(equal(p2.w,  0.0f));
 }
 
+// 48 Rotating a point around the x axis
+int genRotationMatrixXTest() {
+  Mat4x4 rotMat;
+  struct tuple p1 = createPoint(0.0f, 1.0f, 0.0f);
+  struct tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
+  genRotationMatrixX(M_PI / 4, rotMat);
+  mat4x4MulTuple(rotMat, p1, &p2);
+  assert(equal(p2.x, 0.0f));
+  assert(equal(p2.y, sqrt(2.0f)/2.0f));
+  assert(equal(p2.z, sqrt(2.0f) / 2.0f));
+  assert(equal(p2.w, 1.0f));
+
+  genRotationMatrixX(M_PI / 2, rotMat);
+  mat4x4MulTuple(rotMat, p1, &p2);
+  assert(equal(p2.x, 0.0f));
+  assert(equal(p2.y, 0.0f));
+  assert(equal(p2.z, 1.0f));
+  assert(equal(p2.w, 1.0f));
+  return 1;
+}
+
+// 49 Inverse of an x rotation rotates the opposite direction
+int genRotationMatrixReverseTest() {
+  Mat4x4 rotMat;
+  Mat4x4 rotMatInv;
+  struct tuple p1 = createPoint(0.0f, 1.0f, 0.0f);
+  struct tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
+  genRotationMatrixX(M_PI / 4, rotMat);
+  mat4x4Inverse(rotMat, rotMatInv);
+  mat4x4MulTuple(rotMatInv, p1, &p2);
+  assert(equal(p2.x, 0.0f));
+  assert(equal(p2.y, sqrt(2.0f) / 2.0f));
+  assert(equal(p2.z, -sqrt(2.0f) / 2.0f));
+  assert(equal(p2.w, 1.0f));
+  return 1;
+}
+
+// 50 Rotating a point around the y axis
+int genRotationMatrixYTest() {
+  Mat4x4 rotMat;
+  struct tuple p1 = createPoint(0.0f, 0.0f, 1.0f);
+  struct tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
+  genRotationMatrixY(M_PI / 4, rotMat);
+  mat4x4MulTuple(rotMat, p1, &p2);
+  assert(equal(p2.x, sqrt(2.0f) / 2.0f));
+  assert(equal(p2.y,  0.0f));
+  assert(equal(p2.z, sqrt(2.0f) / 2.0f));
+  assert(equal(p2.w,  1.0f));
+
+  genRotationMatrixY(M_PI / 2, rotMat);
+  mat4x4MulTuple(rotMat, p1, &p2);
+  assert(equal(p2.x, 1.0f));
+  assert(equal(p2.y, 0.0f));
+  assert(equal(p2.z, 0.0f));
+  assert(equal(p2.w, 1.0f));
+  return 1;
+}
+
+// 50 Rotating a point around the y axis
+int genRotationMatrixZTest() {
+  Mat4x4 rotMat;
+  struct tuple p1 = createPoint(0.0f, 1.0f, 0.0f);
+  struct tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
+  genRotationMatrixZ(M_PI / 4, rotMat);
+  mat4x4MulTuple(rotMat, p1, &p2);
+  assert(equal(p2.x, -sqrt(2.0f) / 2.0f));
+  assert(equal(p2.y, sqrt(2.0f) / 2.0f));
+  assert(equal(p2.z, 0.0f));
+  assert(equal(p2.w, 1.0f));
+
+  genRotationMatrixZ(M_PI / 2, rotMat);
+  mat4x4MulTuple(rotMat, p1, &p2);
+  assert(equal(p2.x, -1.0f));
+  assert(equal(p2.y, 0.0f));
+  assert(equal(p2.z, 0.0f));
+  assert(equal(p2.w, 1.0f));
+  return 1;
+}
+
 
 int main() {
   unitTest("Create Point Test", createPointTest());
@@ -1138,6 +1242,10 @@ int main() {
   unitTest("Scaling Matrix Applied To A Point Test", pointScaleMat4x4Test());
   unitTest("Scaling Matrix Applied To A Vector Test", vecScaleMat4x4Test());
   unitTest("Multiply Inverse Of Scaling Matrix Test", multInverseScaleMatrixTest());
+  unitTest("Generate Rotation Matrix X Test", genRotationMatrixXTest());
+  unitTest("Generate  Rotation Matrix X Reverse Test()", genRotationMatrixReverseTest());
+  unitTest("Generate Rotation Matrix Y Test", genRotationMatrixYTest());
+  unitTest("Generate Rotation Matrix Z Test", genRotationMatrixZTest());
 
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
