@@ -334,6 +334,13 @@ void genRotationMatrixZ(const float rad, Mat4x4 m) {
   m[3][0] = 0.0f;     m[3][1] = 0.0f;      m[3][2] = 0.0f; m[3][3] = 1.0f;
 }
 
+void genShearMatrix(const float xy, const float xz, const float yx, const float yz, const float zx, const float zy, Mat4x4 m) {
+  m[0][0] = 1.0f; m[0][1] = xy;   m[0][2] = xz;   m[0][3] = 0.0f;
+  m[1][0] = yx;   m[1][1] = 1.0f; m[1][2] = yz;   m[1][3] = 0.0f;
+  m[2][0] = zx;   m[2][1] = zy;   m[2][2] = 1.0f; m[2][3] = 0.0f;
+  m[3][0] = 0.0f; m[3][1] = 0.0f; m[3][2] = 0.0f; m[3][3] = 1.0f;
+}
+
 /*-------------------------------------------------------------*/
 
 void unitTest(char* msg, int assert) {
@@ -1200,6 +1207,64 @@ int genRotationMatrixZTest() {
   return 1;
 }
 
+// 52 Shearing transformation moves x in proportion to y
+int genShearMatrixTest() {
+  Mat4x4 shearMat;
+  genShearMatrix(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, shearMat);
+  struct tuple p1 = createPoint(2.0f, 3.0f, 4.0f);
+  struct tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
+  mat4x4MulTuple(shearMat, p1, &p2);
+  assert(equal(p2.x, 5.0f));
+  assert(equal(p2.y, 3.0f));
+  assert(equal(p2.z, 4.0f));
+  assert(equal(p2.w, 1.0f));
+
+  // moves x in proportion to y
+  genShearMatrix(0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, shearMat);
+  p2.x = 2.0f; p2.y = 3.0f; p2.z = 4.0f;
+  mat4x4MulTuple(shearMat, p1, &p2);
+  assert(equal(p2.x, 6.0f));
+  assert(equal(p2.y, 3.0f));
+  assert(equal(p2.z, 4.0f));
+  assert(equal(p2.w, 1.0f));
+
+  // moves y in proportion to x
+  genShearMatrix(0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, shearMat);
+  p2.x = 2.0f; p2.y = 3.0f; p2.z = 4.0f;
+  mat4x4MulTuple(shearMat, p1, &p2);
+  assert(equal(p2.x, 2.0f));
+  assert(equal(p2.y, 5.0f));
+  assert(equal(p2.z, 4.0f));
+  assert(equal(p2.w, 1.0f));
+
+  // moves y in proportion to z
+  genShearMatrix(0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, shearMat);
+  p2.x = 2.0f; p2.y = 3.0f; p2.z = 4.0f;
+  mat4x4MulTuple(shearMat, p1, &p2);
+  assert(equal(p2.x, 2.0f));
+  assert(equal(p2.y, 7.0f));
+  assert(equal(p2.z, 4.0f));
+  assert(equal(p2.w, 1.0f));
+
+  // moves x in proportion to x
+  genShearMatrix(0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, shearMat);
+  p2.x = 2.0f; p2.y = 3.0f; p2.z = 4.0f;
+  mat4x4MulTuple(shearMat, p1, &p2);
+  assert(equal(p2.x, 2.0f));
+  assert(equal(p2.y, 3.0f));
+  assert(equal(p2.z, 6.0f));
+  assert(equal(p2.w, 1.0f));
+
+  // moves x in proportion to x
+  genShearMatrix(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, shearMat);
+  p2.x = 2.0f; p2.y = 3.0f; p2.z = 4.0f;
+  mat4x4MulTuple(shearMat, p1, &p2);
+  assert(equal(p2.x, 2.0f));
+  assert(equal(p2.y, 3.0f));
+  assert(equal(p2.z, 7.0f));
+  assert(equal(p2.w, 1.0f));
+  return 1;
+}
 
 int main() {
   unitTest("Create Point Test", createPointTest());
@@ -1246,6 +1311,7 @@ int main() {
   unitTest("Generate  Rotation Matrix X Reverse Test()", genRotationMatrixReverseTest());
   unitTest("Generate Rotation Matrix Y Test", genRotationMatrixYTest());
   unitTest("Generate Rotation Matrix Z Test", genRotationMatrixZTest());
+  unitTest("Generate Sheer Matrix Test", genShearMatrixTest());
 
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
