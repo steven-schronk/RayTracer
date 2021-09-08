@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -271,7 +272,7 @@ bool invertableMatrix(Mat4x4 m) {
   return true;
 }
 
-bool mat4x4Inverse(const Mat4x4 a, Mat4x4 b) {
+bool mat4x4Inverse(Mat4x4 a, Mat4x4 b) {
   bool invert = invertableMatrix(a);
   if (!invert) { return false; }
   for (int i = 0; i < 4; ++i) {
@@ -297,44 +298,28 @@ void genScaleMatrix(const double x, const double y, const double z, Mat4x4 m) {
   m[3][0] = 0.0f; m[3][1] = 0.0f; m[3][2] = 0.0f; m[3][3] = 1.0f;
 }
 
-/*
-struct tuple pointTranslate(const double x, const double y, const double z, const struct tuple point) {
-  struct tuple transPoint = { 0.0f, 0.0f, 0.0f, 0.0f };
-  Mat4x4 trans = { { 1.0f, 0.0f, 0.0f, x },{ 0.0f, 1.0f, 0.0f, y },\
-      { 0.0f, 0.0f, 1.0f, z},{ 0.0f, 0.0f, 0.0f, 1.0f } };
-  mat4x4MulTuple(trans, point, &transPoint);
-  return transPoint;
-}
-
-void pointScaleMat4x4(const double x, const double y, const double z, const struct tuple pointIn, struct tuple* pointOut) {
-  Mat4x4 scale = { { x, 0.0f, 0.0f, 0.0 },{ 0.0f, y, 0.0f, 0.0f },\
-      { 0.0f, 0.0f, z, 0.0f},{ 0.0f, 0.0f, 0.0f, 1.0f } };
-  mat4x4MulTuple(scale, pointIn, pointOut);
-}
-*/
-
-void genRotationMatrixX(const float rad, Mat4x4 m) {
+void genRotationMatrixX(const double rad, Mat4x4 m) {
   m[0][0] = 1.0f; m[0][1] = 0.0f;     m[0][2] = 0.0f;      m[0][3] = 0.0f;
   m[1][0] = 0.0f; m[1][1] = cos(rad); m[1][2] = -sin(rad); m[1][3] = 0.0f;
   m[2][0] = 0.0f; m[2][1] = sin(rad); m[2][2] = cos(rad);  m[2][3] = 0.0f;
   m[3][0] = 0.0f; m[3][1] = 0.0f;     m[3][2] = 0.0f;      m[3][3] = 1.0f;
 }
 
-void genRotationMatrixY(const float rad, Mat4x4 m) {
+void genRotationMatrixY(const double rad, Mat4x4 m) {
   m[0][0] = cos(rad);  m[0][1] = 0.0f; m[0][2] = sin(rad); m[0][3] = 0.0f;
   m[1][0] = 0.0f;      m[1][1] = 1.0f; m[1][2] = 0.0f;     m[1][3] = 0.0f;
   m[2][0] = -sin(rad); m[2][1] = 0.0f; m[2][2] = cos(rad); m[2][3] = 0.0f;
   m[3][0] = 0.0f;      m[3][1] = 0.0f; m[3][2] = 0.0f;     m[3][3] = 1.0f;
 }
 
-void genRotationMatrixZ(const float rad, Mat4x4 m) {
+void genRotationMatrixZ(const double rad, Mat4x4 m) {
   m[0][0] = cos(rad); m[0][1] = -sin(rad); m[0][2] = 0.0f; m[0][3] = 0.0f;
   m[1][0] = sin(rad); m[1][1] = cos(rad);  m[1][2] = 0.0f; m[1][3] = 0.0f;
   m[2][0] = 0.0f;     m[2][1] = 0.0f;      m[2][2] = 1.0f; m[2][3] = 0.0f;
   m[3][0] = 0.0f;     m[3][1] = 0.0f;      m[3][2] = 0.0f; m[3][3] = 1.0f;
 }
 
-void genShearMatrix(const float xy, const float xz, const float yx, const float yz, const float zx, const float zy, Mat4x4 m) {
+void genShearMatrix(const double xy, const double xz, const double yx, const double yz, const double zx, const double zy, Mat4x4 m) {
   m[0][0] = 1.0f; m[0][1] = xy;   m[0][2] = xz;   m[0][3] = 0.0f;
   m[1][0] = yx;   m[1][1] = 1.0f; m[1][2] = yz;   m[1][3] = 0.0f;
   m[2][0] = zx;   m[2][1] = zy;   m[2][2] = 1.0f; m[2][3] = 0.0f;
@@ -1050,7 +1035,7 @@ int PointTransTest() {
   struct tuple point1 = createPoint(-3.0f, 4.0f, 5.0f);
   struct tuple point2 = createPoint( 0.0f, 0.0f, 0.0f);
   Mat4x4 trans;
-  genTranslateMatrix(5.0f, -3.0f, 2.0f, &trans);
+  genTranslateMatrix(5.0f, -3.0f, 2.0f, trans);
   mat4x4MulTuple(trans, point1, &point2);
   assert(equal(point2.x, 2.0f));
   assert(equal(point2.y, 1.0f));
@@ -1063,7 +1048,7 @@ int PointTransTest() {
 int pointMultInverseTranslationTest() {
   Mat4x4 trans;
   Mat4x4 transInverse;
-  genTranslateMatrix(5.0f, -3.0f, 2.0f, &trans);
+  genTranslateMatrix(5.0f, -3.0f, 2.0f, trans);
   mat4x4Inverse(trans, transInverse);
   struct tuple p1 = createPoint(-3.0f, 4.0f, 5.0f);
   struct tuple p2 = createPoint(0.0f, 0.0f, 0.0f);
@@ -1072,12 +1057,13 @@ int pointMultInverseTranslationTest() {
   assert(equal(p2.y,  7.0f));
   assert(equal(p2.z,  3.0f));
   assert(equal(p2.w,  1.0f));
+  return 1;
 }
 
 // 45 Translation does not affect vectors
 int vectorTranslationHasNoEffectTest() {
   Mat4x4 trans;
-  genTranslateMatrix(5.0f, -3.0f, 2.0f, &trans);
+  genTranslateMatrix(5.0f, -3.0f, 2.0f, trans);
   struct tuple v1 = createVector(-3.0f, 4.0f, 5.0f);
   struct tuple v2 = createPoint(0.0f, 0.0f, 0.0f);
   mat4x4MulTuple(trans, v1, &v2);
@@ -1085,6 +1071,7 @@ int vectorTranslationHasNoEffectTest() {
   assert(equal(v2.y,  4.0f));
   assert(equal(v2.z,  5.0f));
   assert(equal(v2.w,  0.0f));
+  return 1;
 }
 
 // 46 Scaling matrix applied to a point
@@ -1098,6 +1085,7 @@ int pointScaleMat4x4Test() {
   assert(equal(p2.y, 18.0f));
   assert(equal(p2.z, 32.0f));
   assert(equal(p2.w,  1.0f));
+  return 1;
 }
 
 // 46 Scaling matrix applied to a vector
@@ -1111,6 +1099,7 @@ int vecScaleMat4x4Test() {
   assert(equal(p2.y, 18.0f));
   assert(equal(p2.z, 32.0f));
   assert(equal(p2.w,  0.0f));
+  return 1;
 }
 
 // 46 Multiply inverse of scaling matrix
@@ -1126,6 +1115,7 @@ int multInverseScaleMatrixTest() {
   assert(equal(p2.y,  2.0f));
   assert(equal(p2.z,  2.0f));
   assert(equal(p2.w,  0.0f));
+  return 1;
 }
 
 // 48 Rotating a point around the x axis
@@ -1266,6 +1256,44 @@ int genShearMatrixTest() {
   return 1;
 }
 
+// 54 Individual transormations are applied in sequence
+int transformationsAppliedInSequenceTest() {
+  Mat4x4 rotMat;
+  Mat4x4 scaleMat;
+  Mat4x4 shearMat;
+  genRotationMatrixX(M_PI / 2, rotMat);
+  genScaleMatrix(5.0f, 5.0f, 5.0f, scaleMat);
+  genTranslateMatrix(10.0f, 5.0f, 7.0f, shearMat);
+  struct tuple p1 = createPoint(1.0f, 0.0f, 1.0f);
+  struct tuple p2 = createPoint(1.0f, -1.0f, 0.0f);
+  struct tuple p3 = createPoint(5.0f, -5.0f, 0.0f);
+  struct tuple p4 = createPoint(15.0f, 0.0f, 7.0f);
+  mat4x4MulTuple(rotMat, p1, &p2);
+  assert(equal(p2.x, 1.0f));
+  assert(equal(p2.y, -1.0f));
+  assert(equal(p2.z, 0.0f));
+  assert(equal(p2.w, 1.0f));
+  mat4x4MulTuple(scaleMat, p2, &p3);
+  assert(equal(p3.x, 5.0f));
+  assert(equal(p3.y, -5.0f));
+  assert(equal(p3.z, 0.0f));
+  assert(equal(p3.w, 1.0f));
+  mat4x4MulTuple(shearMat, p3, &p4);
+  assert(equal(p4.x, 15.0f));
+  assert(equal(p4.y, 0.0f));
+  assert(equal(p4.z, 7.0f));
+  assert(equal(p4.w, 1.0f));
+  p1.x = 1.0f; p1.y = 0.0f; p1.z = 1.0f;
+  mat4x4Mul(shearMat, scaleMat, scaleMat);
+  mat4x4Mul(scaleMat, rotMat, rotMat);
+  mat4x4MulTuple(rotMat, p1, &p2);
+  assert(equal(p2.x, 15.0f));
+  assert(equal(p2.y, 0.0f));
+  assert(equal(p2.z, 7.0f));
+  assert(equal(p2.w, 1.0f));
+  return 1;
+}
+
 int main() {
   unitTest("Create Point Test", createPointTest());
   unitTest("Create Vector Test", createVectorTest());
@@ -1312,6 +1340,7 @@ int main() {
   unitTest("Generate Rotation Matrix Y Test", genRotationMatrixYTest());
   unitTest("Generate Rotation Matrix Z Test", genRotationMatrixZTest());
   unitTest("Generate Sheer Matrix Test", genShearMatrixTest());
+  unitTest("Transformations Applied In Sequence Test", transformationsAppliedInSequenceTest());
 
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
