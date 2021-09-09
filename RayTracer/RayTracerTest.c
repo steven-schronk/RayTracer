@@ -11,8 +11,8 @@
 
 #define EPSILON 0.000001
 
-#define HEIGHT 50
-#define WIDTH  50
+#define HEIGHT 100
+#define WIDTH  100
 
 struct tuple { double x, y, z, w; };
 
@@ -1294,6 +1294,22 @@ int transformationsAppliedInSequenceTest() {
   return 1;
 }
 
+int drawClockTest() {
+  double rotation = 2 * 3.14159 / 12;
+  struct tuple twelve = createPoint(0, 0, 1);
+  struct tuple three = createPoint(0, 0, 0);
+  Mat4x4 rotMat;
+  for (int i = 0; i < 12; ++i) {
+    genRotationMatrixY(rotation * i, rotMat);
+    mat4x4MulTuple(rotMat, twelve, &three);
+    three.x = three.x * 40 + 50;  // 40 is radius of circle
+                                  // 50 is center in x and z
+    three.z = three.z * 40 + 50;
+    canvas[(int)three.x][(int)three.z].x = 1.0f;
+  }
+  canvas[50][50].y = 1.0f;
+}
+
 int main() {
   unitTest("Create Point Test", createPointTest());
   unitTest("Create Vector Test", createVectorTest());
@@ -1312,7 +1328,7 @@ int main() {
   unitTest("Dot Product Test", dotTest());
   unitTest("Cross Product Test", crossTest());
   unitTest("Hadamard Product Test", hadamardProductTest());
-  unitTest("Write Pixel Test", writePixelTest());
+  //unitTest("Write Pixel Test", writePixelTest());
   unitTest("Color Conversion Test", colorConvertTest());
   unitTest("Matrix Equality Test", matEqualTest());
   unitTest("4x4 Matrix Multiply Test", mat4x4MulTest());
@@ -1341,7 +1357,7 @@ int main() {
   unitTest("Generate Rotation Matrix Z Test", genRotationMatrixZTest());
   unitTest("Generate Sheer Matrix Test", genShearMatrixTest());
   unitTest("Transformations Applied In Sequence Test", transformationsAppliedInSequenceTest());
-
+  unitTest("Draw Clock Test", drawClockTest());
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
