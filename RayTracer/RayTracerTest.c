@@ -16,6 +16,19 @@
 
 struct tuple { double x, y, z, w; };
 
+struct ray { struct tuple origin; struct tuple direction; };
+
+struct intersection { int count; float first; float second; };
+
+static int sphere_count = 0;
+
+struct sphere { const int id; struct tuple location; };
+
+struct sphere generateSphere(struct tuple location) {
+  struct sphere sp = {sphere_count++, location };
+  return sp;
+}
+
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
 typedef double Mat4x4[4][4];
@@ -171,7 +184,6 @@ void mat4x4Transpose(Mat4x4 a) {
   }
 }
 
-
 void printTuple(struct tuple t) {
   printf("{ %.8f, %.8f, %.8f, %.8f }\n", t.x, t.y, t.z, t.w);
 }
@@ -319,11 +331,38 @@ void genRotationMatrixZ(const double rad, Mat4x4 m) {
   m[3][0] = 0.0f;     m[3][1] = 0.0f;      m[3][2] = 0.0f; m[3][3] = 1.0f;
 }
 
-void genShearMatrix(const double xy, const double xz, const double yx, const double yz, const double zx, const double zy, Mat4x4 m) {
+void genShearMatrix(const double xy, const double xz, const double yx,\
+  const double yz, const double zx, const double zy, Mat4x4 m) {
   m[0][0] = 1.0f; m[0][1] = xy;   m[0][2] = xz;   m[0][3] = 0.0f;
   m[1][0] = yx;   m[1][1] = 1.0f; m[1][2] = yz;   m[1][3] = 0.0f;
   m[2][0] = zx;   m[2][1] = zy;   m[2][2] = 1.0f; m[2][3] = 0.0f;
   m[3][0] = 0.0f; m[3][1] = 0.0f; m[3][2] = 0.0f; m[3][3] = 1.0f;
+}
+
+struct ray createRay(struct tuple p, struct tuple v) {
+  struct ray ray =  {p,v };
+  return ray;
+}
+
+struct tuple poisition(struct ray r, double t) {
+  struct tuple y = tupleMultScalar(r.direction, t);
+  struct tuple x = tupleAdd(r.origin, y);
+  return x;
+}
+
+bool intersectRay(struct ray ray, struct sphere sphere, struct intersection *intersect) {
+  struct tuple sphereToRay = tupleSub(ray.origin, createPoint(0.0f, 0.0f, 0.0f));
+  double a = dot(ray.direction, ray.direction);
+  double b = 2 * dot(ray.direction, sphereToRay);
+  double c = dot(sphereToRay, sphereToRay) - 1;
+  double discriminant = pow(b, 2) - 4 * a * c;
+  if (discriminant < 0) {
+    intersect->count = 0;
+    return;
+  }
+  intersect->count = 2;
+  intersect->first =  (-b - sqrt(discriminant)) / (2 * a);
+  intersect->second = (-b + sqrt(discriminant)) / (2 * a);
 }
 
 /*-------------------------------------------------------------*/
@@ -1294,6 +1333,7 @@ int transformationsAppliedInSequenceTest() {
   return 1;
 }
 
+// 55
 int drawClockTest() {
   double rotation = 2 * 3.14159 / 12;
   struct tuple twelve = createPoint(0, 0, 1);
@@ -1308,6 +1348,101 @@ int drawClockTest() {
     canvas[(int)three.x][(int)three.z].x = 1.0f;
   }
   canvas[50][50].y = 1.0f;
+}
+
+// 58 Creating and quering a ray
+int createRayTest() {
+  struct tuple point = createPoint(0.0f, 1.0f, 2.0f);
+  struct tuple vector = createVector(3.0f, 4.0f, 5.0f);
+  struct ray ray = createRay(point, vector);
+  assert(equal(ray.origin.x, 0.0f));
+  assert(equal(ray.origin.y, 1.0f));
+  assert(equal(ray.origin.z, 2.0f));
+  assert(equal(ray.direction.x, 3.0f));
+  assert(equal(ray.direction.y, 4.0f));
+  assert(equal(ray.direction.z, 5.0f));
+  return 1;
+}
+
+// 58 Computing a point from a distance
+int computePointAlongRayTest() {
+  struct tuple position = { 2.0f, 3.0f, 4.0f };
+  struct tuple direction = { 1.0f, 0.0f, 0.0f };
+  struct tuple intersect = { 0.0f, 0.0f, 0.0f };
+  struct ray ray = createRay(position, direction);
+
+  intersect = poisition(ray, 0.0f);
+  assert(equal(intersect.x, 2.0f));
+  assert(equal(intersect.y, 3.0f));
+  assert(equal(intersect.z, 4.0f));
+  assert(equal(intersect.w, 0.0f));
+
+  intersect = poisition(ray, 1.0f);
+  assert(equal(intersect.x, 3.0f));
+  assert(equal(intersect.y, 3.0f));
+  assert(equal(intersect.z, 4.0f));
+  assert(equal(intersect.w, 0.0f));
+
+  intersect = poisition(ray, -1.0f);
+  assert(equal(intersect.x, 1.0f));
+  assert(equal(intersect.y, 3.0f));
+  assert(equal(intersect.z, 4.0f));
+  assert(equal(intersect.w, 0.0f));
+
+  intersect = poisition(ray, 2.5f);
+  assert(equal(intersect.x, 4.5f));
+  assert(equal(intersect.y, 3.0f));
+  assert(equal(intersect.z, 4.0f));
+  assert(equal(intersect.w, 0.0f));
+  return 1;
+}
+
+// 59 A ray intersects a sphere at two points
+int rayIntersectTest() {
+  struct tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
+  struct sphere sphere = generateSphere(sphereLocation);
+  struct tuple position = { 0.0f, 0.0f, -5.0f };
+  struct tuple direction = { 0.0f, 0.0f, 1.0f };
+  struct ray ray = createRay(position, direction);
+  struct intersection intersect = { 0.0f, 0.0f, 0.0f };
+  intersectRay(ray, sphere, &intersect);
+  assert(equal(intersect.first, 4.0f));
+  assert(equal(intersect.second, 6.0f));
+
+  // 60 ray intersects a sphere at a tangent
+  ray.origin.x =  0.0f;
+  ray.origin.y =  1.0f;
+  ray.origin.z = -5.0f;
+  intersectRay(ray, sphere, &intersect);
+  assert(equal(intersect.count, 2));
+  assert(equal(intersect.first, 5.0f));
+  assert(equal(intersect.second, 5.0f));
+
+  // 60 ray misses a sphere
+  ray.origin.x = 0.0f;
+  ray.origin.y = 2.0f;
+  ray.origin.z = -5.0f;
+  intersectRay(ray, sphere, &intersect);
+  assert(equal(intersect.count, 0));
+
+  // 61 ray originates inside a sphere
+  ray.origin.x = 0.0f;
+  ray.origin.y = 0.0f;
+  ray.origin.z = 0.0f;
+  intersectRay(ray, sphere, &intersect);
+  assert(equal(intersect.count, 2));
+  assert(equal(intersect.first, -1.0f));
+  assert(equal(intersect.second, 1.0f));
+
+  // 62 shere is behind an array
+  ray.origin.x = 0.0f;
+  ray.origin.y = 0.0f;
+  ray.origin.z = 5.0f;
+  intersectRay(ray, sphere, &intersect);
+  assert(equal(intersect.count, 2));
+  assert(equal(intersect.first, -6.0f));
+  assert(equal(intersect.second, -4.0f));
+  return 1;
 }
 
 int main() {
@@ -1358,6 +1493,10 @@ int main() {
   unitTest("Generate Sheer Matrix Test", genShearMatrixTest());
   unitTest("Transformations Applied In Sequence Test", transformationsAppliedInSequenceTest());
   unitTest("Draw Clock Test", drawClockTest());
+  unitTest("Create Ray Test", createRayTest());
+  unitTest("Compute Point Along Ray Test", computePointAlongRayTest());
+  unitTest("Ray Intersect Test", rayIntersectTest());
+
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
