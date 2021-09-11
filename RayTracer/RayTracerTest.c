@@ -22,6 +22,11 @@ struct ray { struct tuple origin; struct tuple direction; };
 
 struct intersect { int count; float first; float second; int object_id; };
 
+
+// this is not finished.
+// go through all the intersections
+// ignore the negative ones altogether
+// find the intersection with the lowest number  (check the book about this)
 struct intersect* getIntersectionHit(const List_Head* intersection_list) {
   int list_length = list_len(intersection_list);
   if (0 == list_length) return NULL;
@@ -1530,8 +1535,18 @@ int intersectSetsObjectOnIntersectionTest() {
 }
 
 int hitVariousIntersectionsTest() {
+  struct tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
+  struct sphere sphere = generateSphere(sphereLocation);
 
   // 65 The hit when all intersections have a positive t
+  List_Head* intersection_list1 = list_new();
+  struct intersect intersect1 = { 0, 1.0f, 1.0f, sphere.id };
+  addIntersectionToList(intersection_list1, &intersect1);
+  struct intersect intersect2 = { 0, 2.0f, 2.0f, sphere.id };
+  addIntersectionToList(intersection_list1, &intersect2);
+  struct intersect* intersectFound = NULL;
+  intersectFound = getIntersectionHit(intersection_list1);
+  assert(equal(intersectFound->first, 1.0f));
 
   // 65 The hit when some intersections have a negative t
 
