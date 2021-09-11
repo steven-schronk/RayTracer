@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lib_ll.h"
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -18,11 +20,40 @@ struct tuple { double x, y, z, w; };
 
 struct ray { struct tuple origin; struct tuple direction; };
 
-struct intersection { int count; float first; float second; };
+struct intersect { int count; float first; float second; int object_id; };
+
+struct intersect* getIntersectionHit(const List_Head* intersection_list) {
+  int list_length = list_len(intersection_list);
+  if (0 == list_length) return NULL;
+  List_Node* current_node = list_next(intersection_list);
+  int count = 0;
+  while (count++ < list_length) {
+    current_node = list_next(intersection_list);
+  }
+  return current_node->pData;
+}
+
+struct intersect* getIntersectionByLocation(const int loc, const List_Head* intersection_list) {
+  assert(loc >= 0 || "Cannot get negative location number when getting intersection by location");
+  assert(loc <= list_len(intersection_list) || "Number larger than the length of the list when getting intersection by location");
+  List_Node* current_node = NULL;
+  int count = 0;
+  while (count <= loc) {
+    current_node = list_next(intersection_list);
+    ++count;
+  }
+  return current_node->pData;
+}
+
+bool addIntersectionToList(List_Head* intersection_list, const struct intersect *intersect) {
+  assert(intersection_list != NULL && "Call to add insertion to list cannot contain null intersection list");
+  assert(intersect != NULL && "Call to add insertion to list cannot contain null intersection struct");
+  list_ins_head_data(intersection_list, intersect);
+}
 
 static int sphere_count = 0;
 
-struct sphere { const int id; struct tuple location; };
+struct sphere { const int id; struct tuple location; double t; };
 
 struct sphere generateSphere(struct tuple location) {
   struct sphere sp = {sphere_count++, location };
@@ -56,14 +87,6 @@ struct tuple createVector(double x, double y, double z) {
   struct tuple t = { x, y, z, 0.0f };
   return t;
 }
-
-/*
-Mat4x4 *Mat4x4Create() {
-  Mat4x4 mat = { { 3.0f, -9.0f, 7.0f, 3.0f },{ 3.0f, -8.0f, 2.0f, -9.0f },\
-      { -4.0f, 4.0f, 4.0f, 1.0f},{ -6.0f, 5.0f, -1.0f, 1.0f } };
-  return mat;
-}
-*/
 
 bool tupleIsPoint(struct tuple t) { return t.w == 1.0 ? true : false; }
 
@@ -350,7 +373,8 @@ struct tuple poisition(struct ray r, double t) {
   return x;
 }
 
-bool intersectRay(struct ray ray, struct sphere sphere, struct intersection *intersect) {
+bool intersectRay(struct ray ray, struct sphere sphere, struct intersect *intersect) {
+  intersect->object_id = sphere.id;
   struct tuple sphereToRay = tupleSub(ray.origin, createPoint(0.0f, 0.0f, 0.0f));
   double a = dot(ray.direction, ray.direction);
   double b = 2 * dot(ray.direction, sphereToRay);
@@ -358,14 +382,17 @@ bool intersectRay(struct ray ray, struct sphere sphere, struct intersection *int
   double discriminant = pow(b, 2) - 4 * a * c;
   if (discriminant < 0) {
     intersect->count = 0;
-    return;
+    return false;
   }
   intersect->count = 2;
   intersect->first =  (-b - sqrt(discriminant)) / (2 * a);
   intersect->second = (-b + sqrt(discriminant)) / (2 * a);
+  return true;
 }
 
-/*-------------------------------------------------------------*/
+/*------------------------------------------------------------------------------------------------------------------*/
+/*------------------------------------------------------------------------------------------------------------------*/
+/*------------------------------------------------------------------------------------------------------------------*/
 
 void unitTest(char* msg, int assert) {
   int msg_length = strlen(msg);
@@ -1348,6 +1375,7 @@ int drawClockTest() {
     canvas[(int)three.x][(int)three.z].x = 1.0f;
   }
   canvas[50][50].y = 1.0f;
+  return 1;
 }
 
 // 58 Creating and quering a ray
@@ -1404,7 +1432,7 @@ int rayIntersectTest() {
   struct tuple position = { 0.0f, 0.0f, -5.0f };
   struct tuple direction = { 0.0f, 0.0f, 1.0f };
   struct ray ray = createRay(position, direction);
-  struct intersection intersect = { 0.0f, 0.0f, 0.0f };
+  struct intersect intersect = { 0.0f, 0.0f, 0.0f };
   intersectRay(ray, sphere, &intersect);
   assert(equal(intersect.first, 4.0f));
   assert(equal(intersect.second, 6.0f));
@@ -1442,6 +1470,75 @@ int rayIntersectTest() {
   assert(equal(intersect.count, 2));
   assert(equal(intersect.first, -6.0f));
   assert(equal(intersect.second, -4.0f));
+  return 1;
+}
+
+// 63 Intersection encapsulates t and object^M
+int intersectionEncapTandObjectTest() {
+  struct tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
+    struct sphere sphere = generateSphere(sphereLocation);
+    const int sphere_id = sphere.id;
+    struct intersect intersect = { 0.0f, 3.5f, 0.0f, sphere_id };
+    assert(equal(intersect.first, 3.5f));
+    assert(intersect.object_id = sphere_id);
+    return 1;
+}
+
+// 64 Aggregating intersections
+int aggregatingIntersectionsTest() {
+  struct tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
+  struct sphere sphere = generateSphere(sphereLocation);
+  struct tuple position = { 0.0f, 0.0f, -5.0f };
+  struct tuple direction = { 0.0f, 0.0f, 1.0f };
+  struct ray ray = createRay(position, direction);
+  struct intersect intersect1 = { 0, 0.0f, 0.0f, 0 };
+  intersectRay(ray, sphere, &intersect1);
+
+  List_Head* intersection_list = list_new();
+  list_ins_head_data(intersection_list, &intersect1);
+  ray.origin.x = 2.0f;
+  struct intersect intersect2 = { 0, 0.0f, 0.0f, 0 };
+  intersectRay(ray, sphere, &intersect2);
+  list_ins_head_data(intersection_list, &intersect2);
+  assert(list_size(intersection_list) == 2);
+  struct intersect* intersectDat = getIntersectionByLocation(0, intersection_list);
+  assert(equal(intersectDat->first, 0.0f));
+  intersectDat = getIntersectionByLocation(1, intersection_list);
+  assert(equal(intersectDat->first, 0.0f));
+  return 1;
+}
+
+// 64 Intersect sets the object on the intersection
+int intersectSetsObjectOnIntersectionTest() {
+  struct tuple position = { 0.0f, 0.0f, -5.0f };
+  struct tuple direction = { 0.0f, 0.0f, 1.0f };
+  struct ray ray = createRay(position, direction);
+  struct tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
+  struct sphere sphere = generateSphere(sphereLocation);
+  struct intersect intersect = { 0, 0.0f, 0.0f, 0 };
+  intersectRay(ray, sphere, &intersect);
+  List_Head* intersection_list = list_new();
+  addIntersectionToList(intersection_list, &intersect);
+  intersectRay(ray, sphere, &intersect);
+  addIntersectionToList(intersection_list, &intersect);
+  struct intersect* intersectDat = getIntersectionByLocation(0, intersection_list);
+  assert(equal(intersectDat->object_id, sphere.id));
+  intersectDat = getIntersectionByLocation(1, intersection_list);
+  assert(equal(intersectDat->object_id, sphere.id));
+  assert(list_size(intersection_list) == 2);
+  return 1;
+}
+
+int hitVariousIntersectionsTest() {
+
+  // 65 The hit when all intersections have a positive t
+
+  // 65 The hit when some intersections have a negative t
+
+  // 65 The hit when all intersections have a negative t
+
+  // 66 The hit is always the lowest nonnegative intersection
+
   return 1;
 }
 
@@ -1487,7 +1584,7 @@ int main() {
   unitTest("Scaling Matrix Applied To A Vector Test", vecScaleMat4x4Test());
   unitTest("Multiply Inverse Of Scaling Matrix Test", multInverseScaleMatrixTest());
   unitTest("Generate Rotation Matrix X Test", genRotationMatrixXTest());
-  unitTest("Generate  Rotation Matrix X Reverse Test()", genRotationMatrixReverseTest());
+  unitTest("Generate  Rotation Matrix X Reverse Test", genRotationMatrixReverseTest());
   unitTest("Generate Rotation Matrix Y Test", genRotationMatrixYTest());
   unitTest("Generate Rotation Matrix Z Test", genRotationMatrixZTest());
   unitTest("Generate Sheer Matrix Test", genShearMatrixTest());
@@ -1496,6 +1593,10 @@ int main() {
   unitTest("Create Ray Test", createRayTest());
   unitTest("Compute Point Along Ray Test", computePointAlongRayTest());
   unitTest("Ray Intersect Test", rayIntersectTest());
+  unitTest("Intersection Encapsulate T Value And Object ID Test", intersectionEncapTandObjectTest());
+  unitTest("Aggregating Intersections Test", aggregatingIntersectionsTest());
+  unitTest("Intersect Sets Object On Intersection Test", intersectSetsObjectOnIntersectionTest());
+  unitTest("Hit Various Intersections Test", hitVariousIntersectionsTest());
 
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
