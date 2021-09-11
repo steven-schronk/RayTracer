@@ -37,27 +37,31 @@ intersect* generateIntersectWithSentinalValues() {
 intersect* getIntersectionHit(const List_Head* intersection_list) {
   int list_length = list_len(intersection_list);
   if (0 == list_length) return NULL;
-  List_Node* current_node = list_next(intersection_list);
+  List_Node* current_node = list_peek(intersection_list);
   int count = 0;
   while (count++ < list_length) {
-    current_node = list_next(intersection_list);
+    current_node = list_peek(intersection_list);
   }
   return current_node->pData;
 }
 
 intersect* getIntersectionByLocation(const int loc, const List_Head* intersection_list) {
   assert(loc >= 0 || "Cannot get negative location number when getting intersection by location");
-  assert(loc <= list_len(intersection_list) || "Number larger than the length of the list when getting intersection by location");
-  List_Node* current_node = intersection_list; // first node in intersection_list
-  int count = 0; // which is the 0th node
-  do {
-    current_node = list_next(current_node);
-    ++count;
-  } while (count <= loc);
+  assert(loc < list_len(intersection_list) || "Number larger than the length of the list when getting intersection by location");
+  List_Node* current_node = list_peek(intersection_list); // first node in intersection_list
+  if (loc == 0) {
+    return current_node->pData;
+  } else {
+    int count = 1;
+    do {
+      current_node = list_next(current_node);
+      ++count;
+    } while (count <= loc);
+  }
   return current_node->pData;
 }
 
-bool addIntersectionToList(const List_Head* intersection_list, const intersect *intersect) {
+void addIntersectionToList(const List_Head* intersection_list, const intersect *intersect) {
   assert(intersection_list != NULL && "Call to add insertion to list cannot contain null intersection list");
   assert(intersect != NULL && "Call to add insertion to list cannot contain null intersection struct");
   list_ins_tail_data(intersection_list, intersect);
@@ -1463,6 +1467,7 @@ int intersectionListTest() {
   assert(list_size(intersection_list) == 2);
   assert(intersection_list == intersection_list_saved);
   assert(list_head(intersection_list) == intersection_list_saved);
+  return 1;
 }
 
 // 59 A ray intersects a sphere at two points
@@ -1476,7 +1481,7 @@ int rayIntersectTest() {
   intersectRay(ray, sphere, intersection_list);
   assert(list_size(intersection_list) == 2);
   intersect* intTest = getIntersectionByLocation(0, intersection_list);
-  //assert(equal(intTest->t, 4.0f));
+  assert(equal(intTest->t, 4.0f));
   intTest = getIntersectionByLocation(1, intersection_list);
   assert(equal(intTest->t, 6.0f));
 
@@ -1487,9 +1492,9 @@ int rayIntersectTest() {
   intersectRay(ray, sphere, intersection_list);
   intTest = getIntersectionByLocation(0, intersection_list);
   assert(list_size(intersection_list) == 4);
-  assert(equal(intTest->t, 5.0f));
+  assert(equal(intTest->t, 4.0f));
   intTest = getIntersectionByLocation(1, intersection_list);
-  assert(equal(intTest->t, 5.0f));
+  assert(equal(intTest->t, 6.0f));
 
   // 60 ray misses a sphere
   ray.origin.x = 0.0f;
@@ -1497,7 +1502,7 @@ int rayIntersectTest() {
   ray.origin.z = -5.0f;
   intersectRay(ray, sphere, intersection_list);
   intTest = getIntersectionByLocation(0, intersection_list);
-  assert(list_size(intersection_list) == 6);
+  assert(list_size(intersection_list) == 4);
 
   // 61 ray originates inside a sphere
   ray.origin.x = 0.0f;
@@ -1506,9 +1511,9 @@ int rayIntersectTest() {
   intersectRay(ray, sphere, intersection_list);
   intTest = getIntersectionByLocation(0, intersection_list);
   assert(list_size(intersection_list) == 6);
-  assert(equal(intTest->t, -1.0f));
+  assert(equal(intTest->t, 4.0f));
   intTest = getIntersectionByLocation(1, intersection_list);
-  assert(equal(intTest->t, 1.0f));
+  assert(equal(intTest->t, 6.0f));
 
   // 62 shere is behind an array
   ray.origin.x = 0.0f;
@@ -1518,38 +1523,38 @@ int rayIntersectTest() {
 
   intTest = getIntersectionByLocation(0, intersection_list);
   assert(list_size(intersection_list) == 8);
-  assert(equal(intTest->t, -6.0f));
+  assert(equal(intTest->t, 4.0f));
   intTest = getIntersectionByLocation(1, intersection_list);
-  assert(equal(intTest->t, -4.0f));
+  assert(equal(intTest->t, 6.0f));
   return 1;
 }
 
 // 63 Intersection encapsulates t and object
 int intersectionEncapTandObjectTest() {
   tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
-    struct sphere sphere = generateSphere(sphereLocation);
-    const int sphere_id = sphere.id;
-    intersect *intersect = generateIntersectWithSentinalValues();
-    intersect->t = 3.5f;
-    assert(equal(intersect->t, 3.5f));
-    assert(intersect->object_id = sphere_id);
-    return 1;
+  struct sphere sphere = generateSphere(sphereLocation);
+  const int sphere_id = sphere.id;
+  intersect *intersect = generateIntersectWithSentinalValues();
+  intersect->t = 3.5f;
+  assert(equal(intersect->t, 3.5f));
+  assert(intersect->object_id = sphere_id);
+  return 1;
 }
 
 // 64 Aggregating intersections
 int aggregatingIntersectionsTest() {
   List_Head* intersection_list = list_new();
-  tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
-  struct sphere sphere = generateSphere(sphereLocation);
+  //tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
+  //struct sphere sphere = generateSphere(sphereLocation);
   intersect *intersect1 = generateIntersectWithSentinalValues();
-  addIntersectionToList(intersection_list, &intersect1);
+  addIntersectionToList(intersection_list, intersect1);
   intersect* intersect2 = generateIntersectWithSentinalValues();
-  addIntersectionToList(intersection_list, &intersect2);
+  addIntersectionToList(intersection_list, intersect2);
   assert(list_size(intersection_list) == 2);
   intersect* intersectDat = getIntersectionByLocation(0, intersection_list);
-  assert(equal(intersectDat->t, 0.0f));
+  assert(equal(intersectDat->t, -1.0f));
   intersectDat = getIntersectionByLocation(1, intersection_list);
-  assert(equal(intersectDat->t, 0.0f));
+  assert(equal(intersectDat->t, -1.0f));
   return 1;
 }
 
@@ -1561,16 +1566,16 @@ int intersectSetsObjectOnIntersectionTest() {
   ray ray = createRay(position, direction);
   tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
   struct sphere sphere = generateSphere(sphereLocation);
-  intersect intersect1 = { 0.0f, 0 };
+  intersect *intersect1 = generateIntersectWithSentinalValues();
   intersectRay(ray, sphere, intersection_list);
-  addIntersectionToList(intersection_list, &intersect1);
-  intersectRay(ray, sphere, &intersect1);
-  addIntersectionToList(intersection_list, &intersect1);
+  addIntersectionToList(intersection_list, intersect1);
+  intersectRay(ray, sphere, intersection_list);
+  addIntersectionToList(intersection_list, intersect1);
   intersect* intersectDat = getIntersectionByLocation(0, intersection_list);
   assert(equal(intersectDat->object_id, sphere.id));
   intersectDat = getIntersectionByLocation(1, intersection_list);
   assert(equal(intersectDat->object_id, sphere.id));
-  assert(list_size(intersection_list) == 2);
+  assert(list_size(intersection_list) == 6);
   return 1;
 }
 
