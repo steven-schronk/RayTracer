@@ -16,18 +16,25 @@
 #define HEIGHT 100
 #define WIDTH  100
 
-struct tuple { double x, y, z, w; };
+typedef struct { double x, y, z, w; } tuple;
 
-struct ray { struct tuple origin; struct tuple direction; };
+typedef struct { tuple origin; tuple direction; } ray;
 
-struct intersect { int count; float first; float second; int object_id; };
+typedef struct { float t; int object_id; } intersect;
 
+intersect* generateIntersectWithSentinalValues() {
+  intersect* inter = (intersect*)malloc(sizeof(intersect));
+  assert(inter != NULL);
+  inter->object_id = -1; // a proper intersect will never have a negative id
+  inter->t = -1; // unlikley to have a negative t until more advanced use
+  return inter;
+}
 
 // this is not finished.
 // go through all the intersections
 // ignore the negative ones altogether
 // find the intersection with the lowest number  (check the book about this)
-struct intersect* getIntersectionHit(const List_Head* intersection_list) {
+intersect* getIntersectionHit(const List_Head* intersection_list) {
   int list_length = list_len(intersection_list);
   if (0 == list_length) return NULL;
   List_Node* current_node = list_next(intersection_list);
@@ -38,29 +45,29 @@ struct intersect* getIntersectionHit(const List_Head* intersection_list) {
   return current_node->pData;
 }
 
-struct intersect* getIntersectionByLocation(const int loc, const List_Head* intersection_list) {
+intersect* getIntersectionByLocation(const int loc, const List_Head* intersection_list) {
   assert(loc >= 0 || "Cannot get negative location number when getting intersection by location");
   assert(loc <= list_len(intersection_list) || "Number larger than the length of the list when getting intersection by location");
-  List_Node* current_node = NULL;
-  int count = 0;
-  while (count <= loc) {
-    current_node = list_next(intersection_list);
+  List_Node* current_node = intersection_list; // first node in intersection_list
+  int count = 0; // which is the 0th node
+  do {
+    current_node = list_next(current_node);
     ++count;
-  }
+  } while (count <= loc);
   return current_node->pData;
 }
 
-bool addIntersectionToList(List_Head* intersection_list, const struct intersect *intersect) {
+bool addIntersectionToList(const List_Head* intersection_list, const intersect *intersect) {
   assert(intersection_list != NULL && "Call to add insertion to list cannot contain null intersection list");
   assert(intersect != NULL && "Call to add insertion to list cannot contain null intersection struct");
-  list_ins_head_data(intersection_list, intersect);
+  list_ins_tail_data(intersection_list, intersect);
 }
 
 static int sphere_count = 0;
 
-struct sphere { const int id; struct tuple location; double t; };
+struct sphere { const int id; tuple location; double t; };
 
-struct sphere generateSphere(struct tuple location) {
+struct sphere generateSphere(tuple location) {
   struct sphere sp = {sphere_count++, location };
   return sp;
 }
@@ -69,9 +76,9 @@ typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
 typedef double Mat4x4[4][4];
 
-struct tuple canvas[WIDTH][HEIGHT];
+tuple canvas[WIDTH][HEIGHT];
 
-void writePixel(int x, int y, struct tuple color) {
+void writePixel(int x, int y, tuple color) {
   canvas[x][y] = color;
 }
 
@@ -83,47 +90,47 @@ bool equal(double a, double b) {
   return false;
 }
 
-struct tuple createPoint(double x, double y, double z) {
-  struct tuple t = { x, y, z, 1.0f };
+tuple createPoint(double x, double y, double z) {
+  tuple t = { x, y, z, 1.0f };
   return t;
 }
 
-struct tuple createVector(double x, double y, double z) {
-  struct tuple t = { x, y, z, 0.0f };
+tuple createVector(double x, double y, double z) {
+  tuple t = { x, y, z, 0.0f };
   return t;
 }
 
-bool tupleIsPoint(struct tuple t) { return t.w == 1.0 ? true : false; }
+bool tupleIsPoint(tuple t) { return t.w == 1.0 ? true : false; }
 
-bool tupleIsVector(struct tuple t) { return t.w == 0.0 ? true : false; }
+bool tupleIsVector(tuple t) { return t.w == 0.0 ? true : false; }
 
-struct tuple tupleAdd(struct tuple t1, struct tuple t2) {
-  struct tuple t3 = { t1.x + t2.x, t1.y + t2.y, t1.z + t2.z, t1.w + t2.w };
+tuple tupleAdd(tuple t1, tuple t2) {
+  tuple t3 = { t1.x + t2.x, t1.y + t2.y, t1.z + t2.z, t1.w + t2.w };
   return t3;
 }
 
-struct tuple tupleSub(struct tuple t1, struct tuple t2) {
-  struct tuple t3 = { t1.x - t2.x, t1.y - t2.y, t1.z - t2.z};
+tuple tupleSub(tuple t1, tuple t2) {
+  tuple t3 = { t1.x - t2.x, t1.y - t2.y, t1.z - t2.z};
   return t3;
 }
 
-struct tuple tupleNegate(struct tuple t) {
-  struct tuple neg = { 0.0f, 0.0f, 0.0f, 0.0f };
-  struct tuple ret = tupleSub(neg, t);
+tuple tupleNegate(tuple t) {
+  tuple neg = { 0.0f, 0.0f, 0.0f, 0.0f };
+  tuple ret = tupleSub(neg, t);
   return ret;
 }
 
-struct tuple tupleMultScalar(struct tuple t, double s) {
-  struct tuple ret = { t.x * s, t.y * s, t.z * s, t.w *s };
+tuple tupleMultScalar(tuple t, double s) {
+  tuple ret = { t.x * s, t.y * s, t.z * s, t.w *s };
   return ret;
 }
 
-struct tuple tupleDivScalar(struct tuple t, double s) {
-  struct tuple ret = { t.x / s, t.y / s, t.z / s, t.w / s };
+tuple tupleDivScalar(tuple t, double s) {
+  tuple ret = { t.x / s, t.y / s, t.z / s, t.w / s };
   return ret;
 }
 
-double tupleMagVec(struct tuple t) {
+double tupleMagVec(tuple t) {
   double magx = pow(t.x, 2);
   double magy = pow(t.y, 2);
   double magz = pow(t.z, 2);
@@ -131,13 +138,13 @@ double tupleMagVec(struct tuple t) {
   return mag;
 }
 
-struct tuple normVec(struct tuple t) {
+tuple normVec(tuple t) {
   double mag = tupleMagVec(t);
-  struct tuple ret = { t.x / mag, t.y / mag, t.z / mag};
+  tuple ret = { t.x / mag, t.y / mag, t.z / mag};
   return ret;
 }
 
-double dot(struct tuple t1, struct tuple t2) {
+double dot(tuple t1, tuple t2) {
   double prod1 = t1.x * t2.x;
   double prod2 = t1.y * t2.y;
   double prod3 = t1.z * t2.z;
@@ -146,16 +153,16 @@ double dot(struct tuple t1, struct tuple t2) {
   return dot;
 }
 
-struct tuple cross(struct tuple a, struct tuple b) {
+tuple cross(tuple a, tuple b) {
   double x = a.y * b.z - a.z * b.y;
   double y = a.z * b.x - a.x * b.z;
   double z = a.x * b.y - a.y * b.x;
-  struct tuple cross = createVector(x, y, z);
+  tuple cross = createVector(x, y, z);
   return cross;
 }
 
-struct tuple hadamardProduct(struct tuple c1, struct tuple c2) {
-  struct tuple color = { c1.x * c2.x, c1.y * c2.y, c1.z * c2.z };
+tuple hadamardProduct(tuple c1, tuple c2) {
+  tuple color = { c1.x * c2.x, c1.y * c2.y, c1.z * c2.z };
   return color;
 }
 
@@ -194,7 +201,7 @@ void mat4x4Mul(const Mat4x4 a, const Mat4x4 b, Mat4x4 m) {
   }
 }
 
-void mat4x4MulTuple(const Mat4x4 a, const struct tuple b, struct tuple *c) {
+void mat4x4MulTuple(const Mat4x4 a, const tuple b, tuple *c) {
     c->x = b.x * a[0][0] + b.y * a[0][1] + b.z * a[0][2] + b.w * a[0][3];
     c->y = b.x * a[1][0] + b.y * a[1][1] + b.z * a[1][2] + b.w * a[1][3];
     c->z = b.x * a[2][0] + b.y * a[2][1] + b.z * a[2][2] + b.w * a[2][3];
@@ -212,7 +219,7 @@ void mat4x4Transpose(Mat4x4 a) {
   }
 }
 
-void printTuple(struct tuple t) {
+void printTuple(tuple t) {
   printf("{ %.8f, %.8f, %.8f, %.8f }\n", t.x, t.y, t.z, t.w);
 }
 
@@ -367,31 +374,34 @@ void genShearMatrix(const double xy, const double xz, const double yx,\
   m[3][0] = 0.0f; m[3][1] = 0.0f; m[3][2] = 0.0f; m[3][3] = 1.0f;
 }
 
-struct ray createRay(struct tuple p, struct tuple v) {
-  struct ray ray =  {p,v };
+ray createRay(tuple p, tuple v) {
+  ray ray =  {p,v };
   return ray;
 }
 
-struct tuple poisition(struct ray r, double t) {
-  struct tuple y = tupleMultScalar(r.direction, t);
-  struct tuple x = tupleAdd(r.origin, y);
+tuple poisition(ray r, double t) {
+  tuple y = tupleMultScalar(r.direction, t);
+  tuple x = tupleAdd(r.origin, y);
   return x;
 }
 
-bool intersectRay(struct ray ray, struct sphere sphere, struct intersect *intersect) {
-  intersect->object_id = sphere.id;
-  struct tuple sphereToRay = tupleSub(ray.origin, createPoint(0.0f, 0.0f, 0.0f));
+bool intersectRay(ray ray, struct sphere sphere, const List_Head* intersection_list) {
+  tuple sphereToRay = tupleSub(ray.origin, createPoint(0.0f, 0.0f, 0.0f));
   double a = dot(ray.direction, ray.direction);
   double b = 2 * dot(ray.direction, sphereToRay);
   double c = dot(sphereToRay, sphereToRay) - 1;
   double discriminant = pow(b, 2) - 4 * a * c;
   if (discriminant < 0) {
-    intersect->count = 0;
     return false;
   }
-  intersect->count = 2;
-  intersect->first =  (-b - sqrt(discriminant)) / (2 * a);
-  intersect->second = (-b + sqrt(discriminant)) / (2 * a);
+  intersect *intersect1 = generateIntersectWithSentinalValues();
+  intersect *intersect2 = generateIntersectWithSentinalValues();
+  intersect1->object_id = sphere.id;
+  intersect2->object_id = sphere.id;
+  intersect1->t = (-b - sqrt(discriminant)) / (2 * a);
+  intersect2->t = (-b + sqrt(discriminant)) / (2 * a);
+  addIntersectionToList(intersection_list, intersect1);
+  addIntersectionToList(intersection_list, intersect2);
   return true;
 }
 
@@ -439,7 +449,7 @@ int writeCanvasToFile() {
 
 // 4 creates tuples with w=1
 int createPointTest() {
-  struct tuple t = createPoint(4.0f, -4.0f, 3.0f);
+  tuple t = createPoint(4.0f, -4.0f, 3.0f);
   assert(equal(t.x, 4.0f));
   assert(equal(t.y, -4.0f));
   assert(equal(t.z, 3.0f));
@@ -449,7 +459,7 @@ int createPointTest() {
 
 // 4 creates tuples with w=0
 int createVectorTest() {
-  struct tuple t = createVector(4.0f, -4.0f, 3.0f);
+  tuple t = createVector(4.0f, -4.0f, 3.0f);
   assert(equal(t.x, 4.0f));
   assert(equal(t.y, -4.0f));
   assert(equal(t.z, 3.0f));
@@ -460,7 +470,7 @@ int createVectorTest() {
 // 4 A tuple with w=1.0 is a point
 int tupleWithW0IsAPointTest()
 {
-  struct tuple a = { 4.3f, -4.2f, 3.1f, 1.0f };
+  tuple a = { 4.3f, -4.2f, 3.1f, 1.0f };
   assert(equal(a.x,  4.3f));
   assert(equal(a.y, -4.2f));
   assert(equal(a.z,  3.1f));
@@ -468,7 +478,7 @@ int tupleWithW0IsAPointTest()
   assert(tupleIsPoint(a)  == true);
   assert(tupleIsVector(a) == false);
 
-  struct tuple b = { 4.3f, -4.2f, 3.1f, 0.0f };
+  tuple b = { 4.3f, -4.2f, 3.1f, 0.0f };
   assert(equal(b.x,  4.3f));
   assert(equal(b.y, -4.2f));
   assert(equal(b.z,  3.1f));
@@ -480,9 +490,9 @@ int tupleWithW0IsAPointTest()
 
 // 6 Adding two tuples
 int tupleAddTest() {
-  struct tuple a = { 3.0f, -2.0f, 5.0f, 1.0f };
-  struct tuple b = { -2.0f, 3.0f, 1.0f, 0.0f };
-  struct tuple c = tupleAdd(a, b);
+  tuple a = { 3.0f, -2.0f, 5.0f, 1.0f };
+  tuple b = { -2.0f, 3.0f, 1.0f, 0.0f };
+  tuple c = tupleAdd(a, b);
   assert(equal(c.x, 1.0f));
   assert(equal(c.y, 1.0f));
   assert(equal(c.z, 6.0f));
@@ -492,9 +502,9 @@ int tupleAddTest() {
 
 // 6 Subtracting two points
 int tupleSubTest() {
-  struct tuple a = { 3.0f, 2.0f, 1.0f };
-  struct tuple b = { 5.0f, 6.0f, 7.0f };
-  struct tuple c = tupleSub(a, b);
+  tuple a = { 3.0f, 2.0f, 1.0f };
+  tuple b = { 5.0f, 6.0f, 7.0f };
+  tuple c = tupleSub(a, b);
   assert(equal(c.x, -2.0f));
   assert(equal(c.y, -4.0f));
   assert(equal(c.z, -6.0f));
@@ -503,9 +513,9 @@ int tupleSubTest() {
 
 // 6 Subtracting vector from a point
 int subtractVetorFromAPointTest() {
-  struct tuple pt = createPoint(3.0f, 2.0f, 1.0f);
-  struct tuple vec = createVector(5.0f, 6.0f, 7.0f);
-  struct tuple ans = tupleSub(pt, vec);
+  tuple pt = createPoint(3.0f, 2.0f, 1.0f);
+  tuple vec = createVector(5.0f, 6.0f, 7.0f);
+  tuple ans = tupleSub(pt, vec);
   assert(equal(ans.x, -2.0f));
   assert(equal(ans.y, -4.0f));
   assert(equal(ans.z, -6.0f));
@@ -514,9 +524,9 @@ int subtractVetorFromAPointTest() {
 
 // 7 Subtracting two vectors
 int subtractTwoVectorsTest() {
-  struct tuple vec1 = createVector(3.0f, 2.0f, 1.0f);
-  struct tuple vec2 = createVector(5.0f, 6.0f, 7.0f);
-  struct tuple vec3 = tupleSub(vec1, vec2);
+  tuple vec1 = createVector(3.0f, 2.0f, 1.0f);
+  tuple vec2 = createVector(5.0f, 6.0f, 7.0f);
+  tuple vec3 = tupleSub(vec1, vec2);
   assert(equal(vec3.x, -2.0f));
   assert(equal(vec3.y, -4.0f));
   assert(equal(vec3.z, -6.0f));
@@ -525,9 +535,9 @@ int subtractTwoVectorsTest() {
 
 // 7 Subtracting a vector from zero vector
 int subtractVectorFromZeroVectorTest() {
-  struct tuple zero = createVector(0.0f, 0.0f, 0.0f);
-  struct tuple vec1 = createVector(1.0f, -2.0f, 3.0f);
-  struct tuple vec2 = tupleSub(zero, vec1);
+  tuple zero = createVector(0.0f, 0.0f, 0.0f);
+  tuple vec1 = createVector(1.0f, -2.0f, 3.0f);
+  tuple vec2 = tupleSub(zero, vec1);
   assert(equal(vec2.x, -1.0f));
   assert(equal(vec2.y,  2.0f));
   assert(equal(vec2.z, -3.0f));
@@ -536,7 +546,7 @@ int subtractVectorFromZeroVectorTest() {
 
 // 7 Negating a tuple
 int negatingTupleTest() {
-  struct tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
+  tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
   vec1 = tupleNegate(vec1);
   assert(equal(vec1.x, -1.0f));
   assert(equal(vec1.y,  2.0f));
@@ -546,7 +556,7 @@ int negatingTupleTest() {
 
 // 8 Multiply tuple by a scalar
 int tupleMultScalarTest() {
-  struct tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
+  tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
   double scalar = 3.5f;
   vec1 = tupleMultScalar(vec1, scalar);
   assert(equal(vec1.x,   3.5f));
@@ -558,7 +568,7 @@ int tupleMultScalarTest() {
 
 // 8 Multiply tuple by a fraction
 int tupleMultScalarFractionTest() {
-  struct tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
+  tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
   double scalar = 0.5f;
   vec1 = tupleMultScalar(vec1, scalar);
   assert(equal(vec1.x, 0.5f));
@@ -570,7 +580,7 @@ int tupleMultScalarFractionTest() {
 
 // 8 Divide a tuple by a scalar
 int tupleDivScalarTest() {
-  struct tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
+  tuple vec1 = { 1.0f, -2.0f, 3.0f, -4.0f };
   double scalar = 2.0f;
   vec1 = tupleDivScalar(vec1, scalar);
   assert(equal(vec1.x, 0.5f));
@@ -582,23 +592,23 @@ int tupleDivScalarTest() {
 
 // 8 Computing the magnitude of vector(1, 0, 0)
 int tupleMagVecTest() {
-  struct tuple vec1 = createVector(1.0f, 0.0f, 0.0f);
+  tuple vec1 = createVector(1.0f, 0.0f, 0.0f);
   double mag = tupleMagVec(vec1);
   assert(equal(mag, 1.0f));
 
-  struct tuple vec2 = createVector(0.0f, 1.0f, 0.0f);
+  tuple vec2 = createVector(0.0f, 1.0f, 0.0f);
   mag = tupleMagVec(vec2);
   assert(equal(mag, 1.0f));
 
-  struct tuple vec3 = createVector(0.0f, 0.0f, 1.0f);
+  tuple vec3 = createVector(0.0f, 0.0f, 1.0f);
   mag = tupleMagVec(vec3);
   assert(equal(mag, 1.0f));
 
-  struct tuple vec4 = createVector(1.0f, 2.0f, 3.0f);
+  tuple vec4 = createVector(1.0f, 2.0f, 3.0f);
   mag = tupleMagVec(vec4);
   assert(equal(mag, sqrt(14.0f)));
 
-  struct tuple vec5 = createVector(-1.0f, -2.0f, -3.0f);
+  tuple vec5 = createVector(-1.0f, -2.0f, -3.0f);
   mag = tupleMagVec(vec5);
   assert(equal(mag, sqrt(14.0f)));
   return 1;
@@ -606,13 +616,13 @@ int tupleMagVecTest() {
 
 // 10 Normalizing vector(4,0,0) gives (1,0,0)
 int normVecTest() {
-  struct tuple vec1 = createVector(4.0f, 0.0f, 0.0f);
-  struct tuple norm = normVec(vec1);
+  tuple vec1 = createVector(4.0f, 0.0f, 0.0f);
+  tuple norm = normVec(vec1);
   assert(equal(norm.x, 1.0f));
   assert(equal(norm.y, 0.0f));
   assert(equal(norm.z, 0.0f));
 
-  struct tuple vec2 = createVector(1.0f, 2.0f, 3.0f);
+  tuple vec2 = createVector(1.0f, 2.0f, 3.0f);
   norm = normVec(vec2);
   double ans1 = 1 / sqrt(14);
   double ans2 = 2 / sqrt(14);
@@ -621,7 +631,7 @@ int normVecTest() {
   assert(equal(norm.y, ans2));
   assert(equal(norm.z, ans3));
 
-  struct tuple vec3 = createVector(1.0f, 2.0f, 3.0f);
+  tuple vec3 = createVector(1.0f, 2.0f, 3.0f);
   norm = normVec(vec3);
   double mag = tupleMagVec(norm);
   assert(equal(mag, 1.0f));
@@ -630,8 +640,8 @@ int normVecTest() {
 
 // 10 dot rpoduct of two tuples
 int dotTest() {
-  struct tuple vec1 = createVector(1.0f, 2.0f, 3.0f);
-  struct tuple vec2 = createVector(2.0f, 3.0f, 4.0f);
+  tuple vec1 = createVector(1.0f, 2.0f, 3.0f);
+  tuple vec2 = createVector(2.0f, 3.0f, 4.0f);
   double dotProd = dot(vec1, vec2);
   assert(equal(dotProd, 20.0f));
   return 1;
@@ -639,13 +649,13 @@ int dotTest() {
 
 // 11 cross product of two vectors
 int crossTest() {
-  struct tuple vec1 = createVector(1.0f, 2.0f, 3.0f);
-  struct tuple vec2 = createVector(2.0f, 3.0f, 4.0f);
-  struct tuple cross1 = cross(vec1, vec2);
+  tuple vec1 = createVector(1.0f, 2.0f, 3.0f);
+  tuple vec2 = createVector(2.0f, 3.0f, 4.0f);
+  tuple cross1 = cross(vec1, vec2);
   assert(equal(cross1.x, -1.0f));
   assert(equal(cross1.y,  2.0f));
   assert(equal(cross1.z, -1.0f));
-  struct tuple cross2 = cross(vec2, vec1);
+  tuple cross2 = cross(vec2, vec1);
   assert(equal(cross2.x,  1.0f));
   assert(equal(cross2.y, -2.0f));
   assert(equal(cross2.z,  1.0f));
@@ -654,9 +664,9 @@ int crossTest() {
 
 // 18 Hadamard product
 int hadamardProductTest() {
-  struct tuple col1 = createVector(1.0f, 0.2f, 0.4f);
-  struct tuple col2 = createVector(0.9f, 1.0f, 0.1f);
-  struct tuple col3 = hadamardProduct(col1, col2);
+  tuple col1 = createVector(1.0f, 0.2f, 0.4f);
+  tuple col2 = createVector(0.9f, 1.0f, 0.1f);
+  tuple col3 = hadamardProduct(col1, col2);
   assert(equal(col3.x, 0.899999976f));
   assert(equal(col3.y, 0.2f));
   assert(equal(col3.z, 0.04f));
@@ -664,21 +674,21 @@ int hadamardProductTest() {
 }
 
 int writePixelTest() {
-  struct tuple red = createVector(1.0f, 0.0f, 0.0f);
+  tuple red = createVector(1.0f, 0.0f, 0.0f);
   writePixel(0, 0, red);
 
   // horizonatal axis
-  struct tuple green = createVector(0.0f, 1.0f, 0.0f);
+  tuple green = createVector(0.0f, 1.0f, 0.0f);
   writePixel(0, 1, green);
 
-  struct tuple blue = createVector(0.0f, 0.0f, 1.0f);
+  tuple blue = createVector(0.0f, 0.0f, 1.0f);
   writePixel(0, 2, blue);
 
   // vertical axis
-  struct tuple sky = createVector(0.3f, 0.6f, 0.9f);
+  tuple sky = createVector(0.3f, 0.6f, 0.9f);
   writePixel(1, 1, sky);
 
-  struct tuple orange = createVector(1.0f, 0.5f, 0.25f);
+  tuple orange = createVector(1.0f, 0.5f, 0.25f);
   writePixel(1, 2, orange);
 
   assert(equal(canvas[0][0].x, 1.0f));
@@ -801,8 +811,8 @@ int mat4x4MulTest() {
 int mat4x4MulTupleTest() {
   Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f }, { 2.0f, 4.0f, 4.0f, 2.0f },\
     { 8.0f, 6.0f, 4.0f, 1.0f }, { 0.0f, 0.0f, 0.0f, 1.0f } };
-  struct tuple b = createPoint(1.0f, 2.0f, 3.0f);
-  struct tuple c = createPoint(0.0f, 0.0f, 0.0f);
+  tuple b = createPoint(1.0f, 2.0f, 3.0f);
+  tuple c = createPoint(0.0f, 0.0f, 0.0f);
   mat4x4MulTuple(a, b, &c);
   assert(equal(c.x, 18.0f));
   assert(equal(c.y, 24.0f));
@@ -1103,8 +1113,8 @@ int MultProdByInverseTest() {
 
 // 45 Multiply by a translation matrix
 int PointTransTest() {
-  struct tuple point1 = createPoint(-3.0f, 4.0f, 5.0f);
-  struct tuple point2 = createPoint( 0.0f, 0.0f, 0.0f);
+  tuple point1 = createPoint(-3.0f, 4.0f, 5.0f);
+  tuple point2 = createPoint( 0.0f, 0.0f, 0.0f);
   Mat4x4 trans;
   genTranslateMatrix(5.0f, -3.0f, 2.0f, trans);
   mat4x4MulTuple(trans, point1, &point2);
@@ -1121,8 +1131,8 @@ int pointMultInverseTranslationTest() {
   Mat4x4 transInverse;
   genTranslateMatrix(5.0f, -3.0f, 2.0f, trans);
   mat4x4Inverse(trans, transInverse);
-  struct tuple p1 = createPoint(-3.0f, 4.0f, 5.0f);
-  struct tuple p2 = createPoint(0.0f, 0.0f, 0.0f);
+  tuple p1 = createPoint(-3.0f, 4.0f, 5.0f);
+  tuple p2 = createPoint(0.0f, 0.0f, 0.0f);
   mat4x4MulTuple(transInverse, p1, &p2);
   assert(equal(p2.x, -8.0f));
   assert(equal(p2.y,  7.0f));
@@ -1135,8 +1145,8 @@ int pointMultInverseTranslationTest() {
 int vectorTranslationHasNoEffectTest() {
   Mat4x4 trans;
   genTranslateMatrix(5.0f, -3.0f, 2.0f, trans);
-  struct tuple v1 = createVector(-3.0f, 4.0f, 5.0f);
-  struct tuple v2 = createPoint(0.0f, 0.0f, 0.0f);
+  tuple v1 = createVector(-3.0f, 4.0f, 5.0f);
+  tuple v2 = createPoint(0.0f, 0.0f, 0.0f);
   mat4x4MulTuple(trans, v1, &v2);
   assert(equal(v2.x, -3.0f));
   assert(equal(v2.y,  4.0f));
@@ -1147,8 +1157,8 @@ int vectorTranslationHasNoEffectTest() {
 
 // 46 Scaling matrix applied to a point
 int pointScaleMat4x4Test() {
-  struct tuple p1 = createPoint(-4.0f, 6.0f, 8.0f);
-  struct tuple p2 = createPoint(0.0f, 0.0f, 0.0f);
+  tuple p1 = createPoint(-4.0f, 6.0f, 8.0f);
+  tuple p2 = createPoint(0.0f, 0.0f, 0.0f);
   Mat4x4 scaleMat;
   genScaleMatrix(2.0f, 3.0f, 4.0f, scaleMat);
   mat4x4MulTuple(scaleMat, p1, &p2);
@@ -1161,8 +1171,8 @@ int pointScaleMat4x4Test() {
 
 // 46 Scaling matrix applied to a vector
 int vecScaleMat4x4Test() {
-  struct tuple p1 = createVector(-4.0f, 6.0f, 8.0f);
-  struct tuple p2 = createVector(0.0f, 0.0f, 0.0f);
+  tuple p1 = createVector(-4.0f, 6.0f, 8.0f);
+  tuple p2 = createVector(0.0f, 0.0f, 0.0f);
   Mat4x4 scaleMat;
   genScaleMatrix(2.0f, 3.0f, 4.0f, scaleMat);
   mat4x4MulTuple(scaleMat, p1, &p2);
@@ -1177,8 +1187,8 @@ int vecScaleMat4x4Test() {
 int multInverseScaleMatrixTest() {
   Mat4x4 scaleMat;
   Mat4x4 scaleMatInv;
-  struct tuple p1 = createVector(-4.0f, 6.0f, 8.0f);
-  struct tuple p2 = createVector(0.0f, 0.0f, 0.0f);
+  tuple p1 = createVector(-4.0f, 6.0f, 8.0f);
+  tuple p2 = createVector(0.0f, 0.0f, 0.0f);
   genScaleMatrix(2.0f, 3.0f, 4.0f, scaleMat);
   mat4x4Inverse(scaleMat, scaleMatInv);
   mat4x4MulTuple(scaleMatInv, p1, &p2);
@@ -1192,8 +1202,8 @@ int multInverseScaleMatrixTest() {
 // 48 Rotating a point around the x axis
 int genRotationMatrixXTest() {
   Mat4x4 rotMat;
-  struct tuple p1 = createPoint(0.0f, 1.0f, 0.0f);
-  struct tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
+  tuple p1 = createPoint(0.0f, 1.0f, 0.0f);
+  tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
   genRotationMatrixX(M_PI / 4, rotMat);
   mat4x4MulTuple(rotMat, p1, &p2);
   assert(equal(p2.x, 0.0f));
@@ -1214,8 +1224,8 @@ int genRotationMatrixXTest() {
 int genRotationMatrixReverseTest() {
   Mat4x4 rotMat;
   Mat4x4 rotMatInv;
-  struct tuple p1 = createPoint(0.0f, 1.0f, 0.0f);
-  struct tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
+  tuple p1 = createPoint(0.0f, 1.0f, 0.0f);
+  tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
   genRotationMatrixX(M_PI / 4, rotMat);
   mat4x4Inverse(rotMat, rotMatInv);
   mat4x4MulTuple(rotMatInv, p1, &p2);
@@ -1229,8 +1239,8 @@ int genRotationMatrixReverseTest() {
 // 50 Rotating a point around the y axis
 int genRotationMatrixYTest() {
   Mat4x4 rotMat;
-  struct tuple p1 = createPoint(0.0f, 0.0f, 1.0f);
-  struct tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
+  tuple p1 = createPoint(0.0f, 0.0f, 1.0f);
+  tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
   genRotationMatrixY(M_PI / 4, rotMat);
   mat4x4MulTuple(rotMat, p1, &p2);
   assert(equal(p2.x, sqrt(2.0f) / 2.0f));
@@ -1250,8 +1260,8 @@ int genRotationMatrixYTest() {
 // 50 Rotating a point around the y axis
 int genRotationMatrixZTest() {
   Mat4x4 rotMat;
-  struct tuple p1 = createPoint(0.0f, 1.0f, 0.0f);
-  struct tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
+  tuple p1 = createPoint(0.0f, 1.0f, 0.0f);
+  tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
   genRotationMatrixZ(M_PI / 4, rotMat);
   mat4x4MulTuple(rotMat, p1, &p2);
   assert(equal(p2.x, -sqrt(2.0f) / 2.0f));
@@ -1272,8 +1282,8 @@ int genRotationMatrixZTest() {
 int genShearMatrixTest() {
   Mat4x4 shearMat;
   genShearMatrix(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, shearMat);
-  struct tuple p1 = createPoint(2.0f, 3.0f, 4.0f);
-  struct tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
+  tuple p1 = createPoint(2.0f, 3.0f, 4.0f);
+  tuple p2 = createPoint(7.0f, 8.0f, 9.0f);
   mat4x4MulTuple(shearMat, p1, &p2);
   assert(equal(p2.x, 5.0f));
   assert(equal(p2.y, 3.0f));
@@ -1335,10 +1345,10 @@ int transformationsAppliedInSequenceTest() {
   genRotationMatrixX(M_PI / 2, rotMat);
   genScaleMatrix(5.0f, 5.0f, 5.0f, scaleMat);
   genTranslateMatrix(10.0f, 5.0f, 7.0f, shearMat);
-  struct tuple p1 = createPoint(1.0f, 0.0f, 1.0f);
-  struct tuple p2 = createPoint(1.0f, -1.0f, 0.0f);
-  struct tuple p3 = createPoint(5.0f, -5.0f, 0.0f);
-  struct tuple p4 = createPoint(15.0f, 0.0f, 7.0f);
+  tuple p1 = createPoint(1.0f, 0.0f, 1.0f);
+  tuple p2 = createPoint(1.0f, -1.0f, 0.0f);
+  tuple p3 = createPoint(5.0f, -5.0f, 0.0f);
+  tuple p4 = createPoint(15.0f, 0.0f, 7.0f);
   mat4x4MulTuple(rotMat, p1, &p2);
   assert(equal(p2.x, 1.0f));
   assert(equal(p2.y, -1.0f));
@@ -1368,8 +1378,8 @@ int transformationsAppliedInSequenceTest() {
 // 55
 int drawClockTest() {
   double rotation = 2 * 3.14159 / 12;
-  struct tuple twelve = createPoint(0, 0, 1);
-  struct tuple three = createPoint(0, 0, 0);
+  tuple twelve = createPoint(0, 0, 1);
+  tuple three = createPoint(0, 0, 0);
   Mat4x4 rotMat;
   for (int i = 0; i < 12; ++i) {
     genRotationMatrixY(rotation * i, rotMat);
@@ -1385,9 +1395,9 @@ int drawClockTest() {
 
 // 58 Creating and quering a ray
 int createRayTest() {
-  struct tuple point = createPoint(0.0f, 1.0f, 2.0f);
-  struct tuple vector = createVector(3.0f, 4.0f, 5.0f);
-  struct ray ray = createRay(point, vector);
+  tuple point = createPoint(0.0f, 1.0f, 2.0f);
+  tuple vector = createVector(3.0f, 4.0f, 5.0f);
+  ray ray = createRay(point, vector);
   assert(equal(ray.origin.x, 0.0f));
   assert(equal(ray.origin.y, 1.0f));
   assert(equal(ray.origin.z, 2.0f));
@@ -1399,10 +1409,10 @@ int createRayTest() {
 
 // 58 Computing a point from a distance
 int computePointAlongRayTest() {
-  struct tuple position = { 2.0f, 3.0f, 4.0f };
-  struct tuple direction = { 1.0f, 0.0f, 0.0f };
-  struct tuple intersect = { 0.0f, 0.0f, 0.0f };
-  struct ray ray = createRay(position, direction);
+  tuple position = { 2.0f, 3.0f, 4.0f };
+  tuple direction = { 1.0f, 0.0f, 0.0f };
+  tuple intersect = { 0.0f, 0.0f, 0.0f };
+  ray ray = createRay(position, direction);
 
   intersect = poisition(ray, 0.0f);
   assert(equal(intersect.x, 2.0f));
@@ -1430,103 +1440,133 @@ int computePointAlongRayTest() {
   return 1;
 }
 
+// Extra tests for linked list issues
+int intersectionListTest() {
+  List_Head* intersection_list = list_new();
+  assert(list_size(intersection_list) == 0);
+  List_Head* intersection_list_saved = intersection_list;
+  assert(intersection_list == intersection_list_saved); // just in case ;)
+  intersect* intersect1 = generateIntersectWithSentinalValues();
+  intersect* intersect1_saved = intersect1;
+  assert(intersect1 == intersect1_saved);
+  assert(list_head(intersection_list) == intersection_list_saved);
+  addIntersectionToList(intersection_list, intersect1);
+  assert(list_size(intersection_list) == 1);
+  assert(intersection_list == intersection_list_saved);
+  assert(intersect1 == intersect1_saved);
+  intersect* intersect2 = generateIntersectWithSentinalValues();
+  intersect* intersect2_saved = intersect2;
+  assert(intersect2 == intersect2_saved);
+  assert(intersection_list == intersection_list_saved);
+  assert(list_head(intersection_list) == intersection_list_saved);
+  addIntersectionToList(intersection_list, intersect2);
+  assert(list_size(intersection_list) == 2);
+  assert(intersection_list == intersection_list_saved);
+  assert(list_head(intersection_list) == intersection_list_saved);
+}
+
 // 59 A ray intersects a sphere at two points
 int rayIntersectTest() {
-  struct tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
+  List_Head* intersection_list = list_new();
+  tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
   struct sphere sphere = generateSphere(sphereLocation);
-  struct tuple position = { 0.0f, 0.0f, -5.0f };
-  struct tuple direction = { 0.0f, 0.0f, 1.0f };
-  struct ray ray = createRay(position, direction);
-  struct intersect intersect = { 0.0f, 0.0f, 0.0f };
-  intersectRay(ray, sphere, &intersect);
-  assert(equal(intersect.first, 4.0f));
-  assert(equal(intersect.second, 6.0f));
+  tuple position = { 0.0f, 0.0f, -5.0f };
+  tuple direction = { 0.0f, 0.0f, 1.0f };
+  ray ray = createRay(position, direction);
+  intersectRay(ray, sphere, intersection_list);
+  assert(list_size(intersection_list) == 2);
+  intersect* intTest = getIntersectionByLocation(0, intersection_list);
+  //assert(equal(intTest->t, 4.0f));
+  intTest = getIntersectionByLocation(1, intersection_list);
+  assert(equal(intTest->t, 6.0f));
 
   // 60 ray intersects a sphere at a tangent
   ray.origin.x =  0.0f;
   ray.origin.y =  1.0f;
   ray.origin.z = -5.0f;
-  intersectRay(ray, sphere, &intersect);
-  assert(equal(intersect.count, 2));
-  assert(equal(intersect.first, 5.0f));
-  assert(equal(intersect.second, 5.0f));
+  intersectRay(ray, sphere, intersection_list);
+  intTest = getIntersectionByLocation(0, intersection_list);
+  assert(list_size(intersection_list) == 4);
+  assert(equal(intTest->t, 5.0f));
+  intTest = getIntersectionByLocation(1, intersection_list);
+  assert(equal(intTest->t, 5.0f));
 
   // 60 ray misses a sphere
   ray.origin.x = 0.0f;
   ray.origin.y = 2.0f;
   ray.origin.z = -5.0f;
-  intersectRay(ray, sphere, &intersect);
-  assert(equal(intersect.count, 0));
+  intersectRay(ray, sphere, intersection_list);
+  intTest = getIntersectionByLocation(0, intersection_list);
+  assert(list_size(intersection_list) == 6);
 
   // 61 ray originates inside a sphere
   ray.origin.x = 0.0f;
   ray.origin.y = 0.0f;
   ray.origin.z = 0.0f;
-  intersectRay(ray, sphere, &intersect);
-  assert(equal(intersect.count, 2));
-  assert(equal(intersect.first, -1.0f));
-  assert(equal(intersect.second, 1.0f));
+  intersectRay(ray, sphere, intersection_list);
+  intTest = getIntersectionByLocation(0, intersection_list);
+  assert(list_size(intersection_list) == 6);
+  assert(equal(intTest->t, -1.0f));
+  intTest = getIntersectionByLocation(1, intersection_list);
+  assert(equal(intTest->t, 1.0f));
 
   // 62 shere is behind an array
   ray.origin.x = 0.0f;
   ray.origin.y = 0.0f;
   ray.origin.z = 5.0f;
-  intersectRay(ray, sphere, &intersect);
-  assert(equal(intersect.count, 2));
-  assert(equal(intersect.first, -6.0f));
-  assert(equal(intersect.second, -4.0f));
+  intersectRay(ray, sphere, intersection_list);
+
+  intTest = getIntersectionByLocation(0, intersection_list);
+  assert(list_size(intersection_list) == 8);
+  assert(equal(intTest->t, -6.0f));
+  intTest = getIntersectionByLocation(1, intersection_list);
+  assert(equal(intTest->t, -4.0f));
   return 1;
 }
 
-// 63 Intersection encapsulates t and object^M
+// 63 Intersection encapsulates t and object
 int intersectionEncapTandObjectTest() {
-  struct tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
+  tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
     struct sphere sphere = generateSphere(sphereLocation);
     const int sphere_id = sphere.id;
-    struct intersect intersect = { 0.0f, 3.5f, 0.0f, sphere_id };
-    assert(equal(intersect.first, 3.5f));
-    assert(intersect.object_id = sphere_id);
+    intersect *intersect = generateIntersectWithSentinalValues();
+    intersect->t = 3.5f;
+    assert(equal(intersect->t, 3.5f));
+    assert(intersect->object_id = sphere_id);
     return 1;
 }
 
 // 64 Aggregating intersections
 int aggregatingIntersectionsTest() {
-  struct tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
-  struct sphere sphere = generateSphere(sphereLocation);
-  struct tuple position = { 0.0f, 0.0f, -5.0f };
-  struct tuple direction = { 0.0f, 0.0f, 1.0f };
-  struct ray ray = createRay(position, direction);
-  struct intersect intersect1 = { 0, 0.0f, 0.0f, 0 };
-  intersectRay(ray, sphere, &intersect1);
-
   List_Head* intersection_list = list_new();
-  list_ins_head_data(intersection_list, &intersect1);
-  ray.origin.x = 2.0f;
-  struct intersect intersect2 = { 0, 0.0f, 0.0f, 0 };
-  intersectRay(ray, sphere, &intersect2);
-  list_ins_head_data(intersection_list, &intersect2);
+  tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
+  struct sphere sphere = generateSphere(sphereLocation);
+  intersect *intersect1 = generateIntersectWithSentinalValues();
+  addIntersectionToList(intersection_list, &intersect1);
+  intersect* intersect2 = generateIntersectWithSentinalValues();
+  addIntersectionToList(intersection_list, &intersect2);
   assert(list_size(intersection_list) == 2);
-  struct intersect* intersectDat = getIntersectionByLocation(0, intersection_list);
-  assert(equal(intersectDat->first, 0.0f));
+  intersect* intersectDat = getIntersectionByLocation(0, intersection_list);
+  assert(equal(intersectDat->t, 0.0f));
   intersectDat = getIntersectionByLocation(1, intersection_list);
-  assert(equal(intersectDat->first, 0.0f));
+  assert(equal(intersectDat->t, 0.0f));
   return 1;
 }
 
 // 64 Intersect sets the object on the intersection
 int intersectSetsObjectOnIntersectionTest() {
-  struct tuple position = { 0.0f, 0.0f, -5.0f };
-  struct tuple direction = { 0.0f, 0.0f, 1.0f };
-  struct ray ray = createRay(position, direction);
-  struct tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
-  struct sphere sphere = generateSphere(sphereLocation);
-  struct intersect intersect = { 0, 0.0f, 0.0f, 0 };
-  intersectRay(ray, sphere, &intersect);
   List_Head* intersection_list = list_new();
-  addIntersectionToList(intersection_list, &intersect);
-  intersectRay(ray, sphere, &intersect);
-  addIntersectionToList(intersection_list, &intersect);
-  struct intersect* intersectDat = getIntersectionByLocation(0, intersection_list);
+  tuple position = { 0.0f, 0.0f, -5.0f };
+  tuple direction = { 0.0f, 0.0f, 1.0f };
+  ray ray = createRay(position, direction);
+  tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
+  struct sphere sphere = generateSphere(sphereLocation);
+  intersect intersect1 = { 0.0f, 0 };
+  intersectRay(ray, sphere, intersection_list);
+  addIntersectionToList(intersection_list, &intersect1);
+  intersectRay(ray, sphere, &intersect1);
+  addIntersectionToList(intersection_list, &intersect1);
+  intersect* intersectDat = getIntersectionByLocation(0, intersection_list);
   assert(equal(intersectDat->object_id, sphere.id));
   intersectDat = getIntersectionByLocation(1, intersection_list);
   assert(equal(intersectDat->object_id, sphere.id));
@@ -1535,18 +1575,18 @@ int intersectSetsObjectOnIntersectionTest() {
 }
 
 int hitVariousIntersectionsTest() {
-  struct tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
+  tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
   struct sphere sphere = generateSphere(sphereLocation);
 
   // 65 The hit when all intersections have a positive t
   List_Head* intersection_list1 = list_new();
-  struct intersect intersect1 = { 0, 1.0f, 1.0f, sphere.id };
+  intersect intersect1 = { 1.0f, sphere.id };
   addIntersectionToList(intersection_list1, &intersect1);
-  struct intersect intersect2 = { 0, 2.0f, 2.0f, sphere.id };
+  intersect intersect2 = { 2.0f, sphere.id };
   addIntersectionToList(intersection_list1, &intersect2);
-  struct intersect* intersectFound = NULL;
+  intersect* intersectFound = NULL;
   intersectFound = getIntersectionHit(intersection_list1);
-  assert(equal(intersectFound->first, 1.0f));
+  assert(equal(intersectFound->t, 1.0f));
 
   // 65 The hit when some intersections have a negative t
 
@@ -1607,6 +1647,7 @@ int main() {
   unitTest("Draw Clock Test", drawClockTest());
   unitTest("Create Ray Test", createRayTest());
   unitTest("Compute Point Along Ray Test", computePointAlongRayTest());
+  unitTest("Intersection List Test", intersectionListTest());
   unitTest("Ray Intersect Test", rayIntersectTest());
   unitTest("Intersection Encapsulate T Value And Object ID Test", intersectionEncapTandObjectTest());
   unitTest("Aggregating Intersections Test", aggregatingIntersectionsTest());
