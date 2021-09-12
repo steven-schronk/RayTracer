@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -20,7 +21,7 @@ typedef struct { double x, y, z, w; } tuple;
 
 typedef struct { tuple origin; tuple direction; } ray;
 
-typedef struct { float t; int object_id; } intersect;
+typedef struct { double t; int object_id; } intersect;
 
 intersect* generateIntersectWithSentinalValues() {
   intersect* inter = (intersect*)malloc(sizeof(intersect));
@@ -35,14 +36,24 @@ intersect* generateIntersectWithSentinalValues() {
 // ignore the negative ones altogether
 // find the intersection with the lowest number  (check the book about this)
 intersect* getIntersectionHit(const List_Head* intersection_list) {
+  assert(intersection_list != NULL);
   int list_length = list_len(intersection_list);
   if (0 == list_length) return NULL;
-  List_Node* current_node = list_peek(intersection_list);
-  int count = 0;
-  while (count++ < list_length) {
-    current_node = list_peek(intersection_list);
+  List_Node *current_node = list_peek(intersection_list);
+  intersect *intersectCurrent = current_node->pData;
+  intersect *interMin = NULL;
+  double min = DBL_MAX;
+
+  while (current_node != NULL) {
+    if (current_node->pData) {
+      intersectCurrent = current_node->pData;
+      if (intersectCurrent->t > 0 && intersectCurrent->t < min) {
+        interMin = intersectCurrent;
+        min = intersectCurrent->t; }
+    }
+    current_node = list_next(current_node);
   }
-  return current_node->pData;
+  return interMin;
 }
 
 intersect* getIntersectionByLocation(const int loc, const List_Head* intersection_list) {
@@ -1490,18 +1501,17 @@ int rayIntersectTest() {
   ray.origin.y =  1.0f;
   ray.origin.z = -5.0f;
   intersectRay(ray, sphere, intersection_list);
-  intTest = getIntersectionByLocation(0, intersection_list);
+  intTest = getIntersectionByLocation(2, intersection_list);
   assert(list_size(intersection_list) == 4);
-  assert(equal(intTest->t, 4.0f));
-  intTest = getIntersectionByLocation(1, intersection_list);
-  assert(equal(intTest->t, 6.0f));
+  assert(equal(intTest->t, 5.0f));
+  intTest = getIntersectionByLocation(3, intersection_list);
+  assert(equal(intTest->t, 5.0f));
 
   // 60 ray misses a sphere
   ray.origin.x = 0.0f;
   ray.origin.y = 2.0f;
   ray.origin.z = -5.0f;
   intersectRay(ray, sphere, intersection_list);
-  intTest = getIntersectionByLocation(0, intersection_list);
   assert(list_size(intersection_list) == 4);
 
   // 61 ray originates inside a sphere
@@ -1509,23 +1519,22 @@ int rayIntersectTest() {
   ray.origin.y = 0.0f;
   ray.origin.z = 0.0f;
   intersectRay(ray, sphere, intersection_list);
-  intTest = getIntersectionByLocation(0, intersection_list);
+  intTest = getIntersectionByLocation(4, intersection_list);
   assert(list_size(intersection_list) == 6);
-  assert(equal(intTest->t, 4.0f));
-  intTest = getIntersectionByLocation(1, intersection_list);
-  assert(equal(intTest->t, 6.0f));
+  assert(equal(intTest->t, -1.0f));
+  intTest = getIntersectionByLocation(5, intersection_list);
+  assert(equal(intTest->t, 1.0f));
 
   // 62 shere is behind an array
   ray.origin.x = 0.0f;
   ray.origin.y = 0.0f;
   ray.origin.z = 5.0f;
   intersectRay(ray, sphere, intersection_list);
-
-  intTest = getIntersectionByLocation(0, intersection_list);
+  intTest = getIntersectionByLocation(6, intersection_list);
   assert(list_size(intersection_list) == 8);
-  assert(equal(intTest->t, 4.0f));
-  intTest = getIntersectionByLocation(1, intersection_list);
-  assert(equal(intTest->t, 6.0f));
+  assert(equal(intTest->t, -6.0f));
+  intTest = getIntersectionByLocation(7, intersection_list);
+  assert(equal(intTest->t, -4.0f));
   return 1;
 }
 
@@ -1544,17 +1553,17 @@ int intersectionEncapTandObjectTest() {
 // 64 Aggregating intersections
 int aggregatingIntersectionsTest() {
   List_Head* intersection_list = list_new();
-  //tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
-  //struct sphere sphere = generateSphere(sphereLocation);
   intersect *intersect1 = generateIntersectWithSentinalValues();
+  intersect1->t = 1.0f;
   addIntersectionToList(intersection_list, intersect1);
   intersect* intersect2 = generateIntersectWithSentinalValues();
+  intersect2->t = 2.0f;
   addIntersectionToList(intersection_list, intersect2);
   assert(list_size(intersection_list) == 2);
   intersect* intersectDat = getIntersectionByLocation(0, intersection_list);
-  assert(equal(intersectDat->t, -1.0f));
+  assert(equal(intersectDat->t, 1.0f));
   intersectDat = getIntersectionByLocation(1, intersection_list);
-  assert(equal(intersectDat->t, -1.0f));
+  assert(equal(intersectDat->t, 2.0f));
   return 1;
 }
 
@@ -1566,16 +1575,12 @@ int intersectSetsObjectOnIntersectionTest() {
   ray ray = createRay(position, direction);
   tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
   struct sphere sphere = generateSphere(sphereLocation);
-  intersect *intersect1 = generateIntersectWithSentinalValues();
   intersectRay(ray, sphere, intersection_list);
-  addIntersectionToList(intersection_list, intersect1);
-  intersectRay(ray, sphere, intersection_list);
-  addIntersectionToList(intersection_list, intersect1);
   intersect* intersectDat = getIntersectionByLocation(0, intersection_list);
   assert(equal(intersectDat->object_id, sphere.id));
   intersectDat = getIntersectionByLocation(1, intersection_list);
   assert(equal(intersectDat->object_id, sphere.id));
-  assert(list_size(intersection_list) == 6);
+  assert(list_size(intersection_list) == 2);
   return 1;
 }
 
@@ -1584,21 +1589,62 @@ int hitVariousIntersectionsTest() {
   struct sphere sphere = generateSphere(sphereLocation);
 
   // 65 The hit when all intersections have a positive t
-  List_Head* intersection_list1 = list_new();
+  // TODO: Need to clear all of these linked lists when we leave method
+  List_Head* intersection_list = list_new();
   intersect intersect1 = { 1.0f, sphere.id };
-  addIntersectionToList(intersection_list1, &intersect1);
+  addIntersectionToList(intersection_list, &intersect1);
   intersect intersect2 = { 2.0f, sphere.id };
-  addIntersectionToList(intersection_list1, &intersect2);
+  addIntersectionToList(intersection_list, &intersect2);
   intersect* intersectFound = NULL;
-  intersectFound = getIntersectionHit(intersection_list1);
+  intersectFound = getIntersectionHit(intersection_list);
   assert(equal(intersectFound->t, 1.0f));
 
   // 65 The hit when some intersections have a negative t
+  list_clear(intersection_list);
+  assert(list_size(intersection_list) == 0);
+  assert(intersection_list->pNext == NULL);
+  assert(intersection_list->count == 0);
+
+  intersect intersect3 = { -1.0f, sphere.id };
+  addIntersectionToList(intersection_list, &intersect3);
+  intersect intersect4 = { 1.0f, sphere.id };
+  addIntersectionToList(intersection_list, &intersect4);
+  intersectFound = NULL;
+  intersectFound = getIntersectionHit(intersection_list);
+  assert(equal(intersectFound->t, 1.0f));
 
   // 65 The hit when all intersections have a negative t
+  list_clear(intersection_list);
+  assert(list_size(intersection_list) == 0);
+  assert(intersection_list->pNext == NULL);
+  assert(intersection_list->count == 0);
+
+  intersect intersect5 = { -2.0f, sphere.id };
+  addIntersectionToList(intersection_list, &intersect5);
+  intersect intersect6 = { -1.0f, sphere.id };
+  addIntersectionToList(intersection_list, &intersect6);
+  intersectFound = NULL;
+  intersectFound = getIntersectionHit(intersection_list);
+  assert(intersectFound == NULL);
 
   // 66 The hit is always the lowest nonnegative intersection
+  list_clear(intersection_list);
+  assert(list_size(intersection_list) == 0);
+  assert(intersection_list->pNext == NULL);
+  assert(intersection_list->count == 0);
 
+  intersect intersect7 = { 5.0f, sphere.id };
+  addIntersectionToList(intersection_list, &intersect7);
+  intersect intersect8 = { 7.0f, sphere.id };
+  addIntersectionToList(intersection_list, &intersect8);
+  intersect intersect9 = { -3.0f, sphere.id };
+  addIntersectionToList(intersection_list, &intersect9);
+  intersect intersect10 = { 2.0f, sphere.id };
+  addIntersectionToList(intersection_list, &intersect10);
+  intersectFound = NULL;
+  intersectFound = getIntersectionHit(intersection_list);
+  assert(intersectFound != NULL);
+  assert(equal(intersectFound->t, 2.0f));
   return 1;
 }
 
