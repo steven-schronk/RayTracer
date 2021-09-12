@@ -119,6 +119,13 @@ bool tupleIsPoint(tuple t) { return t.w == 1.0 ? true : false; }
 
 bool tupleIsVector(tuple t) { return t.w == 0.0 ? true : false; }
 
+void tupleCopy(tuple *t1, tuple *t2) {
+  t2->x = t1->x;
+  t2->y = t1->y;
+  t2->z = t1->z;
+  t2->w = t1->w;
+}
+
 tuple tupleAdd(tuple t1, tuple t2) {
   tuple t3 = { t1.x + t2.x, t1.y + t2.y, t1.z + t2.z, t1.w + t2.w };
   return t3;
@@ -418,6 +425,15 @@ bool intersectRay(ray ray, struct sphere sphere, List_Head* intersection_list) {
   addIntersectionToList(intersection_list, intersect1);
   addIntersectionToList(intersection_list, intersect2);
   return true;
+}
+
+ray transformRayMat4x4(ray r, Mat4x4 m) {
+  tuple point = createPoint(0.0f, 0.0f, 0.0f);
+  tuple direction = createVector(0.0f, 0.0f, 0.0f);
+  ray transRay = createRay(point, direction);
+  mat4x4MulTuple(m, r.origin, &transRay.origin);
+  mat4x4MulTuple(m, r.direction, &transRay.direction);
+  return transRay;
 }
 
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -1650,6 +1666,56 @@ int hitVariousIntersectionsTest() {
   return 1;
 }
 
+int tupleCopyTest() {
+  tuple t1 = { 1.0f, 2.0f, 3.0f, 4.0f };
+  tuple t2 = { 0.0f, 0.0f, 0.0f, 0.0f };
+  tupleCopy(&t1, &t2);
+  assert(equal(t1.x, 1.0f));
+  assert(equal(t1.y, 2.0f));
+  assert(equal(t1.z, 3.0f));
+  assert(equal(t1.w, 4.0f));
+
+  assert(equal(t2.x, 1.0f));
+  assert(equal(t2.y, 2.0f));
+  assert(equal(t2.z, 3.0f));
+  assert(equal(t2.w, 4.0f));
+
+  assert(equal(t1.x, t2.x));
+  assert(equal(t1.y, t2.y));
+  assert(equal(t1.z, t2.z));
+  assert(equal(t1.w, t2.w));
+  return 1;
+}
+
+
+int transformRayTest() {
+  // 69 Translating a ray
+  tuple position = createPoint(1.0f, 2.0f, 3.0f);
+  tuple direction = createVector(0.0f, 1.0f, 0.0f);
+  const ray ray1 = createRay(position, direction);
+  Mat4x4 translateMat;
+  genTranslateMatrix(3.0f, 4.0f, 5.0f, translateMat);
+  ray rayTrans2 = transformRayMat4x4(ray1, translateMat);
+  assert(equal(rayTrans2.origin.x, 4.0f));
+  assert(equal(rayTrans2.origin.y, 6.0f));
+  assert(equal(rayTrans2.origin.z, 8.0f));
+  assert(equal(rayTrans2.direction.x, 0.0f));
+  assert(equal(rayTrans2.direction.y, 1.0f));
+  assert(equal(rayTrans2.direction.z, 0.0f));
+
+  // 69 Scaling a ray
+  Mat4x4 scaleMat;
+  genScaleMatrix(2.0f, 3.0f, 4.0f, scaleMat);
+  ray rayTrans3 = transformRayMat4x4(ray1, scaleMat);
+  assert(equal(rayTrans3.origin.x, 2.0f));
+  assert(equal(rayTrans3.origin.y, 6.0f));
+  assert(equal(rayTrans3.origin.z, 12.0f));
+  assert(equal(rayTrans3.direction.x, 0.0f));
+  assert(equal(rayTrans3.direction.y, 3.0f));
+  assert(equal(rayTrans3.direction.z, 0.0f));
+  return 1;
+}
+
 int main() {
   unitTest("Create Point Test", createPointTest());
   unitTest("Create Vector Test", createVectorTest());
@@ -1706,6 +1772,8 @@ int main() {
   unitTest("Aggregating Intersections Test", aggregatingIntersectionsTest());
   unitTest("Intersect Sets Object On Intersection Test", intersectSetsObjectOnIntersectionTest());
   unitTest("Hit Various Intersections Test", hitVariousIntersectionsTest());
+  unitTest("Tuple Copy Test", tupleCopyTest());
+  unitTest("Translate Ray Test", transformRayTest());
 
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
