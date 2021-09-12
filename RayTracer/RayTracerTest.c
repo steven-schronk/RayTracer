@@ -35,7 +35,7 @@ intersect* generateIntersectWithSentinalValues() {
 // go through all the intersections
 // ignore the negative ones altogether
 // find the intersection with the lowest number  (check the book about this)
-intersect* getIntersectionHit(const List_Head* intersection_list) {
+intersect* getIntersectionHit(List_Head* intersection_list) {
   assert(intersection_list != NULL);
   int list_length = list_len(intersection_list);
   if (0 == list_length) return NULL;
@@ -56,7 +56,7 @@ intersect* getIntersectionHit(const List_Head* intersection_list) {
   return interMin;
 }
 
-intersect* getIntersectionByLocation(const int loc, const List_Head* intersection_list) {
+intersect* getIntersectionByLocation(const int loc, List_Head* intersection_list) {
   assert(loc >= 0 || "Cannot get negative location number when getting intersection by location");
   assert(loc < list_len(intersection_list) || "Number larger than the length of the list when getting intersection by location");
   List_Node* current_node = list_peek(intersection_list); // first node in intersection_list
@@ -72,7 +72,7 @@ intersect* getIntersectionByLocation(const int loc, const List_Head* intersectio
   return current_node->pData;
 }
 
-void addIntersectionToList(const List_Head* intersection_list, const intersect *intersect) {
+void addIntersectionToList(List_Head* intersection_list, intersect *intersect) {
   assert(intersection_list != NULL && "Call to add insertion to list cannot contain null intersection list");
   assert(intersect != NULL && "Call to add insertion to list cannot contain null intersection struct");
   list_ins_tail_data(intersection_list, intersect);
@@ -400,7 +400,7 @@ tuple poisition(ray r, double t) {
   return x;
 }
 
-bool intersectRay(ray ray, struct sphere sphere, const List_Head* intersection_list) {
+bool intersectRay(ray ray, struct sphere sphere, List_Head* intersection_list) {
   tuple sphereToRay = tupleSub(ray.origin, createPoint(0.0f, 0.0f, 0.0f));
   double a = dot(ray.direction, ray.direction);
   double b = 2 * dot(ray.direction, sphereToRay);
@@ -425,7 +425,7 @@ bool intersectRay(ray ray, struct sphere sphere, const List_Head* intersection_l
 /*------------------------------------------------------------------------------------------------------------------*/
 
 void unitTest(char* msg, int assert) {
-  int msg_length = strlen(msg);
+  size_t msg_length = strlen(msg);
   printf("%s", msg);
 
   /* 74 is 80 - length of "PASSED" */
@@ -442,7 +442,9 @@ void unitTest(char* msg, int assert) {
 }
 
 // TODO: Clamp the values between 0.0 and 1.0
-int colorConvert(double x) { return x * 255; }
+int colorConvert(double x) { return (int)(x * 255); }
+
+#pragma warning(disable:4996)
 
 int writeCanvasToFile() {
   FILE* fp;
