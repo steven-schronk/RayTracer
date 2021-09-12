@@ -31,10 +31,6 @@ intersect* generateIntersectWithSentinalValues() {
   return inter;
 }
 
-// this is not finished.
-// go through all the intersections
-// ignore the negative ones altogether
-// find the intersection with the lowest number  (check the book about this)
 intersect* getIntersectionHit(List_Head* intersection_list) {
   assert(intersection_list != NULL);
   int list_length = list_len(intersection_list);
@@ -76,15 +72,6 @@ void addIntersectionToList(List_Head* intersection_list, intersect *intersect) {
   assert(intersection_list != NULL && "Call to add insertion to list cannot contain null intersection list");
   assert(intersect != NULL && "Call to add insertion to list cannot contain null intersection struct");
   list_ins_tail_data(intersection_list, intersect);
-}
-
-static int sphere_count = 0;
-
-struct sphere { const int id; tuple location; double t; };
-
-struct sphere generateSphere(tuple location) {
-  struct sphere sp = {sphere_count++, location };
-  return sp;
 }
 
 typedef double Mat2x2[2][2];
@@ -353,6 +340,21 @@ bool mat4x4Inverse(Mat4x4 a, Mat4x4 b) {
   return true;
 }
 
+void Mat4x4SetIndent(Mat4x4 m) {
+  m[0][0] = 1.0f; m[0][1] = 0.0f; m[0][2] = 0.0f; m[0][3] = 0.0f;
+  m[1][0] = 0.0f; m[1][1] = 1.0f; m[1][2] = 0.0f; m[1][3] = 0.0f;
+  m[2][0] = 0.0f; m[2][1] = 0.0f; m[2][2] = 1.0f; m[2][3] = 0.0f;
+  m[3][0] = 0.0f; m[3][1] = 0.0f; m[3][2] = 0.0f; m[3][3] = 1.0f;
+}
+
+void Mat4x4Copy(Mat4x4 m1, Mat4x4 m2) {
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      m2[i][j] = m1[i][j];
+    }
+  }
+}
+
 void genTranslateMatrix(const double x, const double y, const double z, Mat4x4 m) {
   m[0][0] = 1.0f; m[0][1] = 0.0f; m[0][2] = 0.0f; m[0][3] = x;
   m[1][0] = 0.0f; m[1][1] = 1.0f; m[1][2] = 0.0f; m[1][3] = y;
@@ -394,6 +396,16 @@ void genShearMatrix(const double xy, const double xz, const double yx,\
   m[1][0] = yx;   m[1][1] = 1.0f; m[1][2] = yz;   m[1][3] = 0.0f;
   m[2][0] = zx;   m[2][1] = zy;   m[2][2] = 1.0f; m[2][3] = 0.0f;
   m[3][0] = 0.0f; m[3][1] = 0.0f; m[3][2] = 0.0f; m[3][3] = 1.0f;
+}
+
+static int sphere_count = 0;
+
+struct sphere { const int id; tuple location; double t; Mat4x4 transform; };
+
+struct sphere generateSphere(tuple location) {
+  struct sphere sp = { sphere_count++, location };
+  Mat4x4SetIndent(sp.transform);
+  return sp;
 }
 
 ray createRay(tuple p, tuple v) {
@@ -1687,7 +1699,6 @@ int tupleCopyTest() {
   return 1;
 }
 
-
 int transformRayTest() {
   // 69 Translating a ray
   tuple position = createPoint(1.0f, 2.0f, 3.0f);
@@ -1715,6 +1726,88 @@ int transformRayTest() {
   assert(equal(rayTrans3.direction.z, 0.0f));
   return 1;
 }
+
+int Mat4x4CopyTest() {
+  Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f },{ 5.0f, 6.0f, 7.0f, 8.0f },\
+    { 9.0f, 10.0f, 11.0f, 12.0f},{ 13.0f, 14.0f, 15.0f, 16.0f } };
+  Mat4x4 b = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f },\
+    { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f } };
+  Mat4x4Copy(a, b);
+  assert(equal(a[0][0], 1.0f));
+  assert(equal(a[1][0], 5.0f));
+  assert(equal(a[2][0], 9.0f));
+  assert(equal(a[3][0], 13.0f));
+
+  assert(equal(a[0][1], 2.0f));
+  assert(equal(a[1][1], 6.0f));
+  assert(equal(a[2][1], 10.0f));
+  assert(equal(a[3][1], 14.0f));
+
+  assert(equal(a[0][2], 3.0f));
+  assert(equal(a[1][2], 7.0f));
+  assert(equal(a[2][2], 11.0f));
+  assert(equal(a[3][2], 15.0f));
+
+  assert(equal(a[0][3], 4.0f));
+  assert(equal(a[1][3], 8.0f));
+  assert(equal(a[2][3], 12.0f));
+  assert(equal(a[3][3], 16.0f));
+
+  assert(equal(b[0][0], 1.0f));
+  assert(equal(b[1][0], 5.0f));
+  assert(equal(b[2][0], 9.0f));
+  assert(equal(b[3][0], 13.0f));
+
+  assert(equal(b[0][1], 2.0f));
+  assert(equal(b[1][1], 6.0f));
+  assert(equal(b[2][1], 10.0f));
+  assert(equal(b[3][1], 14.0f));
+
+  assert(equal(b[0][2], 3.0f));
+  assert(equal(b[1][2], 7.0f));
+  assert(equal(b[2][2], 11.0f));
+  assert(equal(b[3][2], 15.0f));
+
+  assert(equal(b[0][3], 4.0f));
+  assert(equal(b[1][3], 8.0f));
+  assert(equal(b[2][3], 12.0f));
+  assert(equal(b[3][3], 16.0f));
+  return 1;
+}
+
+int sphereTransformationsTest() {
+  // 69 A sphere's default transformation
+  tuple location = createPoint(0.0f, 0.0f, 0.0f);
+  struct sphere sp = generateSphere(location);
+  assert(equal(sp.transform[0][0], 1.0f));
+  assert(equal(sp.transform[1][0], 0.0f));
+  assert(equal(sp.transform[2][0], 0.0f));
+  assert(equal(sp.transform[3][0], 0.0f));
+
+  assert(equal(sp.transform[0][1], 0.0f));
+  assert(equal(sp.transform[1][1], 1.0f));
+  assert(equal(sp.transform[2][1], 0.0f));
+  assert(equal(sp.transform[3][1], 0.0f));
+
+  assert(equal(sp.transform[0][2], 0.0f));
+  assert(equal(sp.transform[1][2], 0.0f));
+  assert(equal(sp.transform[2][2], 1.0f));
+  assert(equal(sp.transform[3][2], 0.0f));
+
+  assert(equal(sp.transform[0][3], 0.0f));
+  assert(equal(sp.transform[1][3], 0.0f));
+  assert(equal(sp.transform[2][3], 0.0f));
+  assert(equal(sp.transform[3][3], 1.0f));
+
+  // 69 Changing a sphere's transformation
+  Mat4x4 translateMat;
+  genTranslateMatrix(2.0f, 3.0f, 4.0f, translateMat);
+  Mat4x4Copy(translateMat, sp.transform);
+  assert(mat4x4Equal(translateMat, sp.transform) == true);
+  return 1;
+}
+
+// 69 Intersecting a scaled sphere with a ray
 
 int main() {
   unitTest("Create Point Test", createPointTest());
@@ -1774,6 +1867,8 @@ int main() {
   unitTest("Hit Various Intersections Test", hitVariousIntersectionsTest());
   unitTest("Tuple Copy Test", tupleCopyTest());
   unitTest("Translate Ray Test", transformRayTest());
+  unitTest("Sphere Transformations Test", sphereTransformationsTest());
+  unitTest("4x4 Matrix Copy Test", Mat4x4CopyTest());
 
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
