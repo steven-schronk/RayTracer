@@ -21,23 +21,23 @@ typedef struct { double x, y, z, w; } tuple;
 
 typedef struct { tuple point; tuple vector; } ray;
 
-typedef struct { double t; int object_id; } intersect;
+typedef struct { double t; int object_id; } intersection;
 
-intersect* generateIntersectWithSentinalValues() {
-  intersect* inter = (intersect*)malloc(sizeof(intersect));
+intersection* generateIntersectWithSentinalValues() {
+  intersection* inter = (intersection*)malloc(sizeof(intersection));
   assert(inter != NULL);
   inter->object_id = -1; // a proper intersect will never have a negative id
   inter->t = -1; // unlikley to have a negative t until more advanced use
   return inter;
 }
 
-intersect* getIntersectionHit(List_Head* intersection_list) {
+intersection* getIntersectionHit(List_Head* intersection_list) {
   assert(intersection_list != NULL);
   int list_length = list_len(intersection_list);
   if (0 == list_length) return NULL;
   List_Node *current_node = list_peek(intersection_list);
-  intersect *intersectCurrent = current_node->pData;
-  intersect *interMin = NULL;
+  intersection *intersectCurrent = current_node->pData;
+  intersection *interMin = NULL;
   double min = DBL_MAX;
 
   while (current_node != NULL) {
@@ -52,7 +52,7 @@ intersect* getIntersectionHit(List_Head* intersection_list) {
   return interMin;
 }
 
-intersect* getIntersectionByLocation(const int loc, List_Head* intersection_list) {
+intersection* getIntersectionByLocation(const int loc, List_Head* intersection_list) {
   assert(loc >= 0 || "Cannot get negative location number when getting intersection by location");
   assert(loc < list_len(intersection_list) || "Number larger than the length of the list when getting intersection by location");
   List_Node* current_node = list_peek(intersection_list); // first node in intersection_list
@@ -68,7 +68,7 @@ intersect* getIntersectionByLocation(const int loc, List_Head* intersection_list
   return current_node->pData;
 }
 
-void addIntersectionToList(List_Head* intersection_list, intersect *intersect) {
+void addIntersectionToList(List_Head* intersection_list, intersection *intersect) {
   assert(intersection_list != NULL && "Call to add insertion to list cannot contain null intersection list");
   assert(intersect != NULL && "Call to add insertion to list cannot contain null intersection struct");
   list_ins_tail_data(intersection_list, intersect);
@@ -425,7 +425,7 @@ tuple poisition(ray r, double t) {
   return x;
 }
 
-bool intersectRay(ray ray, sphere sphere, List_Head* intersection_list) {
+bool intersect(ray ray, sphere sphere, List_Head* intersection_list) {
   tuple sphereToRay = tupleSub(ray.point, createPoint(0.0f, 0.0f, 0.0f));
   double a = dot(ray.vector, ray.vector);
   double b = 2 * dot(ray.vector, sphereToRay);
@@ -434,8 +434,8 @@ bool intersectRay(ray ray, sphere sphere, List_Head* intersection_list) {
   if (discriminant < 0) {
     return false;
   }
-  intersect *intersect1 = generateIntersectWithSentinalValues();
-  intersect *intersect2 = generateIntersectWithSentinalValues();
+  intersection *intersect1 = generateIntersectWithSentinalValues();
+  intersection *intersect2 = generateIntersectWithSentinalValues();
   intersect1->object_id = sphere.id;
   intersect2->object_id = sphere.id;
   intersect1->t = (-b - sqrt(discriminant)) / (2 * a);
@@ -1462,32 +1462,32 @@ int createRayTest() {
 int computePointAlongRayTest() {
   tuple position = { 2.0f, 3.0f, 4.0f };
   tuple vector = { 1.0f, 0.0f, 0.0f };
-  tuple intersect = { 0.0f, 0.0f, 0.0f };
+  tuple intersect1 = { 0.0f, 0.0f, 0.0f };
   ray* ray = createRay(position, vector);
 
-  intersect = poisition(*ray, 0.0f);
-  assert(equal(intersect.x, 2.0f));
-  assert(equal(intersect.y, 3.0f));
-  assert(equal(intersect.z, 4.0f));
-  assert(equal(intersect.w, 0.0f));
+  intersect1 = poisition(*ray, 0.0f);
+  assert(equal(intersect1.x, 2.0f));
+  assert(equal(intersect1.y, 3.0f));
+  assert(equal(intersect1.z, 4.0f));
+  assert(equal(intersect1.w, 0.0f));
 
-  intersect = poisition(*ray, 1.0f);
-  assert(equal(intersect.x, 3.0f));
-  assert(equal(intersect.y, 3.0f));
-  assert(equal(intersect.z, 4.0f));
-  assert(equal(intersect.w, 0.0f));
+  intersect1 = poisition(*ray, 1.0f);
+  assert(equal(intersect1.x, 3.0f));
+  assert(equal(intersect1.y, 3.0f));
+  assert(equal(intersect1.z, 4.0f));
+  assert(equal(intersect1.w, 0.0f));
 
-  intersect = poisition(*ray, -1.0f);
-  assert(equal(intersect.x, 1.0f));
-  assert(equal(intersect.y, 3.0f));
-  assert(equal(intersect.z, 4.0f));
-  assert(equal(intersect.w, 0.0f));
+  intersect1 = poisition(*ray, -1.0f);
+  assert(equal(intersect1.x, 1.0f));
+  assert(equal(intersect1.y, 3.0f));
+  assert(equal(intersect1.z, 4.0f));
+  assert(equal(intersect1.w, 0.0f));
 
-  intersect = poisition(*ray, 2.5f);
-  assert(equal(intersect.x, 4.5f));
-  assert(equal(intersect.y, 3.0f));
-  assert(equal(intersect.z, 4.0f));
-  assert(equal(intersect.w, 0.0f));
+  intersect1 = poisition(*ray, 2.5f);
+  assert(equal(intersect1.x, 4.5f));
+  assert(equal(intersect1.y, 3.0f));
+  assert(equal(intersect1.z, 4.0f));
+  assert(equal(intersect1.w, 0.0f));
   return 1;
 }
 
@@ -1497,16 +1497,16 @@ int intersectionListTest() {
   assert(list_size(intersection_list) == 0);
   List_Head* intersection_list_saved = intersection_list;
   assert(intersection_list == intersection_list_saved); // just in case ;)
-  intersect* intersect1 = generateIntersectWithSentinalValues();
-  intersect* intersect1_saved = intersect1;
+  intersection* intersect1 = generateIntersectWithSentinalValues();
+  intersection* intersect1_saved = intersect1;
   assert(intersect1 == intersect1_saved);
   assert(list_head(intersection_list) == intersection_list_saved);
   addIntersectionToList(intersection_list, intersect1);
   assert(list_size(intersection_list) == 1);
   assert(intersection_list == intersection_list_saved);
   assert(intersect1 == intersect1_saved);
-  intersect* intersect2 = generateIntersectWithSentinalValues();
-  intersect* intersect2_saved = intersect2;
+  intersection* intersect2 = generateIntersectWithSentinalValues();
+  intersection* intersect2_saved = intersect2;
   assert(intersect2 == intersect2_saved);
   assert(intersection_list == intersection_list_saved);
   assert(list_head(intersection_list) == intersection_list_saved);
@@ -1525,9 +1525,9 @@ int rayIntersectTest() {
   tuple position = { 0.0f, 0.0f, -5.0f };
   tuple vector = { 0.0f, 0.0f, 1.0f };
   ray* ray = createRay(position, vector);
-  intersectRay(*ray, *sphere1, intersection_list);
+  intersect(*ray, *sphere1, intersection_list);
   assert(list_size(intersection_list) == 2);
-  intersect* intTest = getIntersectionByLocation(0, intersection_list);
+  intersection* intTest = getIntersectionByLocation(0, intersection_list);
   assert(equal(intTest->t, 4.0f));
   intTest = getIntersectionByLocation(1, intersection_list);
   assert(equal(intTest->t, 6.0f));
@@ -1536,7 +1536,7 @@ int rayIntersectTest() {
   ray->point.x =  0.0f;
   ray->point.y =  1.0f;
   ray->point.z = -5.0f;
-  intersectRay(*ray, *sphere1, intersection_list);
+  intersect(*ray, *sphere1, intersection_list);
   intTest = getIntersectionByLocation(2, intersection_list);
   assert(list_size(intersection_list) == 4);
   assert(equal(intTest->t, 5.0f));
@@ -1547,14 +1547,14 @@ int rayIntersectTest() {
   ray->point.x = 0.0f;
   ray->point.y = 2.0f;
   ray->point.z = -5.0f;
-  intersectRay(*ray, *sphere1, intersection_list);
+  intersect(*ray, *sphere1, intersection_list);
   assert(list_size(intersection_list) == 4);
 
   // 61 ray originates inside a sphere
   ray->point.x = 0.0f;
   ray->point.y = 0.0f;
   ray->point.z = 0.0f;
-  intersectRay(*ray, *sphere1, intersection_list);
+  intersect(*ray, *sphere1, intersection_list);
   intTest = getIntersectionByLocation(4, intersection_list);
   assert(list_size(intersection_list) == 6);
   assert(equal(intTest->t, -1.0f));
@@ -1565,7 +1565,7 @@ int rayIntersectTest() {
   ray->point.x = 0.0f;
   ray->point.y = 0.0f;
   ray->point.z = 5.0f;
-  intersectRay(*ray, *sphere1, intersection_list);
+  intersect(*ray, *sphere1, intersection_list);
   intTest = getIntersectionByLocation(6, intersection_list);
   assert(list_size(intersection_list) == 8);
   assert(equal(intTest->t, -6.0f));
@@ -1579,24 +1579,24 @@ int intersectionEncapTandObjectTest() {
   tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
   sphere* sphere1 = generateSphere(sphereLocation);
   const int sphere_id = sphere1->id;
-  intersect *intersect = generateIntersectWithSentinalValues();
-  intersect->t = 3.5f;
-  assert(equal(intersect->t, 3.5f));
-  assert(intersect->object_id = sphere_id);
+  intersection *intersect1 = generateIntersectWithSentinalValues();
+  intersect1->t = 3.5f;
+  assert(equal(intersect1->t, 3.5f));
+  assert(intersect1->object_id = sphere_id);
   return 1;
 }
 
 // 64 Aggregating intersections
 int aggregatingIntersectionsTest() {
   List_Head* intersection_list = list_new();
-  intersect *intersect1 = generateIntersectWithSentinalValues();
+  intersection *intersect1 = generateIntersectWithSentinalValues();
   intersect1->t = 1.0f;
   addIntersectionToList(intersection_list, intersect1);
-  intersect* intersect2 = generateIntersectWithSentinalValues();
+  intersection* intersect2 = generateIntersectWithSentinalValues();
   intersect2->t = 2.0f;
   addIntersectionToList(intersection_list, intersect2);
   assert(list_size(intersection_list) == 2);
-  intersect* intersectDat = getIntersectionByLocation(0, intersection_list);
+  intersection* intersectDat = getIntersectionByLocation(0, intersection_list);
   assert(equal(intersectDat->t, 1.0f));
   intersectDat = getIntersectionByLocation(1, intersection_list);
   assert(equal(intersectDat->t, 2.0f));
@@ -1611,8 +1611,8 @@ int intersectSetsObjectOnIntersectionTest() {
   ray* ray = createRay(position, vector);
   tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
   sphere* sphere1 = generateSphere(sphereLocation);
-  intersectRay(*ray, *sphere1, intersection_list);
-  intersect* intersectDat = getIntersectionByLocation(0, intersection_list);
+  intersect(*ray, *sphere1, intersection_list);
+  intersection* intersectDat = getIntersectionByLocation(0, intersection_list);
   assert(equal(intersectDat->object_id, sphere1->id));
   intersectDat = getIntersectionByLocation(1, intersection_list);
   assert(equal(intersectDat->object_id, sphere1->id));
@@ -1627,11 +1627,11 @@ int hitVariousIntersectionsTest() {
   // 65 The hit when all intersections have a positive t
   // TODO: Need to clear all of these linked lists when we leave method
   List_Head* intersection_list = list_new();
-  intersect intersect1 = { 1.0f, sphere1->id };
+  intersection intersect1 = { 1.0f, sphere1->id };
   addIntersectionToList(intersection_list, &intersect1);
-  intersect intersect2 = { 2.0f, sphere1->id };
+  intersection intersect2 = { 2.0f, sphere1->id };
   addIntersectionToList(intersection_list, &intersect2);
-  intersect* intersectFound = NULL;
+  intersection* intersectFound = NULL;
   intersectFound = getIntersectionHit(intersection_list);
   assert(equal(intersectFound->t, 1.0f));
 
@@ -1641,9 +1641,9 @@ int hitVariousIntersectionsTest() {
   assert(intersection_list->pNext == NULL);
   assert(intersection_list->count == 0);
 
-  intersect intersect3 = { -1.0f, sphere1->id };
+  intersection intersect3 = { -1.0f, sphere1->id };
   addIntersectionToList(intersection_list, &intersect3);
-  intersect intersect4 = { 1.0f, sphere1->id };
+  intersection intersect4 = { 1.0f, sphere1->id };
   addIntersectionToList(intersection_list, &intersect4);
   intersectFound = NULL;
   intersectFound = getIntersectionHit(intersection_list);
@@ -1655,9 +1655,9 @@ int hitVariousIntersectionsTest() {
   assert(intersection_list->pNext == NULL);
   assert(intersection_list->count == 0);
 
-  intersect intersect5 = { -2.0f, sphere1->id };
+  intersection intersect5 = { -2.0f, sphere1->id };
   addIntersectionToList(intersection_list, &intersect5);
-  intersect intersect6 = { -1.0f, sphere1->id };
+  intersection intersect6 = { -1.0f, sphere1->id };
   addIntersectionToList(intersection_list, &intersect6);
   intersectFound = NULL;
   intersectFound = getIntersectionHit(intersection_list);
@@ -1669,13 +1669,13 @@ int hitVariousIntersectionsTest() {
   assert(intersection_list->pNext == NULL);
   assert(intersection_list->count == 0);
 
-  intersect intersect7 = { 5.0f, sphere1->id };
+  intersection intersect7 = { 5.0f, sphere1->id };
   addIntersectionToList(intersection_list, &intersect7);
-  intersect intersect8 = { 7.0f, sphere1->id };
+  intersection intersect8 = { 7.0f, sphere1->id };
   addIntersectionToList(intersection_list, &intersect8);
-  intersect intersect9 = { -3.0f, sphere1->id };
+  intersection intersect9 = { -3.0f, sphere1->id };
   addIntersectionToList(intersection_list, &intersect9);
-  intersect intersect10 = { 2.0f, sphere1->id };
+  intersection intersect10 = { 2.0f, sphere1->id };
   addIntersectionToList(intersection_list, &intersect10);
   intersectFound = NULL;
   intersectFound = getIntersectionHit(intersection_list);
@@ -1825,9 +1825,9 @@ int intersectScaledSphereArray() {
   Mat4x4 scaleMat;
   genTranslateMatrix(2.0f, 2.0f, 2.0f, scaleMat);
   assert(list_size(intersection_list) == 0);
-  intersectRay(*ray1, *sp, intersection_list);
+  intersect(*ray1, *sp, intersection_list);
   assert(list_size(intersection_list) == 2);
-  intersect* intersectDat = getIntersectionByLocation(0, intersection_list);
+  intersection* intersectDat = getIntersectionByLocation(0, intersection_list);
   //assert(equal(intersectDat->t, 3.0f));
   intersectDat = getIntersectionByLocation(0, intersection_list);
   assert(equal(intersectDat->t, 7.0f));
@@ -1848,7 +1848,7 @@ int intersectingTransSphereWithRayTest() {
   genTranslateMatrix(5.0f, 0.0f, 0.0f, translateMat);
   Mat4x4Copy(translateMat, sphere1->transform);
 
-  intersectRay(*ray1, *sphere1, intersection_list);
+  intersect(*ray1, *sphere1, intersection_list);
   assert(list_size(intersection_list) == 0);
   return 1;
 }
@@ -1874,7 +1874,8 @@ void renderSphere1() {
       tuple position = createPoint(world_x, world_y, wall_z);
       tuple posRayOrigin = tupleSub(position, ray_origin);
       ray* tempRay = createRay(ray_origin, normVec(posRayOrigin));
-      intersectRay(*tempRay, *sphere1, intersection_list);
+      list_clear(intersection_list);
+      intersect(*tempRay, *sphere1, intersection_list);
       if (getIntersectionHit(intersection_list)) {
         writePixel(x, y, color_red);
       }
