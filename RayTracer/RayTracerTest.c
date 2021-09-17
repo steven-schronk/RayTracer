@@ -25,7 +25,7 @@ typedef struct { double x, y, z, w; } tuple;
 
 typedef struct { tuple location; double t; Mat4x4 transform; } sphere;
 
-typedef struct { tuple point; tuple vector; } ray;
+typedef struct { tuple originPoint; tuple directionVector; } ray;
 
 typedef struct { double t; sphere *object_id; } intersection;
 
@@ -33,15 +33,26 @@ typedef struct { double t; sphere *object_id; } intersection;
 
 typedef struct { intersection itersection[10]; int count; } intersections;
 
-void clearIntersections(intersections* intersects) {
-    intersects->count = 0;
+intersections createIntersections() {
+    intersections intersects;
+    intersects.count = 0;
     for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
-        intersects->itersection[i].t = DBL_MIN;
-        intersects->itersection[i].object_id = NULL;
+        intersects.itersection[i].t = DBL_MIN;
+        intersects.itersection[i].object_id = NULL;
+    }
+    return intersects;
+}
+
+void clearIntersections(intersections *intersection_list) {
+    assert(intersection_list != NULL);
+    intersection_list->count = 0;
+    for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
+        intersection_list->itersection[i].t = DBL_MIN;
+        intersection_list->itersection[i].object_id = NULL;
     }
 }
 
-intersection* getIntersectionHit(intersections *intersection_list) {
+intersection* hit(intersections *intersection_list) {
   assert(intersection_list != NULL);
   if (0 == intersection_list->count) return NULL;
   intersection* intersect = NULL;
@@ -94,6 +105,20 @@ tuple createPoint(double x, double y, double z) {
 tuple createVector(double x, double y, double z) {
   tuple t = { x, y, z, 0.0f };
   return t;
+}
+
+ray createRay(double originPoint_x, double originPoint_y, double originPoint_z, double dirVector_x, double dirVector_y, double dirVector_z) {
+    ray r;
+    r.originPoint.x = originPoint_x;
+    r.originPoint.y = originPoint_y;
+    r.originPoint.z = originPoint_z;
+    r.originPoint.w = 1.0f;
+
+    r.directionVector.x = dirVector_x;
+    r.directionVector.y = dirVector_y;
+    r.directionVector.z = dirVector_z;
+    r.directionVector.w = 0.0f;
+    return r;
 }
 
 bool tupleIsPoint(tuple t) { return t.w == 1.0 ? true : false; }
@@ -236,8 +261,9 @@ void printMat(const int rows, const int cols, const double* mat) {
     }
     printf(" }");
     if (i < rows - 1) { printf(", "); }
+    printf("\n");
   }
-  printf("}\n");
+  printf("}\n\n");
 }
 
 double mat2x2Det(Mat2x2 a) {
@@ -349,6 +375,17 @@ void Mat4x4Copy(Mat4x4 m1, Mat4x4 m2) {
   }
 }
 
+sphere createSphere() {
+    sphere s;
+    s.t = 1.0f;
+    s.location.x = 0.0f;
+    s.location.y = 0.0f;
+    s.location.z = 0.0f;
+    s.location.w = 1.0f;
+    Mat4x4SetIndent(s.transform);
+    return s;
+}
+
 void genTranslateMatrix(const double x, const double y, const double z, Mat4x4 m) {
   m[0][0] = 1.0f; m[0][1] = 0.0f; m[0][2] = 0.0f; m[0][3] = x;
   m[1][0] = 0.0f; m[1][1] = 1.0f; m[1][2] = 0.0f; m[1][3] = y;
@@ -401,89 +438,50 @@ sphere *generateSphere(tuple location) {
   return sp;
 }
 
-ray *createRay(tuple point, tuple vector) {
-  ray* newRay = (ray*)malloc(sizeof(ray));
-  tupleCopy(&point, &newRay->point);
-  tupleCopy(&vector, &newRay->vector);
-  return newRay;
+tuple position(ray r, double t) {
+    tuple pos = createPoint(0.0f, 0.0f, 0.0f);
+    pos = tupleMultScalar(r.directionVector, t);
+    pos = tupleAdd(r.originPoint, pos);
+    return pos;
 }
 
-tuple position_ray(ray r, double t) {
-  tuple out = tupleMultScalar(r.vector, t);
-  return tupleAdd(r.point, out);
+ray transform(ray* r, Mat4x4 m) {
+    ray ray_out = *r;
+    mat4x4MulTuple(m, r->originPoint, &ray_out.originPoint);
+    mat4x4MulTuple(m, r->directionVector, &ray_out.directionVector);
+    return ray_out;
 }
 
-ray* transformRayMat4x4(ray r, Mat4x4 m) {
-  tuple point = createPoint(0.0f, 0.0f, 0.0f);
-  tuple vetctor = createVector(0.0f, 0.0f, 0.0f);
-  ray* transRay = createRay(point, vetctor);
-  mat4x4MulTuple(m, r.point, &transRay->point);
-  mat4x4MulTuple(m, r.vector, &transRay->vector);
-  return transRay;
+intersections intersect(sphere* sp, ray* r) {
+    Mat4x4 invScaleMat;
+    //Mat4x4SetIndent(invScaleMat);
+    mat4x4Inverse(sp->transform, invScaleMat);
+    ray r2 = *r;
+    transform(&r2, invScaleMat);
+
+    intersections intersects = createIntersections();
+    tuple origin = createPoint(0.0f, 0.0f, 0.0f);
+    tuple sphere_to_ray = tupleSub(r2.originPoint, origin);
+    double a = dot(r2.directionVector, r2.directionVector);
+    double b = 2 * dot(r2.directionVector, sphere_to_ray);
+    double c = dot(sphere_to_ray, sphere_to_ray) - 1.0f;
+    double discriminant = b * b - 4 * a * c;
+    if (discriminant < 0) { return intersects; }
+    double t1 = (-b - sqrt(discriminant)) / (2 * a);
+    double t2 = (-b + sqrt(discriminant)) / (2 * a);
+    if (t1 < t2) {
+        addIntersectionToList(&intersects, t1, sp);
+        addIntersectionToList(&intersects, t2, sp);
+    }
+    else {
+        addIntersectionToList(&intersects, t2, sp);
+        addIntersectionToList(&intersects, t1, sp);
+    }
+    return intersects;
 }
 
-bool intersect(ray *r1, sphere *sphere, intersections *intersection_list) {
-  tuple point = createPoint(0.0f, 0.0f, 0.0f);
-  tuple vector = createVector(0.0f, 0.0f, 0.0f);
-  ray* r2 = createRay(point, vector);
-  Mat4x4 sphTransInverse;
-  mat4x4Inverse(sphere->transform, sphTransInverse);
-  r2 = transformRayMat4x4(*r1, sphTransInverse);
-
-
-
-  tuple pointOrigin = createPoint(0.0, 0.0, 0.0);
-  tuple sphere_to_ray = tupleSub(r2->point, pointOrigin);
-  double a = dot(r2->vector, r2->vector);
-  double b = 2 * dot(r2->vector, sphere_to_ray);
-  double c = dot(sphere_to_ray, sphere_to_ray) - 1;
-  double discriminant = b * b - 4 * a * c;
-  if (discriminant < 0) {
-    return false;
-  }
-
-  double t1 = (-b - sqrt(discriminant)) / (2 * a);
-  double t2 = (-b + sqrt(discriminant)) / (2 * a);
-  if (t1 < t2) {
-    addIntersectionToList(intersection_list, t1, sphere);
-    addIntersectionToList(intersection_list, t2, sphere);
-  }
-  else {
-    addIntersectionToList(intersection_list, t2, sphere);
-    addIntersectionToList(intersection_list, t1, sphere);
-  }
-  return true;
-}
-
-tuple normal_at(sphere* sphere, tuple world_point) {
-    // Line 1
-    tuple object_point = createPoint(0.0f, 0.0f, 0.0f);
-    Mat4x4 inverse_sphere;
-    mat4x4Inverse(sphere->transform, inverse_sphere);
-    mat4x4MulTuple(inverse_sphere, world_point, &object_point);
-
-    // Line 2
-    tuple objectNormal = createVector(0.0f, 0.0f, 0.0f);
-    tuple temp_point = createPoint(0.0f, 0.0f, 0.0f);
-    objectNormal = tupleSub(object_point, temp_point);
-
-    // Line 3
-    tuple world_normal;
-    mat4x4Inverse(sphere->transform, inverse_sphere);
-    mat4x4Transpose(inverse_sphere);
-    mat4x4MulTuple(inverse_sphere, objectNormal, &world_normal);
-    world_normal.w = 0.0f;
-
-    // Line 4
-    return normVec(world_normal);
-}
-
-void set_transform(sphere* sp, Mat4x4* translateMat) {
-    Mat4x4 invTransMat;
-    mat4x4Inverse(*translateMat, invTransMat);
-    //mat4x4MulTuple(invTransMat, sp->vector, &r->vector);
-    //mat4x4MulTuple(invTransMat, r->point, &r->point);
-    Mat4x4Copy(invTransMat, sp->transform);
+void set_transform(sphere *sp, Mat4x4 m) {
+    Mat4x4Copy(m, sp->transform);
 }
 
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -1489,355 +1487,6 @@ int drawClockTest() {
   return 1;
 }
 
-// 58 Creating and quering a ray
-int createRayTest() {
-  tuple point = createPoint(0.0f, 1.0f, 2.0f);
-  tuple vector = createVector(3.0f, 4.0f, 5.0f);
-  ray* ray1 = createRay(point, vector);
-  assert(equal(ray1->point.x, 0.0f));
-  assert(equal(ray1->point.y, 1.0f));
-  assert(equal(ray1->point.z, 2.0f));
-  assert(equal(ray1->vector.x, 3.0f));
-  assert(equal(ray1->vector.y, 4.0f));
-  assert(equal(ray1->vector.z, 5.0f));
-  return 1;
-}
-
-// 58 Computing a point from a distance
-int computePointAlongRayTest() {
-  tuple position = { 2.0f, 3.0f, 4.0f };
-  tuple vector = { 1.0f, 0.0f, 0.0f };
-  tuple intersect1 = { 0.0f, 0.0f, 0.0f };
-  ray* ray = createRay(position, vector);
-
-  intersect1 = position_ray(*ray, 0.0f);
-  assert(equal(intersect1.x, 2.0f));
-  assert(equal(intersect1.y, 3.0f));
-  assert(equal(intersect1.z, 4.0f));
-  assert(equal(intersect1.w, 0.0f));
-
-  intersect1 = position_ray(*ray, 1.0f);
-  assert(equal(intersect1.x, 3.0f));
-  assert(equal(intersect1.y, 3.0f));
-  assert(equal(intersect1.z, 4.0f));
-  assert(equal(intersect1.w, 0.0f));
-
-  intersect1 = position_ray(*ray, -1.0f);
-  assert(equal(intersect1.x, 1.0f));
-  assert(equal(intersect1.y, 3.0f));
-  assert(equal(intersect1.z, 4.0f));
-  assert(equal(intersect1.w, 0.0f));
-
-  intersect1 = position_ray(*ray, 2.5f);
-  assert(equal(intersect1.x, 4.5f));
-  assert(equal(intersect1.y, 3.0f));
-  assert(equal(intersect1.z, 4.0f));
-  assert(equal(intersect1.w, 0.0f));
-  return 1;
-}
-
-// Extra tests for linked list issues
-int intersectionListTest() {
-  intersections intersections_list;
-  clearIntersections(&intersections_list);
-  assert(intersections_list.count == 0);
-
-  for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
-      assert(intersections_list.itersection[i].object_id == NULL);
-      assert(intersections_list.itersection[i].t == DBL_MIN);
-  }
-  tuple location1 = createPoint(1.0f, 2.0f, 3.0f);
-  sphere *sp1 = generateSphere(location1);
-  addIntersectionToList(&intersections_list, 3.14f, sp1);
-  assert(intersections_list.count == 1);
-
-  assert(intersections_list.itersection[0].object_id == sp1);
-  assert(equal(intersections_list.itersection[0].t, 3.14f));
-
-  clearIntersections(&intersections_list);
-  assert(intersections_list.count == 0);
-
-  for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
-      assert(intersections_list.itersection[i].object_id == NULL);
-      assert(intersections_list.itersection[i].t == DBL_MIN);
-  }
-
-  tuple location2 = createPoint(1.0f, 2.0f, 3.0f);
-  sphere* sp2 = generateSphere(location2);
-  addIntersectionToList(&intersections_list, 3.14f, sp1);
-  addIntersectionToList(&intersections_list, 3.14f, sp2);
-  assert(intersections_list.count == 2);
-
-  // Make sure the 3rd space in the list is not used yet
-  assert(intersections_list.itersection[2].object_id == NULL);
-  assert(intersections_list.itersection[2].t == DBL_MIN);
-
-  return 1;
-}
-
-// Extra cirricular activity
-int intersectionTests() {
-
-  tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
-  sphere* sphere1 = generateSphere(sphereLocation);
-
-  assert(equal(sphere1->transform[0][0], 1.0f));
-  assert(equal(sphere1->transform[0][1], 0.0f));
-  assert(equal(sphere1->transform[0][2], 0.0f));
-  assert(equal(sphere1->transform[0][3], 0.0f));
-
-  assert(equal(sphere1->transform[1][0], 0.0f));
-  assert(equal(sphere1->transform[1][1], 1.0f));
-  assert(equal(sphere1->transform[1][2], 0.0f));
-  assert(equal(sphere1->transform[1][3], 0.0f));
-
-  assert(equal(sphere1->transform[2][0], 0.0f));
-  assert(equal(sphere1->transform[2][1], 0.0f));
-  assert(equal(sphere1->transform[2][2], 1.0f));
-  assert(equal(sphere1->transform[2][3], 0.0f));
-
-  assert(equal(sphere1->transform[3][0], 0.0f));
-  assert(equal(sphere1->transform[3][1], 0.0f));
-  assert(equal(sphere1->transform[3][2], 0.0f));
-  assert(equal(sphere1->transform[3][3], 1.0f));
-
-  sphere1->transform[0][0] = 0.5f;
-  sphere1->transform[1][1] = 0.5f;
-  sphere1->transform[2][2] = 0.5f;
-
-  tuple point  = createPoint( 0.0f, 0.0f, -5.0f );
-  tuple vector = createVector( 0.0f, 0.0f, 0.0f );
-  ray* ray1 = createRay(point, vector);
-
-
-  // TODO: Add tests for this ray!
-
-
-  //shape transform's reverse
-  Mat4x4 shape_trans_inverse;
-  mat4x4Inverse(sphere1->transform, shape_trans_inverse);
-
-  assert(equal(shape_trans_inverse[0][0], 2.0f));
-  assert(equal(shape_trans_inverse[0][1], 0.0f));
-  assert(equal(shape_trans_inverse[0][2], 0.0f));
-  assert(equal(shape_trans_inverse[0][3], 0.0f));
-
-  assert(equal(shape_trans_inverse[1][0], 0.0f));
-  assert(equal(shape_trans_inverse[1][1], 2.0f));
-  assert(equal(shape_trans_inverse[1][2], 0.0f));
-  assert(equal(shape_trans_inverse[1][3], 0.0f));
-
-  assert(equal(shape_trans_inverse[2][0], 0.0f));
-  assert(equal(shape_trans_inverse[2][1], 0.0f));
-  assert(equal(shape_trans_inverse[2][2], 2.0f));
-  assert(equal(shape_trans_inverse[2][3], 0.0f));
-
-  assert(equal(shape_trans_inverse[3][0], 0.0f));
-  assert(equal(shape_trans_inverse[3][1], 0.0f));
-  assert(equal(shape_trans_inverse[3][2], 0.0f));
-  assert(equal(shape_trans_inverse[3][3], 1.0f));
-
-  // const origin = matrix.multiplyBy(this.origin)
-  tuple newRayOrigin = createPoint(95.0f, 78.0f, 32.0f);
-  mat4x4MulTuple(&shape_trans_inverse, ray1->point, &newRayOrigin);
-
-  //     const direction = matrix.multiplyBy(this.direction)
-  tuple newRayDirection = createVector(9.0f, 56.0f, 87.0f);
-  mat4x4MulTuple(&shape_trans_inverse, ray1->vector, &newRayDirection);
-
-  ray1->vector = newRayDirection;
-  ray1->point = newRayOrigin;
-
-  assert(equal(ray1->vector.x, -1.116291144371895f));
-  assert(equal(ray1->vector.y, 1.116291144371895f));
-  assert(equal(ray1->vector.z, 1.2279202588090847f));
-  assert(equal(ray1->vector.w, 0.0f));
-
-  assert(equal(ray1->point.x, 0.0f));
-  assert(equal(ray1->point.y, 0.0f));
-  assert(equal(ray1->point.z, -10.0f));
-  assert(equal(ray1->point.w, 1.0f));
-
-  //new origin for ray 
-  // Position(4)[0, 0, -10, 1]
-
-  //new direction for ray 
-  //Position(4)[
-  //    -1.116291144371895,
-  //        1.116291144371895,
-  //        1.2279202588090847,
-  //        0
-  //]
-
-  // USE THIS TO SEARCH THE LOG FILE!!!!
-  /*
-transform: Matrix(4) [
-  [ 0.5, 0, 0, 0 ],
-      [0, 0.5, 0, 0],
-      [0, 0, 0.5, 0],
-      [0, 0, 0, 1]
-]
-*/
-
-  return 1;
-}
-
-// 59 A ray intersects a sphere at two points
-int rayIntersectTest() {
-  intersections intersections_list;
-  clearIntersections(&intersections_list);
-  tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
-  sphere* sphere1 = generateSphere(sphereLocation);
-  tuple position = { 0.0f, 0.0f, -5.0f };
-  tuple vector = { 0.0f, 0.0f, 1.0f };
-  ray* ray = createRay(position, vector);
-  intersect(ray, sphere1, &intersections_list);
-  assert(intersections_list.count == 2);
-  intersection* intTest = &intersections_list.itersection[0];
-  assert(equal(intTest->t, 4.0f));
-  intTest = &intersections_list.itersection[1];
-  assert(equal(intTest->t, 6.0f));
-
-  // 60 ray intersects a sphere at a tangent
-
-  ray->point.x =  0.0f;
-  ray->point.y =  1.0f;
-  ray->point.z = -5.0f;
-  intersect(ray, sphere1, &intersections_list);
-  intTest = &intersections_list.itersection[2];
-  assert(intersections_list.count == 4);
-  assert(equal(intTest->t, 5.0f));
-  intTest = &intersections_list.itersection[3];
-  assert(equal(intTest->t, 5.0f));
-
-  // 60 ray misses a sphere
-  ray->point.x = 0.0f;
-  ray->point.y = 2.0f;
-  ray->point.z = -5.0f;
-  intersect(ray, sphere1, &intersections_list);
-  assert(intersections_list.count == 4);
-
-  // 61 ray originates inside a sphere
-  ray->point.x = 0.0f;
-  ray->point.y = 0.0f;
-  ray->point.z = 0.0f;
-  intersect(ray, sphere1, &intersections_list);
-  assert(intersections_list.count == 6);
-  intTest = &intersections_list.itersection[4];
-  assert(equal(intTest->t, -1.0f));
-  intTest = &intersections_list.itersection[5];
-  assert(equal(intTest->t, 1.0f));
-
-  // 62 shere is behind an array
-  ray->point.x = 0.0f;
-  ray->point.y = 0.0f;
-  ray->point.z = 5.0f;
-  intersect(ray, sphere1, &intersections_list);
-  intTest = &intersections_list.itersection[6];
-  assert(intersections_list.count == 8);
-  assert(equal(intTest->t, -6.0f));
-  intTest = &intersections_list.itersection[7];
-  assert(equal(intTest->t, -4.0f));
-  return 1;
-}
-
-// 63 Intersection encapsulates t and object
-int intersectionEncapTandObjectTest() {
-  tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
-  sphere* sphere1 = generateSphere(sphereLocation);
-  intersection intersection1;
-  intersection1.t = 3.5f;
-  intersection1.object_id = sphere1;
-  assert(equal(intersection1.t, 3.5f));
-  assert(intersection1.object_id == sphere1);
-  return 1;
-}
-
-// 64 Aggregating intersections
-int aggregatingIntersectionsTest() {
-  intersections intersections_list;
-  clearIntersections(&intersections_list);
-  tuple sphereLocation1 = createPoint(0.0f, 0.0f, 0.0f);
-  sphere* sphere1 = generateSphere(sphereLocation1);
-  addIntersectionToList(&intersections_list, 1.0f, sphere1);
-  tuple sphereLocation2 = createPoint(0.0f, 0.0f, 0.0f);
-  sphere* sphere2 = generateSphere(sphereLocation2);
-  addIntersectionToList(&intersections_list, 2.0f, sphere2);
-  assert(intersections_list.count == 2);
-  intersection* intersectDat = &intersections_list.itersection[0];
-  assert(equal(intersectDat->t, 1.0f));
-  intersectDat = &intersections_list.itersection[1];
-  assert(equal(intersectDat->t, 2.0f));
-  return 1;
-}
-
-// 64 Intersect sets the object on the intersection
-int intersectSetsObjectOnIntersectionTest() {
-  intersections intersections_list;
-  clearIntersections(&intersections_list);
-  tuple position = { 0.0f, 0.0f, -5.0f };
-  tuple vector = { 0.0f, 0.0f, 1.0f };
-  ray* ray = createRay(position, vector);
-  tuple sphereLocation = createPoint(0.0f, 0.0f, 0.0f);
-  sphere* sphere1 = generateSphere(sphereLocation);
-  intersect(ray, sphere1, &intersections_list);
-  intersection* intersectDat = &intersections_list.itersection[0];
-  assert(intersectDat->object_id == sphere1);
-  intersectDat = &intersections_list.itersection[1];
-  assert(intersectDat->object_id == sphere1);
-  assert(intersections_list.count == 2);
-  return 1;
-}
-
-int hitVariousIntersectionsTest() {
-  intersections intersections_list;
-  clearIntersections(&intersections_list);
-  tuple sphereLocation1 = createPoint(0.0f, 0.0f, 0.0f);
-  sphere* sphere1 = generateSphere(sphereLocation1);
-
-  tuple sphereLocation2 = createPoint(0.0f, 0.0f, 0.0f);
-  sphere* sphere2 = generateSphere(sphereLocation2);
-
-  // 65 The hit when all intersections have a positive t
-  addIntersectionToList(&intersections_list, 1.0f, sphere1);
-  addIntersectionToList(&intersections_list, 2.0f, sphere2);
-  intersection* intersectFound = getIntersectionHit(&intersections_list);
-  assert(intersectFound != NULL);
-  assert(equal(intersectFound->t, 1.0f));
-  assert(intersectFound->object_id == sphere1);
-
-  // 65 The hit when some intersections have a negative t
-  clearIntersections(&intersections_list);
-  assert(intersections_list.count == 0);
-  addIntersectionToList(&intersections_list, -1.0f, sphere1);
-  addIntersectionToList(&intersections_list, 1.0f, sphere2);
-  intersectFound = getIntersectionHit(&intersections_list);
-  assert(intersectFound != NULL);
-  assert(equal(intersectFound->t, 1.0f));
-
-  // 65 The hit when all intersections have a negative t
-  clearIntersections(&intersections_list);
-  assert(intersections_list.count == 0);
-  addIntersectionToList(&intersections_list, -2.0f, sphere1);
-  addIntersectionToList(&intersections_list, -1.0f, sphere1);
-  intersectFound = NULL;
-  intersectFound = getIntersectionHit(&intersections_list);
-  assert(intersectFound == NULL);
-
-  // 66 The hit is always the lowest nonnegative intersection
-  clearIntersections(&intersections_list);
-  assert(intersections_list.count == 0);
-  addIntersectionToList(&intersections_list, 5.0f, sphere1);
-  addIntersectionToList(&intersections_list, 7.0f, sphere1);
-  addIntersectionToList(&intersections_list, -3.0f, sphere1);
-  addIntersectionToList(&intersections_list, 2.0f, sphere1);
-  intersectFound = NULL;
-  intersectFound = getIntersectionHit(&intersections_list);
-  assert(intersectFound != NULL);
-  assert(equal(intersectFound->t, 2.0f));
-  return 1;
-}
-
 int tupleCopyTest() {
   tuple t1 = { 1.0f, 2.0f, 3.0f, 4.0f };
   tuple t2 = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -1856,34 +1505,6 @@ int tupleCopyTest() {
   assert(equal(t1.y, t2.y));
   assert(equal(t1.z, t2.z));
   assert(equal(t1.w, t2.w));
-  return 1;
-}
-
-int transformRayTest() {
-  // 69 Translating a ray
-  tuple position = createPoint(1.0f, 2.0f, 3.0f);
-  tuple direction = createVector(0.0f, 1.0f, 0.0f);
-  ray* ray1 = createRay(position, direction);
-  Mat4x4 translateMat;
-  genTranslateMatrix(3.0f, 4.0f, 5.0f, translateMat);
-  ray* rayTrans2 = transformRayMat4x4(*ray1, translateMat);
-  assert(equal(rayTrans2->point.x, 4.0f));
-  assert(equal(rayTrans2->point.y, 6.0f));
-  assert(equal(rayTrans2->point.z, 8.0f));
-  assert(equal(rayTrans2->vector.x, 0.0f));
-  assert(equal(rayTrans2->vector.y, 1.0f));
-  assert(equal(rayTrans2->vector.z, 0.0f));
-
-  // 69 Scaling a ray
-  Mat4x4 scaleMat;
-  genScaleMatrix(2.0f, 3.0f, 4.0f, scaleMat);
-  ray* rayTrans3 = transformRayMat4x4(*ray1, scaleMat);
-  assert(equal(rayTrans3->point.x, 2.0f));
-  assert(equal(rayTrans3->point.y, 6.0f));
-  assert(equal(rayTrans3->point.z, 12.0f));
-  assert(equal(rayTrans3->vector.x, 0.0f));
-  assert(equal(rayTrans3->vector.y, 3.0f));
-  assert(equal(rayTrans3->vector.z, 0.0f));
   return 1;
 }
 
@@ -1935,99 +1556,349 @@ int Mat4x4CopyTest() {
   return 1;
 }
 
-int sphereTransformationsTest() {
-  // 69 A sphere's default transformation
-  tuple location = createPoint(0.0f, 0.0f, 0.0f);
-  sphere* sp = generateSphere(location);
-  assert(equal(sp->transform[0][0], 1.0f));
-  assert(equal(sp->transform[1][0], 0.0f));
-  assert(equal(sp->transform[2][0], 0.0f));
-  assert(equal(sp->transform[3][0], 0.0f));
+// 58 Creating and quering a ray
+int createRayTest() {
+  ray r = createRay(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f);
 
-  assert(equal(sp->transform[0][1], 0.0f));
-  assert(equal(sp->transform[1][1], 1.0f));
-  assert(equal(sp->transform[2][1], 0.0f));
-  assert(equal(sp->transform[3][1], 0.0f));
+  assert(equal(r.originPoint.x, 1.0f));
+  assert(equal(r.originPoint.y, 2.0f));
+  assert(equal(r.originPoint.z, 3.0f));
+  assert(equal(r.originPoint.w, 1.0f));
 
-  assert(equal(sp->transform[0][2], 0.0f));
-  assert(equal(sp->transform[1][2], 0.0f));
-  assert(equal(sp->transform[2][2], 1.0f));
-  assert(equal(sp->transform[3][2], 0.0f));
+  assert(equal(r.directionVector.x, 4.0f));
+  assert(equal(r.directionVector.y, 5.0f));
+  assert(equal(r.directionVector.z, 6.0f));
+  assert(equal(r.directionVector.w, 0.0f));
 
-  assert(equal(sp->transform[0][3], 0.0f));
-  assert(equal(sp->transform[1][3], 0.0f));
-  assert(equal(sp->transform[2][3], 0.0f));
-  assert(equal(sp->transform[3][3], 1.0f));
-
-  // 69 Changing a sphere's transformation
-  Mat4x4 translateMat;
-  genTranslateMatrix(2.0f, 3.0f, 4.0f, translateMat);
-  Mat4x4Copy(translateMat, sp->transform);
-  assert(mat4x4Equal(translateMat, sp->transform) == true);
   return 1;
 }
 
-// 69 Intersecting a scaled sphere with a ray
-int intersectScaledSphereArray() {
-    intersections intersections_list;
-    clearIntersections(&intersections_list);
-    tuple position = createPoint(0.0f, 0.0f, -5.0f);
-    tuple direction = createVector(0.0f, 0.0f, 1.0f);
-    ray* ray1 = createRay(position, direction);
+int createSphereTest() {
+    sphere s = createSphere();
 
-    tuple sphereLocation1 = createPoint(0.0f, 0.0f, 0.0f);
-    sphere* sphere1 = generateSphere(sphereLocation1);
-  
-    Mat4x4 scaleMat;
-    genScaleMatrix(2.0f, 2.0f, 2.0f, scaleMat);
+    assert(equal(s.t, 1.0f));
 
+    assert(equal(s.location.x, 0.0f));
+    assert(equal(s.location.y, 0.0f));
+    assert(equal(s.location.z, 0.0f));
+    assert(equal(s.location.w, 1.0f));
 
-    //set_transform(sphere1, &scaleMat);
+    assert(equal(s.transform[0][0], 1.0f));
+    assert(equal(s.transform[1][0], 0.0f));
+    assert(equal(s.transform[2][0], 0.0f));
+    assert(equal(s.transform[3][0], 0.0f));
 
-    //assert(intersections_list.count == 0);
-    intersect(ray1, sphere1, &intersections_list);
-    //assert(intersections_list.count == 2);
-    intersection* intersectDat = &intersections_list.itersection[0];
-    //assert(equal(intersectDat->t, 3.0f));
-    intersectDat = &intersections_list.itersection[1];
-    //assert(equal(intersectDat->t, 7.0f));
+    assert(equal(s.transform[0][1], 0.0f));
+    assert(equal(s.transform[1][1], 1.0f));
+    assert(equal(s.transform[2][1], 0.0f));
+    assert(equal(s.transform[3][1], 0.0f));
+
+    assert(equal(s.transform[0][2], 0.0f));
+    assert(equal(s.transform[1][2], 0.0f));
+    assert(equal(s.transform[2][2], 1.0f));
+    assert(equal(s.transform[3][2], 0.0f));
+
+    assert(equal(s.transform[0][3], 0.0f));
+    assert(equal(s.transform[1][3], 0.0f));
+    assert(equal(s.transform[2][3], 0.0f));
+    assert(equal(s.transform[3][3], 1.0f));
+
     return 1;
 }
 
-// 70 Intersecting translated sphere with a ray
-int intersectingTransSphereWithRayTest() {
-  intersections intersections_list;
-  clearIntersections(&intersections_list);
-  tuple point = createPoint(0.0f, 0.0f, -5.0f);
-  tuple vector = createVector(0.0f, 0.0f, 1.0f);
-  ray *ray1 = createRay(point, vector);
+int createIntersectionsTest() {
+    intersections intersects  = createIntersections();
 
-  tuple location = createPoint(0.0f, 0.0f, 0.0f);
-  sphere* sphere1 = generateSphere(location);
-
-  Mat4x4 translateMat;
-  genTranslateMatrix(5.0f, 0.0f, 0.0f, translateMat);
-
-  //set_transform(sphere1, &translateMat);
-  Mat4x4 translateInvMat;
-  mat4x4Inverse(sphere1->transform, translateInvMat);
-
- // const origin = matrix.multiplyBy(this.origin)
-  tuple newRayOrigin = createPoint(0.0f, 0.0f, 0.0f);
-  mat4x4MulTuple(&sphere1->location, ray1->point, &newRayOrigin);
-
- //     const direction = matrix.multiplyBy(this.direction)
-  tuple newRayDirection = createPoint(0.0f, 0.0f, 0.0f);
-  mat4x4MulTuple(&sphere1->location, ray1->vector, &newRayDirection);
-
-  ray1->vector = newRayDirection;
-  ray1->point = newRayOrigin;
-
-  intersect(ray1, sphere1, &intersections_list);
-  assert(intersections_list.count == 0);
-  return 1;
+    assert(intersects.count == 0);
+    for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
+        assert(equal(intersects.itersection[i].t, 0.0f));
+        assert(intersects.itersection[i].object_id == NULL);
+    }
+    return 1;
 }
 
+// 58 Computing a point from a distance
+int positionTest() {
+    ray r = createRay(2.0f, 3.0f, 4.0f, 1.0f, 0.0f, 0.0f);
+    tuple p1 = position(r, 0.0f);
+    assert(equal(p1.x, 2.0f));
+    assert(equal(p1.y, 3.0f));
+    assert(equal(p1.z, 4.0f));
+    assert(equal(p1.w, 1.0f));
+
+    tuple p2 = position(r, 1.0f);
+    assert(equal(p2.x, 3.0f));
+    assert(equal(p2.y, 3.0f));
+    assert(equal(p2.z, 4.0f));
+    assert(equal(p2.w, 1.0f));
+
+    tuple p3 = position(r, -1.0f);
+    assert(equal(p3.x, 1.0f));
+    assert(equal(p3.y, 3.0f));
+    assert(equal(p3.z, 4.0f));
+    assert(equal(p3.w, 1.0f));
+
+    tuple p4 = position(r, 2.5f);
+    assert(equal(p4.x, 4.5f));
+    assert(equal(p4.y, 3.0f));
+    assert(equal(p4.z, 4.0f));
+    assert(equal(p4.w, 1.0f));
+
+    return 1;
+}
+
+// 59 A ray intersects a sphere at two points
+int rayIntersectSphereTwoPointTest() {
+    ray r = createRay(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+    sphere s = createSphere();
+    intersections inter = intersect(&s, &r);
+    assert(inter.count == 2);
+    assert(equal(inter.itersection[0].t, 4.0f));
+    assert(equal(inter.itersection[1].t, 6.0f));
+    return 1;
+}
+
+// 60 A ray intersects a sphere at a tangent
+int rayIntersectSphereTangentTest() {
+    ray r = createRay(0.0f, 1.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+    sphere s = createSphere();
+    intersections inter = intersect(&s, &r);
+    assert(inter.count == 2);
+    assert(equal(inter.itersection[0].t, 5.0f));
+    assert(equal(inter.itersection[1].t, 5.0f));
+    return 1;
+}
+
+// 60 A ray misses a sphere
+int rayMissesSphereTest() {
+    ray r = createRay(0.0f, 2.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+    sphere s = createSphere();
+    intersections inter = intersect(&s, &r);
+    assert(inter.count == 0);
+    assert(equal(inter.itersection[0].t, 0.0f)); // might as well check
+    assert(equal(inter.itersection[1].t, 0.0f));
+
+    assert(inter.itersection[0].object_id == NULL);
+    assert(inter.itersection[1].object_id == NULL);
+
+    return 1;
+}
+
+// 61 A ray originates inside a sphere
+int rayOriginatesInsideSphereTest() {
+    ray r = createRay(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+    sphere s = createSphere();
+    intersections inter = intersect(&s, &r);
+    assert(inter.count == 2);
+    assert(equal(inter.itersection[0].t, -1.0f));
+    assert(equal(inter.itersection[1].t, 1.0f));
+    return 1;
+}
+
+// 62 A sphere is behind a ray
+int sphereIsBehindRayTest() {
+    ray r = createRay(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 1.0f);
+    sphere s = createSphere();
+    intersections inter = intersect(&s, &r);
+    assert(inter.count == 2);
+    assert(equal(inter.itersection[0].t, -6.0f));
+    assert(equal(inter.itersection[1].t, -4.0f));
+    return 1;
+}
+
+// 63 An intersection encapsulates t and object
+// Test Not Required Due To Design Of Application
+
+// 64 Aggegating intersections
+int aggregatingIntersectionsTest() {
+    intersections intersects = createIntersections();
+    sphere s = createSphere();
+    addIntersectionToList(&intersects, 1.0, &s);
+    addIntersectionToList(&intersects, 2.0, &s);
+    assert(intersects.count == 2);
+    assert(equal(intersects.itersection[0].t, 1.0f));
+    assert(equal(intersects.itersection[1].t, 2.0f));
+    return 1;
+}
+
+// 64 Intersect sets the object on the intersection
+int intersectSetsObjectOnIntersectionTest() {
+    ray r = createRay(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+    sphere sp = createSphere();
+    intersections intersects = intersect(&sp, &r);
+    assert(intersects.count == 2);
+    assert(intersects.itersection[0].object_id == &sp);
+    assert(intersects.itersection[1].object_id == &sp);
+    return 1;
+}
+
+// Clear Intersections List
+// NOTE: Needed for testing
+int clearIntersectionsTest() {
+    intersections intersects = createIntersections();
+    sphere sp = createSphere();
+    addIntersectionToList(&intersects, 9.0f, &sp);
+    clearIntersections(&intersects);
+    assert(intersects.count == 0);
+    for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
+        assert(equal(intersects.itersection[i].t, DBL_MIN));
+        assert(intersects.itersection[i].object_id == NULL);
+    }
+    return 1;
+}
+
+// 64  NOTE: All hit tests have been put together
+int hitTests(){
+    intersections intersects = createIntersections();
+    sphere sp = createSphere();
+
+    // 65 The hit when all intersections have positive t
+    addIntersectionToList(&intersects, 1.0, &sp);
+    addIntersectionToList(&intersects, 2.0, &sp);
+    assert(intersects.count == 2);
+    intersection* intersect = hit(&intersects);
+    assert(intersect->object_id == &sp);
+    assert(equal(intersect->t, 1.0f));
+
+    //65 The hit when some intersections have a negative t
+    clearIntersections(&intersects);
+    assert(intersects.count == 0);
+    addIntersectionToList(&intersects, -1.0, &sp);
+    addIntersectionToList(&intersects, 1.0, &sp);
+    assert(intersects.count == 2);
+    intersect = hit(&intersects);
+    assert(intersect->object_id == &sp);
+    assert(equal(intersect->t, 1.0f));
+
+    // 65 The hit when all intersections have negative t
+    clearIntersections(&intersects);
+    assert(intersects.count == 0);
+    addIntersectionToList(&intersects, -2.0, &sp);
+    addIntersectionToList(&intersects, -1.0, &sp);
+    assert(intersects.count == 2);
+    intersect = hit(&intersects);
+    assert(intersect == NULL);
+
+    // 66 The hit is always the lowest nonnegative intersection
+    clearIntersections(&intersects);
+    assert(intersects.count == 0);
+    addIntersectionToList(&intersects, 5.0, &sp);
+    addIntersectionToList(&intersects, 7.0, &sp);
+    addIntersectionToList(&intersects, -3.0, &sp);
+    addIntersectionToList(&intersects, 2.0, &sp);
+    assert(intersects.count == 4);
+    intersect = hit(&intersects);
+    assert(intersect->object_id == &sp);
+    assert(equal(intersect->t, 2.0f));
+
+    return 1;
+}
+
+// 69 Translating a ray
+int translatingRayTest() {
+    ray r1 = createRay(1.0f, 2.0f, 3.0f, 0.0f, 1.0f, 0.0f);
+    Mat4x4 transMat;
+    genTranslateMatrix(3.0f, 4.0f, 5.0f, transMat);
+
+    ray r2 = transform(&r1, transMat);
+
+    assert(equal(r2.originPoint.x, 4.0f));
+    assert(equal(r2.originPoint.y, 6.0f));
+    assert(equal(r2.originPoint.z, 8.0f));
+    assert(equal(r2.originPoint.w, 1.0f));
+
+    assert(equal(r2.directionVector.x, 0.0f));
+    assert(equal(r2.directionVector.y, 1.0f));
+    assert(equal(r2.directionVector.z, 0.0f));
+    assert(equal(r2.directionVector.w, 0.0f));
+    return 1;
+}
+
+// 69 Scaling a ray
+int scalingRayTest() {
+    ray r1 = createRay(1.0f, 2.0f, 3.0f, 0.0f, 1.0f, 0.0f);
+    Mat4x4 scaleMat;
+    genScaleMatrix(2.0f, 3.0f, 4.0f, scaleMat);
+    ray r2 = transform(&r1, scaleMat);
+
+    assert(equal(r2.originPoint.x, 2.0f));
+    assert(equal(r2.originPoint.y, 6.0f));
+    assert(equal(r2.originPoint.z, 12.0f));
+    assert(equal(r2.originPoint.w, 1.0f));
+
+    assert(equal(r2.directionVector.x, 0.0f));
+    assert(equal(r2.directionVector.y, 3.0f));
+    assert(equal(r2.directionVector.z, 0.0f));
+    assert(equal(r2.directionVector.w, 0.0f));
+    return 1;
+}
+
+// 69 Sphere default transformation
+int sphereDefaultTransformationTest() {
+    sphere sp = createSphere();
+    Mat4x4 identMat;
+    Mat4x4SetIndent(identMat);
+    assert(mat4x4Equal(sp.transform, identMat) == true);
+    return 1;
+}
+
+// 69 Changing a sphere's transformation
+int changeSphereTransformTest() {
+    sphere sp = createSphere();
+    Mat4x4 transMat;
+    genTranslateMatrix(2.0f, 3.0f, 4.0f, transMat);
+    set_transform(&sp, transMat);
+    assert(mat4x4Equal(sp.transform, transMat) == true);
+    return 1;
+}
+
+int setTransformTest() {
+    sphere sp = createSphere();
+   
+    Mat4x4 identMat;
+    Mat4x4SetIndent(identMat);
+    // does sphere have identity as transform?
+    assert(mat4x4Equal(sp.transform, identMat));
+
+    Mat4x4 transMat;
+    genTranslateMatrix(2.0f, 3.0f, 4.0f, transMat);
+
+    // is correct translate matrix?
+    assert(equal(transMat[0][3], 2.0f));
+    assert(equal(transMat[1][3], 3.0f));
+    assert(equal(transMat[2][3], 4.0f));
+    assert(equal(transMat[3][3], 1.0f));
+
+    set_transform(&sp, transMat);
+    // has it been copied correctly?
+    assert(mat4x4Equal(sp.transform, transMat));
+    // two seperate matrixes
+    assert(&sp.transform != &identMat);
+    return 1;
+}
+
+// 69 Intersecting a scaled sphere with a ray
+int intersectScaledSphereTest() {
+    ray r1 = createRay(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+    sphere sp = createSphere();
+    Mat4x4 scaleMat;
+    genScaleMatrix(2.0f, 2.0f, 2.0f, scaleMat);
+    set_transform(&sp, scaleMat);
+    assert(mat4x4Equal(sp.transform, scaleMat) == true);
+
+    intersections intersects = intersect(&sp, &r1);
+
+    assert(intersects.count == 2);
+    assert(intersects.itersection[0].object_id == &sp);
+    assert(equal(intersects.itersection[0].t, 3.0f));
+
+    assert(intersects.itersection[1].object_id == &sp);
+    assert(equal(intersects.itersection[1].t, 7.0f));
+    return 1;
+}
+
+
+/*
 // 72 Hint #4
 void renderSphere1() {
   intersections intersections_list;
@@ -2058,82 +1929,7 @@ void renderSphere1() {
     }
   }
 }
-
-int normalsTests() {
-    tuple location = createPoint(0.0f, 0.0f, 0.0f);
-    sphere* sphere1 = generateSphere(location);
-    tuple n = createPoint(0.0f, 0.0f, 0.0f);
-    // 78 The normal on a sphere at a point on the X axis.
-    tuple location1 = createPoint(1.0f, 0.0f, 0.0f);
-    n = normal_at(sphere1, location1);
-    assert(equal(n.x, 1.0f));
-    assert(equal(n.y, 0.0f));
-    assert(equal(n.z, 0.0f));
-    assert(equal(n.w, 0.0f));
-
-    // 78 The normal on a sphere at a point on the Y axis.
-    tuple location2 = createPoint(0.0f, 1.0f, 0.0f);
-    n = normal_at(sphere1, location2);
-    assert(equal(n.x, 0.0f));
-    assert(equal(n.y, 1.0f));
-    assert(equal(n.z, 0.0f));
-    assert(equal(n.w, 0.0f));
-
-    // 78 The normal on a sphere at a point on the Z axis.
-    tuple location3 = createPoint(0.0f, 0.0f, 1.0f);
-    n = normal_at(sphere1, location3);
-    assert(equal(n.x, 0.0f));
-    assert(equal(n.y, 0.0f));
-    assert(equal(n.z, 1.0f));
-    assert(equal(n.w, 0.0f));
-
-    // 78 The normal on a sphere at a nonaxial point.
-    double nonaxial = sqrt(3) / 3.0f;
-    tuple location4 = createPoint(nonaxial, nonaxial, nonaxial);
-    n = normal_at(sphere1, location4);
-    assert(equal(n.x, nonaxial));
-    assert(equal(n.y, nonaxial));
-    assert(equal(n.z, nonaxial));
-    assert(equal(n.w, 0.0f));
-    return 1;
-}
-
-// 78 The normal is a normalized vector.
-int normalIsNormalTest() {
-    tuple location = createPoint(0.0f, 0.0f, 0.0f);
-    sphere* sphere1 = generateSphere(location);
-    tuple n = createPoint(0.0f, 0.0f, 0.0f);
-    double nonaxial = sqrt(3) / 3.0f;
-    tuple location1 = createPoint(nonaxial, nonaxial, nonaxial);
-    n = normal_at(sphere1, location1);
-    tuple nn = normVec(n);
-    assert(equal(n.x, nn.x));
-    assert(equal(n.y, nn.y));
-    assert(equal(n.z, nn.z));
-    assert(equal(n.w, 0.0f));
-    return 1;
-}
-
-int computeNormalOnSphereTests() {
-    // 80 Computing the normal on a translated sphere
-    tuple location = createPoint(0.0f, 0.0f, 0.0f);
-    tuple vec = createVector(0.0f, sqrt(2)/2, -sqrt(2)/2);
-    sphere* sphere1 = generateSphere(location);
-    genTranslateMatrix(0.0f, 1.0f, 0.0f, sphere1->transform);
-    tuple normal_point = createPoint(0.0f, sqrt(2)/2+1, -sqrt(2)/2);
-    tuple n = normal_at(sphere1, normal_point);
-    assert(equal(n.x, vec.x));
-    assert(equal(n.y, vec.y));
-    assert(equal(n.z, vec.z));
-    assert(equal(n.w, 0.0f));
-
-    // 80 Computing the normal on a transformed sphere
-    sphere* sphere2 = generateSphere(location);
-    Mat4x4 transMat;
-    genTranslateMatrix(0.0f, 1.0f, 0.0f, transMat);
-    //set_transform()
-    return 1;
-}
+*/
 
 int main() {
   unitTest("Create Point Test", createPointTest());
@@ -2185,25 +1981,28 @@ int main() {
   unitTest("Transformations Applied In Sequence Test", transformationsAppliedInSequenceTest());
   //unitTest("Draw Clock Test", drawClockTest());
   unitTest("Create Ray Test", createRayTest());
-  unitTest("Compute Point Along Ray Test", computePointAlongRayTest());
-  unitTest("Intersection Tests", intersectionTests());
-  unitTest("Intersection List Test", intersectionListTest());
-  unitTest("Ray Intersect Test", rayIntersectTest());
-  unitTest("Intersection Encapsulate T Value And Object ID Test", intersectionEncapTandObjectTest());
+  unitTest("Create Sphere Test", createSphereTest());
+  unitTest("Create Intersections Test", createIntersectionsTest());
+  unitTest("Position Test", positionTest());
+  unitTest("Ray Intersect Sphere At Two Points Test", rayIntersectSphereTwoPointTest());
+  unitTest("Ray Intersect Sphere Tangent Test", rayIntersectSphereTangentTest());
+  unitTest("Ray Misses Sphere Test", rayMissesSphereTest());
+  unitTest("Ray Originates Inside Sphere Test", rayOriginatesInsideSphereTest());
+  unitTest("Sphere Is Behind Ray Test", sphereIsBehindRayTest());
   unitTest("Aggregating Intersections Test", aggregatingIntersectionsTest());
   unitTest("Intersect Sets Object On Intersection Test", intersectSetsObjectOnIntersectionTest());
-  unitTest("Hit Various Intersections Test", hitVariousIntersectionsTest());
-  unitTest("Tuple Copy Test", tupleCopyTest());
-  unitTest("Translate Ray Test", transformRayTest());
-  unitTest("Sphere Transformations Test", sphereTransformationsTest());
-  unitTest("4x4 Matrix Copy Test", Mat4x4CopyTest());
-  unitTest("Intersect Scaled Sphere Array", intersectScaledSphereArray());
-  unitTest("Intersecting Translated Sphere With Ray Test()", intersectingTransSphereWithRayTest());
-  unitTest("Normal Is Normal Test", normalIsNormalTest());
-  unitTest("Normals Tests", normalsTests());
-  unitTest("Compute Normal On Sphere Tests", computeNormalOnSphereTests());
+  unitTest("Clear Intersections Test", clearIntersectionsTest());
+  unitTest("Hit Test", hitTests());
+  unitTest("Sphere Default Transformation Test", sphereDefaultTransformationTest());
+  unitTest("Translating Ray Test", translatingRayTest());
+  unitTest("Scaling Ray Test", scalingRayTest());
+  unitTest("Set Transform Test", setTransformTest());
+  unitTest("Intersect Scaled Sphere Test", intersectScaledSphereTest());
+  
+  
+  unitTest("Change Sphere Transform Test", changeSphereTransformTest());
 
-  renderSphere1();
+  //renderSphere1();
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
