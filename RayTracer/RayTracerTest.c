@@ -15,8 +15,6 @@
 #define HEIGHT 100
 #define WIDTH  100
 
-static int sphere_count = 0;
-
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
 typedef double Mat4x4[4][4];
@@ -476,6 +474,35 @@ intersections intersect(sphere* sp, ray* r) {
 
 void set_transform(sphere *sp, Mat4x4 m) {
     Mat4x4Copy(m, sp->transform);
+}
+
+tuple normal_at(sphere* sphere, tuple world_point) {
+    // Line 1
+    tuple object_point = createPoint(0.0f, 0.0f, 0.0f);
+    Mat4x4 inverse_sphere;
+    mat4x4Inverse(sphere->transform, inverse_sphere);
+    mat4x4MulTuple(inverse_sphere, world_point, &object_point);
+
+    // Line 2
+    tuple objectNormal = createPoint(0.0f, 0.0f, 0.0f);
+    tuple temp_point = createPoint(0.0f, 0.0f, 0.0f);
+    objectNormal = tupleSub(object_point, temp_point);
+
+    // Line 3
+    tuple world_normal;
+    // mat4x4Inverse(sphere->transform, inverse_sphere);
+    mat4x4Transpose(inverse_sphere);
+    mat4x4MulTuple(inverse_sphere, objectNormal, &world_normal);
+    world_normal.w = 0.0f;
+
+    // Line 4
+    return normVec(world_normal);
+}
+
+tuple reflect(tuple in, tuple normal) {
+    tuple normTwo = tupleMultScalar(normal, 2.0f);
+    double dotNNormal = dot(in, normal);
+    return tupleSub(in, tupleMultScalar(normTwo, dotNNormal));
 }
 
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -1918,6 +1945,114 @@ int intersectingTranslatedSphereTest() {
     return 1;
 }
 
+int normalsTests() {
+    tuple location = createPoint(0.0f, 0.0f, 0.0f);
+    sphere* sphere1 = generateSphere(location);
+    tuple n = createPoint(0.0f, 0.0f, 0.0f);
+    // 78 The normal on a sphere at a point on the X axis.
+    tuple location1 = createPoint(1.0f, 0.0f, 0.0f);
+    n = normal_at(sphere1, location1);
+    assert(equal(n.x, 1.0f));
+    assert(equal(n.y, 0.0f));
+    assert(equal(n.z, 0.0f));
+    assert(equal(n.w, 0.0f));
+
+    // 78 The normal on a sphere at a point on the Y axis.
+    tuple location2 = createPoint(0.0f, 1.0f, 0.0f);
+    n = normal_at(sphere1, location2);
+    assert(equal(n.x, 0.0f));
+    assert(equal(n.y, 1.0f));
+    assert(equal(n.z, 0.0f));
+    assert(equal(n.w, 0.0f));
+
+    // 78 The normal on a sphere at a point on the Z axis.
+    tuple location3 = createPoint(0.0f, 0.0f, 1.0f);
+    n = normal_at(sphere1, location3);
+    assert(equal(n.x, 0.0f));
+    assert(equal(n.y, 0.0f));
+    assert(equal(n.z, 1.0f));
+    assert(equal(n.w, 0.0f));
+
+    // 78 The normal on a sphere at a nonaxial point.
+    double nonaxial = sqrt(3) / 3.0f;
+    tuple location4 = createPoint(nonaxial, nonaxial, nonaxial);
+    n = normal_at(sphere1, location4);
+    assert(equal(n.x, nonaxial));
+    assert(equal(n.y, nonaxial));
+    assert(equal(n.z, nonaxial));
+    assert(equal(n.w, 0.0f));
+    return 1;
+}
+
+// 78 The normal is a normalized vector.
+int normalIsNormalTest() {
+    tuple location = createPoint(0.0f, 0.0f, 0.0f);
+    sphere* sphere1 = generateSphere(location);
+    tuple n = createPoint(0.0f, 0.0f, 0.0f);
+    double nonaxial = sqrt(3) / 3.0f;
+    tuple location1 = createPoint(nonaxial, nonaxial, nonaxial);
+    n = normal_at(sphere1, location1);
+    tuple nn = normVec(n);
+    assert(equal(n.x, nn.x));
+    assert(equal(n.y, nn.y));
+    assert(equal(n.z, nn.z));
+    assert(equal(n.w, 0.0f));
+    return 1;
+}
+
+// 80 Computing the normal on a translated sphere
+int computeNormalOnSphereTest() {
+    tuple location = createPoint(0.0f, 0.0f, 0.0f);
+    tuple vec1 = createVector(0.0f, sqrt(2) / 2, -sqrt(2) / 2);
+    sphere* sphere1 = generateSphere(location);
+    genTranslateMatrix(0.0f, 1.0f, 0.0f, sphere1->transform);
+    tuple n = normal_at(sphere1, vec1);
+    assert(equal(n.x, 0.0f));
+    assert(equal(n.y, sqrt(2) / 2));
+    assert(equal(n.z, -sqrt(2) / 2));
+    assert(equal(n.w, 0.0f));
+    return 1;
+}
+ 
+// 80 Computing the normal on a transformed sphere
+int computeNormalOnTransformedSphereTest(){
+    sphere sp1 = createSphere();
+    Mat4x4 scaleMat;
+    genScaleMatrix(1.0f, 0.5f, 1.0f, scaleMat);
+    Mat4x4 rotMat;
+    genRotationMatrixZ(M_PI / 5.0f, rotMat);
+    Mat4x4 translateMat;
+    mat4x4Mul(scaleMat, rotMat, translateMat);
+    set_transform(&sp1, translateMat);
+    tuple point = createPoint(0.0f, sqrt(2) / 2.0f, -sqrt(2) / 2);
+    tuple norm_at = normal_at(&sp1, point);
+    assert(equal(norm_at.x, 0.0f));
+    assert(equal(norm_at.y, 0.97014250014533188f));
+    assert(equal(norm_at.z, -0.24253562503633294f));
+    return 1;
+}
+
+// 83 Reflecting a vector approaching at 45deg
+int reflectVectorApproachAt45DegTest() {
+    tuple v = createVector(1.0f, -1.0f, 0.0f);
+    tuple n = createVector(0.0f, 1.0f, 0.0f);
+    tuple r = reflect(v, n);
+    assert(equal(r.x, 1.0f));
+    assert(equal(r.y, 1.0f));
+    assert(equal(r.z, 0.0f));
+    return 1;
+}
+
+// 83 Reflecting a vector off a slanted surface
+int reflectVectorOffSlantedSurfTest() {
+    tuple v = createVector(0.0f, -1.0f, 0.0f);
+    tuple n = createVector(sqrt(2)/2, sqrt(2)/2, 0.0f);
+    tuple r = reflect(v, n);
+    assert(equal(r.x, 1.0f));
+    assert(equal(r.y, 0.0f));
+    assert(equal(r.z, 0.0f));
+    return 1;
+}
 
 // 72 Hint #4
 void renderSphere1() {
@@ -2017,8 +2152,12 @@ int main() {
   unitTest("Sphere Default Transformation Test", sphereDefaultTransformationTest());
   unitTest("Set Transform Test", setTransformTest());
   unitTest("Intersecting Translated Sphere With Ray Test", intersectingTranslatedSphereTest());
-  
-  
+  unitTest("Normal Is Normal Test", normalIsNormalTest());
+  unitTest("Normals Test", normalsTests());
+  unitTest("Compute Normal On Sphere Test", computeNormalOnSphereTest());
+  unitTest("Compute Normal On Transformed Sphere Test", computeNormalOnTransformedSphereTest());
+  unitTest("Reflect Vector Approach At 45 Deg Test", reflectVectorApproachAt45DegTest());
+  unitTest("Reflect Vector Off Slanted Surface Test", reflectVectorOffSlantedSurfTest());
 
   renderSphere1();
   unitTest("Write Canvas To File Test", writeCanvasToFile());
