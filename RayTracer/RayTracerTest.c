@@ -453,17 +453,11 @@ ray transform(ray* r, Mat4x4 m) {
 }
 
 intersections intersect(sphere* sp, ray* r) {
-    Mat4x4 invScaleMat;
-    //Mat4x4SetIndent(invScaleMat);
-    mat4x4Inverse(sp->transform, invScaleMat);
-    ray r2 = *r;
-    transform(&r2, invScaleMat);
-
     intersections intersects = createIntersections();
     tuple origin = createPoint(0.0f, 0.0f, 0.0f);
-    tuple sphere_to_ray = tupleSub(r2.originPoint, origin);
-    double a = dot(r2.directionVector, r2.directionVector);
-    double b = 2 * dot(r2.directionVector, sphere_to_ray);
+    tuple sphere_to_ray = tupleSub(r->originPoint, origin);
+    double a = dot(r->directionVector, r->directionVector);
+    double b = 2 * dot(r->directionVector, sphere_to_ray);
     double c = dot(sphere_to_ray, sphere_to_ray) - 1.0f;
     double discriminant = b * b - 4 * a * c;
     if (discriminant < 0) { return intersects; }
@@ -1801,7 +1795,7 @@ int translatingRayTest() {
     genTranslateMatrix(3.0f, 4.0f, 5.0f, transMat);
 
     ray r2 = transform(&r1, transMat);
-
+    assert(&r1 != &r2);
     assert(equal(r2.originPoint.x, 4.0f));
     assert(equal(r2.originPoint.y, 6.0f));
     assert(equal(r2.originPoint.z, 8.0f));
@@ -1820,6 +1814,8 @@ int scalingRayTest() {
     Mat4x4 scaleMat;
     genScaleMatrix(2.0f, 3.0f, 4.0f, scaleMat);
     ray r2 = transform(&r1, scaleMat);
+
+    assert(&r1 != &r2);
 
     assert(equal(r2.originPoint.x, 2.0f));
     assert(equal(r2.originPoint.y, 6.0f));
@@ -1885,8 +1881,15 @@ int intersectScaledSphereTest() {
     genScaleMatrix(2.0f, 2.0f, 2.0f, scaleMat);
     set_transform(&sp, scaleMat);
     assert(mat4x4Equal(sp.transform, scaleMat) == true);
+    assert(&sp.transform != &scaleMat);
 
-    intersections intersects = intersect(&sp, &r1);
+    // NOTE: This set of lines might need to be in intersect()
+    Mat4x4 invScaleMat;
+    Mat4x4SetIndent(invScaleMat);
+    mat4x4Inverse(sp.transform, invScaleMat);
+    ray r2 = transform(&r1, invScaleMat);
+
+    intersections intersects = intersect(&sp, &r2);
 
     assert(intersects.count == 2);
     assert(intersects.itersection[0].object_id == &sp);
@@ -1897,12 +1900,27 @@ int intersectScaledSphereTest() {
     return 1;
 }
 
+// 70 Intersecting a translated sphere with a ray
+int intersectingTranslatedSphereTest() {
+    ray r1 = createRay(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+    sphere sp = createSphere();
+    Mat4x4 transMat;
+    genTranslateMatrix(5.0f, 0.0f, 0.0f, transMat);
+    set_transform(&sp, transMat);
 
-/*
+    Mat4x4 invScaleMat;
+    Mat4x4SetIndent(invScaleMat);
+    mat4x4Inverse(sp.transform, invScaleMat);
+    ray r2 = transform(&r1, invScaleMat);
+
+    intersections intersects = intersect(&sp, &r2);
+    assert(intersects.count == 0);
+    return 1;
+}
+
+
 // 72 Hint #4
 void renderSphere1() {
-  intersections intersections_list;
-  clearIntersections(&intersections_list);
   tuple color_red = createVector(1.0f, 0.0f, 0.0f);
   tuple ray_origin = createPoint(0.0f, 0.0f, -5.0f);
 
@@ -1920,16 +1938,15 @@ void renderSphere1() {
       double world_x = -half + pixel_size * x;
       tuple position = createPoint(world_x, world_y, wall_z);
       tuple posRayOrigin = tupleSub(position, ray_origin);
-      ray* tempRay = createRay(ray_origin, normVec(posRayOrigin));
-      clearIntersections(&intersections_list);
-      intersect(tempRay, sphere1, &intersections_list);
-      if (getIntersectionHit(&intersections_list)) {
+      tuple normRayOrigin = normVec(posRayOrigin);
+      ray tempRay = createRay(ray_origin.x, ray_origin.y, ray_origin.z, normRayOrigin.x, normRayOrigin.y, normRayOrigin.z );
+      intersections intersects = intersect(sphere1, &tempRay);
+      if (hit(&intersects)) {
         writePixel(x, y, color_red);
       }
     }
   }
 }
-*/
 
 int main() {
   unitTest("Create Point Test", createPointTest());
@@ -1993,16 +2010,17 @@ int main() {
   unitTest("Intersect Sets Object On Intersection Test", intersectSetsObjectOnIntersectionTest());
   unitTest("Clear Intersections Test", clearIntersectionsTest());
   unitTest("Hit Test", hitTests());
-  unitTest("Sphere Default Transformation Test", sphereDefaultTransformationTest());
-  unitTest("Translating Ray Test", translatingRayTest());
-  unitTest("Scaling Ray Test", scalingRayTest());
-  unitTest("Set Transform Test", setTransformTest());
-  unitTest("Intersect Scaled Sphere Test", intersectScaledSphereTest());
-  
-  
   unitTest("Change Sphere Transform Test", changeSphereTransformTest());
+  unitTest("Intersect Scaled Sphere With Ray Test", intersectScaledSphereTest());
+  unitTest("Translating A Ray Test", translatingRayTest());
+  unitTest("Scaling A Ray Test", scalingRayTest());
+  unitTest("Sphere Default Transformation Test", sphereDefaultTransformationTest());
+  unitTest("Set Transform Test", setTransformTest());
+  unitTest("Intersecting Translated Sphere With Ray Test", intersectingTranslatedSphereTest());
+  
+  
 
-  //renderSphere1();
+  renderSphere1();
   unitTest("Write Canvas To File Test", writeCanvasToFile());
   return 0;
 }
