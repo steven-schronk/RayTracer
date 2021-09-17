@@ -21,7 +21,11 @@ typedef double Mat4x4[4][4];
 
 typedef struct { double x, y, z, w; } tuple;
 
-typedef struct { tuple location; double t; Mat4x4 transform; } sphere;
+typedef struct { tuple color; double ambient; double diffuse; double specular; double shininess; } material;
+
+typedef struct { tuple position; tuple intensity; } point_light;
+
+typedef struct { tuple location; double t; Mat4x4 transform; material material; } sphere;
 
 typedef struct { tuple originPoint; tuple directionVector; } ray;
 
@@ -30,6 +34,33 @@ typedef struct { double t; sphere *object_id; } intersection;
 #define INTERSECTIONS_SIZE 10
 
 typedef struct { intersection itersection[10]; int count; } intersections;
+
+material createMaterial(tuple color, double ambient, double diffuse, double specular, double shininess) {
+    material m;
+    m.color = color;
+    m.ambient = ambient;
+    m.diffuse = diffuse;
+    m.specular = specular;
+    m.shininess = shininess;
+    return m;
+}
+
+material createMaterialDefault() {
+    material m;
+    m.color.x = 1.0f; m.color.y = 1.0f; m.color.z = 1.0f; m.color.w = 0.0f;
+    m.ambient = 0.1f;
+    m.diffuse = 0.9f;
+    m.specular = 0.9f;
+    m.shininess = 200.0f;
+    return m;
+}
+
+point_light createPointLight(tuple position, tuple intensity) {
+    point_light pl;
+    pl.position = position;
+    pl.intensity = intensity;
+    return pl;
+}
 
 intersections createIntersections() {
     intersections intersects;
@@ -381,6 +412,7 @@ sphere createSphere() {
     s.location.z = 0.0f;
     s.location.w = 1.0f;
     Mat4x4SetIndent(s.transform);
+    s.material = createMaterialDefault();
     return s;
 }
 
@@ -1624,6 +1656,15 @@ int createSphereTest() {
     assert(equal(s.transform[2][3], 0.0f));
     assert(equal(s.transform[3][3], 1.0f));
 
+    assert(equal(s.material.color.x, 1.0f));
+    assert(equal(s.material.color.y, 1.0f));
+    assert(equal(s.material.color.z, 1.0f));
+    assert(equal(s.material.color.w, 0.0f));
+
+    assert(equal(s.material.ambient, 0.1f));
+    assert(equal(s.material.diffuse, 0.9f));
+    assert(equal(s.material.specular, 0.9f));
+    assert(equal(s.material.shininess, 200.0f));
     return 1;
 }
 
@@ -2054,6 +2095,71 @@ int reflectVectorOffSlantedSurfTest() {
     return 1;
 }
 
+// 84 A point light has a position and intensity
+int pointLightPositionIntensityTest() {
+    tuple intensity = createPoint(1.0f, 2.0f, 3.0f);
+    tuple position = createPoint(4.0f, 5.0f, 6.0f);
+    point_light pl = createPointLight(position, intensity);
+    assert(equal(pl.intensity.x, intensity.x));
+    assert(equal(pl.intensity.y, intensity.y));
+    assert(equal(pl.intensity.z, intensity.z));
+    assert(equal(pl.intensity.w, intensity.w));
+
+    assert(equal(pl.position.x, position.x));
+    assert(equal(pl.position.y, position.y));
+    assert(equal(pl.position.z, position.z));
+    assert(equal(pl.position.w, position.w));
+    return 1;
+}
+
+// 85 The default material
+int defaultMaterialTest() {
+    // typedef struct { tuple color; double ambient; double diffuse; double specualar; double shininess; } material;
+    tuple color_white = createVector(1.0f, 1.0f, 1.0f);
+    material m1 = createMaterial(color_white, 0.1f, 0.9f, 0.9f, 200.0f);
+
+    assert(equal(m1.color.x, 1.0f));
+    assert(equal(m1.color.y, 1.0f));
+    assert(equal(m1.color.z, 1.0f));
+    assert(equal(m1.color.w, 0.0f));
+
+    assert(equal(m1.ambient, 0.1f));
+    assert(equal(m1.diffuse, 0.9f));
+    assert(equal(m1.specular, 0.9f));
+    assert(equal(m1.shininess, 200.0f));
+
+    material m2 = createMaterialDefault();
+
+    assert(equal(m2.color.x, 1.0f));
+    assert(equal(m2.color.y, 1.0f));
+    assert(equal(m2.color.z, 1.0f));
+    assert(equal(m2.color.w, 0.0f));
+
+    assert(equal(m2.ambient, 0.1f));
+    assert(equal(m2.diffuse, 0.9f));
+    assert(equal(m2.specular, 0.9f));
+    assert(equal(m2.shininess, 200.0f));
+
+    return 1;
+}
+
+// 85 Sphere has a default material
+int sphereHasDefaultMaterialTest() {
+    sphere sp1 = createSphere();
+    material m1 = createMaterialDefault();
+
+    assert(equal(m1.color.x, sp1.material.color.x));
+    assert(equal(m1.color.y, sp1.material.color.y));
+    assert(equal(m1.color.z, sp1.material.color.z));
+    assert(equal(m1.color.w, sp1.material.color.w));
+
+    assert(equal(m1.ambient, 0.1f));
+    assert(equal(m1.diffuse, 0.9f));
+    assert(equal(m1.specular, 0.9f));
+    assert(equal(m1.shininess, 200.0f));
+    return 1;
+}
+
 // 72 Hint #4
 void renderSphere1() {
   tuple color_red = createVector(1.0f, 0.0f, 0.0f);
@@ -2158,6 +2264,9 @@ int main() {
   unitTest("Compute Normal On Transformed Sphere Test", computeNormalOnTransformedSphereTest());
   unitTest("Reflect Vector Approach At 45 Deg Test", reflectVectorApproachAt45DegTest());
   unitTest("Reflect Vector Off Slanted Surface Test", reflectVectorOffSlantedSurfTest());
+  unitTest("Point Light Position Intensity Test", pointLightPositionIntensityTest());
+  unitTest("Default Material Test", defaultMaterialTest());
+  unitTest("Sphere Has A Default Material Test", sphereHasDefaultMaterialTest());
 
   renderSphere1();
   unitTest("Write Canvas To File Test", writeCanvasToFile());
