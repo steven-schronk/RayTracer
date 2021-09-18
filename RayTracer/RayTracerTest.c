@@ -228,6 +228,14 @@ tuple hadamard_product(tuple c1, tuple c2) {
   return color;
 }
 
+void Mat4x4_copy(Mat4x4 m1, Mat4x4 m2) {
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            m2[i][j] = m1[i][j];
+        }
+    }
+}
+
 // TODO: Merge these three matrix methods together into one.
 // TODO: Might should use the equal method.
 bool mat2x2_equal(Mat2x2 m1, Mat2x2 m2) {
@@ -261,6 +269,21 @@ void mat4x4_mul(const Mat4x4 a, const Mat4x4 b, Mat4x4 m) {
         a[row][3] * b[3][col];
     }
   }
+}
+
+void mat4x4_mul_in_place(const Mat4x4 a, const Mat4x4 b, Mat4x4 m) {
+    Mat4x4 orig;
+    Mat4x4_copy(m, orig);
+    for (int row = 0; row < 4; ++row) {
+        for (int col = 0; col < 4; ++col) {
+            orig[row][col] =
+                a[row][0] * b[0][col] +
+                a[row][1] * b[1][col] +
+                a[row][2] * b[2][col] +
+                a[row][3] * b[3][col];
+        }
+    }
+    Mat4x4_copy(orig, m);
 }
 
 void mat4x4_mul_tuple(const Mat4x4 a, const tuple b, tuple *c) {
@@ -401,14 +424,6 @@ void Mat4x4_set_ident(Mat4x4 m) {
   m[3][0] = 0.0f; m[3][1] = 0.0f; m[3][2] = 0.0f; m[3][3] = 1.0f;
 }
 
-void Mat4x4_copy(Mat4x4 m1, Mat4x4 m2) {
-  for (int i = 0; i < 4; ++i) {
-    for (int j = 0; j < 4; ++j) {
-      m2[i][j] = m1[i][j];
-    }
-  }
-}
-
 void gen_translate_matrix(const double x, const double y, const double z, Mat4x4 m) {
   m[0][0] = 1.0f; m[0][1] = 0.0f; m[0][2] = 0.0f; m[0][3] = x;
   m[1][0] = 0.0f; m[1][1] = 1.0f; m[1][2] = 0.0f; m[1][3] = y;
@@ -452,6 +467,30 @@ void gen_shear_matrix(const double xy, const double xz, const double yx,\
   m[3][0] = 0.0f; m[3][1] = 0.0f; m[3][2] = 0.0f; m[3][3] = 1.0f;
 }
 
+// TODO: Make these more generic
+void mat2x2_reset_to_zero(Mat2x2 mat) {
+    for (int i = 0; i < 2; ++i) {
+        for (int j = 0; j < 2; ++j) {
+            mat[i][j] = 0.0f;
+        }
+    }
+}
+
+void mat3x3_reset_to_zero(Mat3x3 mat) {
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            mat[i][j] = 0.0f;
+        }
+    }
+}
+
+void mat4x4_reset_to_zero(Mat4x4 mat) {
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            mat[i][j] = 0.0f;
+        }
+    }
+}
 
 sphere create_sphere() {
     sphere s;
@@ -570,9 +609,38 @@ tuple lighting(material material, point_light light, tuple point, tuple eyev, tu
     return light_out;
 }
 
+int color_convert(double x) {
+    int color = (int)(x * 255);
+    if (color < 0) { color = 0; }
+    if (color > 255) { color = 255; }
+    return color;
+}
+
+#pragma warning(disable:4996)
+
+int write_canvas_to_file() {
+    FILE* fp;
+    fp = fopen("canvas.ppm", "w");
+    fprintf(fp, "P3\n");
+    fprintf(fp, "%d %d\n255\n", WIDTH, HEIGHT);
+    for (int i = 0; i < WIDTH; ++i) {
+        for (int j = 0; j < HEIGHT; ++j) {
+            int color = color_convert(canvas[i][j].x);
+            fprintf(fp, "%d ", color);
+            color = color_convert(canvas[i][j].y);
+            fprintf(fp, "%d ", color);
+            color = color_convert(canvas[i][j].z);
+            fprintf(fp, "%d \n", color);
+        }
+    }
+    return 1;
+}
+
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
+
+#if defined _DEBUG
 
 void unit_test(char* msg, int assert) {
   size_t msg_length = strlen(msg);
@@ -584,39 +652,11 @@ void unit_test(char* msg, int assert) {
     msg_length++;
   }
 
-  if (assert == 1) {
+  if (assert == 0) {
     printf("PASSED\n");
   } else {
     printf("FAILED\n");
   }
-}
-
-
-int color_convert(double x) {
-    int color = (int)(x * 255);
-    if (color < 0) { color = 0; }
-    if (color > 255) { color = 255; }
-    return color;
-}
-
-#pragma warning(disable:4996)
-
-int write_canvas_to_file() {
-  FILE* fp;
-  fp = fopen("canvas.ppm", "w");
-  fprintf(fp, "P3\n");
-  fprintf(fp, "%d %d\n255\n", WIDTH, HEIGHT);
-  for (int i = 0; i < WIDTH; ++i) {
-    for (int j = 0; j < HEIGHT; ++j) {
-      int color = color_convert(canvas[i][j].x);
-      fprintf(fp, "%d ", color);
-      color = color_convert(canvas[i][j].y);
-      fprintf(fp, "%d ", color);
-      color = color_convert(canvas[i][j].z);
-      fprintf(fp, "%d \n", color);
-    }
-  }
-  return 1;
 }
 
 // 4 creates tuples with w=1
@@ -983,6 +1023,50 @@ int mat4x4_mul_test() {
   return 1;
 }
 
+int mat4x4_mul_in_place_test() {
+    Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f }, { 5.0f, 6.0f, 7.0f, 8.0f },\
+      { 9.0f, 8.0f, 7.0f, 6.0f }, { 5.0f, 4.0f, 3.0f, 2.0f } };
+    Mat4x4 b = { { -2.0f, 1.0f, 2.0f, 3.0f }, { 3.0f, 2.0f, 1.0f, -1.0f },\
+      { 4.0f, 3.0f, 6.0f, 5.0f }, { 1.0f, 2.0f, 7.0f, 8.0f } };
+
+    mat4x4_mul_in_place(a, b, b);
+
+    assert(equal(a[0][0], 1.0f));
+    assert(equal(a[0][1], 2.0f));
+    assert(equal(a[0][2], 3.0f));
+    assert(equal(a[0][3], 4.0f));
+    assert(equal(a[1][0], 5.0f));
+    assert(equal(a[1][1], 6.0f));
+    assert(equal(a[1][2], 7.0f));
+    assert(equal(a[1][3], 8.0f));
+    assert(equal(a[2][0], 9.0f));
+    assert(equal(a[2][1], 8.0f));
+    assert(equal(a[2][2], 7.0f));
+    assert(equal(a[2][3], 6.0f));
+    assert(equal(a[3][0], 5.0f));
+    assert(equal(a[3][1], 4.0f));
+    assert(equal(a[3][2], 3.0f));
+    assert(equal(a[3][3], 2.0f));
+
+    assert(equal(b[0][0], 20.0f));
+    assert(equal(b[0][1], 22.0f));
+    assert(equal(b[0][2], 50.0f));
+    assert(equal(b[0][3], 48.0f));
+    assert(equal(b[1][0], 44.0f));
+    assert(equal(b[1][1], 54.0f));
+    assert(equal(b[1][2], 114.0f));
+    assert(equal(b[1][3], 108.0f));
+    assert(equal(b[2][0], 40.0f));
+    assert(equal(b[2][1], 58.0f));
+    assert(equal(b[2][2], 110.0f));
+    assert(equal(b[2][3], 102.0f));
+    assert(equal(b[3][0], 16.0f));
+    assert(equal(b[3][1], 26.0f));
+    assert(equal(b[3][2], 46.0f));
+    assert(equal(b[3][3], 42.0f));
+    return 1;
+}
+
 // 30 Matrix multipled by a tuple
 int mat4x4_mul_tuple_test() {
   Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f }, { 2.0f, 4.0f, 4.0f, 2.0f },\
@@ -1014,31 +1098,6 @@ int mat4x4_mult_ident_test() {
   return 1;
 }
 
-// TODO: Make these more generic
-void mat2x2_reset_to_zero(Mat2x2 mat) {
-  for (int i = 0; i < 2; ++i) {
-    for (int j = 0; j < 2; ++j) {
-      mat[i][j] = 0.0f;
-    }
-  }
-}
-
-void mat3x3_reset_to_zero(Mat3x3 mat) {
-  for (int i = 0; i < 3; ++i) {
-    for (int j = 0; j < 3; ++j) {
-      mat[i][j] = 0.0f;
-    }
-  }
-}
-
-void mat4x4_reset_to_zero(Mat4x4 mat) {
-  for (int i = 0; i < 4; ++i) {
-    for (int j = 0; j < 4; ++j) {
-      mat[i][j] = 0.0f;
-    }
-  }
-}
-
 // 33 Transpose a matrix
 int mat4x4_transpose_test() {
   Mat4x4 a = { { 0.0f, 9.0f, 3.0f, 0.0f },{ 9.0f, 8.0f, 0.0f, 8.0f },\
@@ -1047,7 +1106,7 @@ int mat4x4_transpose_test() {
     { 3.0f, 0.0f, 5.0f, 5.0f}, { 0.0f, 8.0f, 3.0f, 8.0f } };
   mat4x4_transpose(a);
   assert(mat4x4_equal(a, b));
-  return 1;
+  return 0;
 }
 
 // 34 Calculating the determinant of a 2x2 matrix
@@ -1075,7 +1134,7 @@ int mat2x2_det_test() {
   Mat2x2 e = { { 1.0f, 2.0f },{ 3.0f, 4.0f } };
   det = mat2x2_det(e);
   assert(equal(det, -2.0f));
-  return 1;
+  return 0;
 }
 
 // 35 Submatrix of 3x3 matrix is a 2x2 matrix
@@ -1101,7 +1160,7 @@ int mat3x3_submat_2x2_test() {
   assert(equal(b[0][1], 3.0f));
   assert(equal(b[1][0], 7.0f));
   assert(equal(b[1][1], 9.0f));
-  return 1;
+  return 0;
 }
 
 // 35 Submatrix of 4x4 matrix is a 3x3 matrix
@@ -1144,7 +1203,7 @@ int mat4x4_submat_3x3_test() {
   assert(equal(b[2][0], 9.0f));
   assert(equal(b[2][1], 10.0f));
   assert(equal(b[2][2], 11.0f));
-  return 1;
+  return 0;
 }
 
 // 35 Calculating a minor of a 3x3 matrix
@@ -1152,7 +1211,7 @@ int mat3x3_minor_test() {
   Mat3x3 a = { { 3.0f, 5.0f, 0.0f },{ 2.0f, -1.0f, -7.0f },{ 6.0f, -1.0f, 5.0f } };
   double minor = mat3x3_minor(a, 1, 0);
   assert(equal(minor, 25.0f));
-  return 1;
+  return 0;
 }
 
 // 36 Calculating a cofactor of a 3x3 matrix
@@ -1169,7 +1228,7 @@ int mat3x3_cofactor_test() {
 
   cofactor = mat3x3_cofactor(a, 1, 0);
   assert(equal(cofactor, -25.0f));
-  return 1;
+  return 0;
 }
 
 // 37 Calculating the determinant of a 3x3 matrix
@@ -1186,7 +1245,7 @@ int mat3x3_det_test() {
 
   double det = mat3x3_det(a);
   assert(equal(det, -196.0f));
-  return 1;
+  return 0;
 }
 
 // 37 Calculating the determinant of a 4x4 matrix
@@ -1204,7 +1263,7 @@ int mat4x4_det_test() {
   assert(equal(cofactor, 51.0f));
   double det = mat4x4_det(a, 4);
   assert(equal(det, -4071.0f));
-  return 1;
+  return 0;
 }
 
 // 39 Testing an invertable matrix for invertability
@@ -1218,7 +1277,7 @@ int invertable_matrix_test() {
     { 0.0f, -5.0f, 1.0f, -5.0f},{ 0.0f, 0.0f, 0.0f, 0.0f } };
   inv = invertable_matrix(b);
   assert(inv == false);
-  return 1;
+  return 0;
 }
 
 // 39 Calculating the inverse of a matrix
@@ -1262,7 +1321,7 @@ int inverse_matrix_test() {
   inversable = mat4x4_inverse(g, h);
   assert(inversable == true);
   assert(mat4x4_equal(e, f) == true);
-  return 1;
+  return 0;
 }
 
 // 41 Multiply product by its inverse
@@ -1284,7 +1343,7 @@ int mult_prod_by_inverse_test() {
   assert(equal(u[0][1], a[0][1]));
   assert(equal(u[0][2], a[0][2]));
   assert(equal(u[0][3], a[0][3]));
-  return 1;
+  return 0;
 }
 
 // 45 Multiply by a translation matrix
@@ -1298,7 +1357,7 @@ int point_trans_test() {
   assert(equal(point2.y, 1.0f));
   assert(equal(point2.z, 7.0f));
   assert(equal(point2.w, 1.0f));
-  return 1;
+  return 0;
 }
 
 // 45 Multiply by the inverse of a traslation matrix
@@ -1314,7 +1373,7 @@ int point_mult_inverse_translation_test() {
   assert(equal(p2.y,  7.0f));
   assert(equal(p2.z,  3.0f));
   assert(equal(p2.w,  1.0f));
-  return 1;
+  return 0;
 }
 
 // 45 Translation does not affect vectors
@@ -1328,7 +1387,7 @@ int vector_translation_has_no_effect_test() {
   assert(equal(v2.y,  4.0f));
   assert(equal(v2.z,  5.0f));
   assert(equal(v2.w,  0.0f));
-  return 1;
+  return 0;
 }
 
 // 46 Scaling matrix applied to a point
@@ -1342,7 +1401,7 @@ int point_scale_Mat4x4_test() {
   assert(equal(p2.y, 18.0f));
   assert(equal(p2.z, 32.0f));
   assert(equal(p2.w,  1.0f));
-  return 1;
+  return 0;
 }
 
 // 46 Scaling matrix applied to a vector
@@ -1356,7 +1415,7 @@ int vec_scale_Mat4x4_test() {
   assert(equal(p2.y, 18.0f));
   assert(equal(p2.z, 32.0f));
   assert(equal(p2.w,  0.0f));
-  return 1;
+  return 0;
 }
 
 // 46 Multiply inverse of scaling matrix
@@ -1372,7 +1431,7 @@ int mult_inverse_scale_matrix_test() {
   assert(equal(p2.y,  2.0f));
   assert(equal(p2.z,  2.0f));
   assert(equal(p2.w,  0.0f));
-  return 1;
+  return 0;
 }
 
 // 47 Reflection is scaling by a negative value
@@ -1385,7 +1444,7 @@ int reflection_scaling_neg_value_test() {
     assert(equal(p2.x, -2.0f));
     assert(equal(p2.y, 3.0f));
     assert(equal(p2.z, 4.0f));
-    return 1;
+    return 0;
 }
 
 // 48 Rotating a point around the x axis
@@ -1406,7 +1465,7 @@ int gen_rotation_matrix_X_test() {
   assert(equal(p2.y, 0.0f));
   assert(equal(p2.z, 1.0f));
   assert(equal(p2.w, 1.0f));
-  return 1;
+  return 0;
 }
 
 // 49 Inverse of an x rotation rotates the opposite direction
@@ -1422,7 +1481,7 @@ int gen_rotation_matrix_reverse_test() {
   assert(equal(p2.y, sqrt(2.0f) / 2.0f));
   assert(equal(p2.z, -sqrt(2.0f) / 2.0f));
   assert(equal(p2.w, 1.0f));
-  return 1;
+  return 0;
 }
 
 // 50 Rotating a point around the y axis
@@ -1443,7 +1502,7 @@ int gen_rotation_matrix_Y_test() {
   assert(equal(p2.y, 0.0f));
   assert(equal(p2.z, 0.0f));
   assert(equal(p2.w, 1.0f));
-  return 1;
+  return 0;
 }
 
 // 50 Rotating a point around the y axis
@@ -1464,7 +1523,7 @@ int gen_rotation_matrix_Z_test() {
   assert(equal(p2.y, 0.0f));
   assert(equal(p2.z, 0.0f));
   assert(equal(p2.w, 1.0f));
-  return 1;
+  return 0;
 }
 
 // 52 Shearing transformation moves x in proportion to y
@@ -1523,7 +1582,7 @@ int gen_shear_matrix_test() {
   assert(equal(p2.y, 3.0f));
   assert(equal(p2.z, 7.0f));
   assert(equal(p2.w, 1.0f));
-  return 1;
+  return 0;
 }
 
 // 54 Individual transormations are applied in sequence
@@ -1561,7 +1620,7 @@ int transform_applied_in_sequence_test() {
   assert(equal(p2.y, 0.0f));
   assert(equal(p2.z, 7.0f));
   assert(equal(p2.w, 1.0f));
-  return 1;
+  return 0;
 }
 
 // 55
@@ -1579,7 +1638,7 @@ int draw_clock_test() {
     canvas[(int)three.x][(int)three.z].x = 1.0f;
   }
   canvas[50][50].y = 1.0f;
-  return 1;
+  return 0;
 }
 
 int tuple_copy_test() {
@@ -1600,7 +1659,7 @@ int tuple_copy_test() {
   assert(equal(t1.y, t2.y));
   assert(equal(t1.z, t2.z));
   assert(equal(t1.w, t2.w));
-  return 1;
+  return 0;
 }
 
 int Mat4x4_copy_test() {
@@ -1648,7 +1707,7 @@ int Mat4x4_copy_test() {
   assert(equal(b[1][3], 8.0f));
   assert(equal(b[2][3], 12.0f));
   assert(equal(b[3][3], 16.0f));
-  return 1;
+  return 0;
 }
 
 // 58 Creating and quering a ray
@@ -1665,7 +1724,7 @@ int create_ray_test() {
   assert(equal(r.directionVector.z, 6.0f));
   assert(equal(r.directionVector.w, 0.0f));
 
-  return 1;
+  return 0;
 }
 
 int create_sphere_test() {
@@ -1707,7 +1766,7 @@ int create_sphere_test() {
     assert(equal(s.material.diffuse, 0.9f));
     assert(equal(s.material.specular, 0.9f));
     assert(equal(s.material.shininess, 200.0f));
-    return 1;
+    return 0;
 }
 
 int create_intersections_test() {
@@ -1718,7 +1777,7 @@ int create_intersections_test() {
         assert(equal(intersects.itersection[i].t, 0.0f));
         assert(intersects.itersection[i].object_id == NULL);
     }
-    return 1;
+    return 0;
 }
 
 // 58 Computing a point from a distance
@@ -1748,7 +1807,7 @@ int position_test() {
     assert(equal(p4.z, 4.0f));
     assert(equal(p4.w, 1.0f));
 
-    return 1;
+    return 0;
 }
 
 // 59 A ray intersects a sphere at two points
@@ -1759,7 +1818,7 @@ int ray_intersect_sphere_two_point_test() {
     assert(inter.count == 2);
     assert(equal(inter.itersection[0].t, 4.0f));
     assert(equal(inter.itersection[1].t, 6.0f));
-    return 1;
+    return 0;
 }
 
 // 60 A ray intersects a sphere at a tangent
@@ -1770,7 +1829,7 @@ int ray_intersect_sphere_tangent_test() {
     assert(inter.count == 2);
     assert(equal(inter.itersection[0].t, 5.0f));
     assert(equal(inter.itersection[1].t, 5.0f));
-    return 1;
+    return 0;
 }
 
 // 60 A ray misses a sphere
@@ -1785,7 +1844,7 @@ int ray_misses_sphere_test() {
     assert(inter.itersection[0].object_id == NULL);
     assert(inter.itersection[1].object_id == NULL);
 
-    return 1;
+    return 0;
 }
 
 // 61 A ray originates inside a sphere
@@ -1796,7 +1855,7 @@ int ray_originates_inside_sphere_test() {
     assert(inter.count == 2);
     assert(equal(inter.itersection[0].t, -1.0f));
     assert(equal(inter.itersection[1].t, 1.0f));
-    return 1;
+    return 0;
 }
 
 // 62 A sphere is behind a ray
@@ -1807,7 +1866,7 @@ int sphere_is_behind_ray_test() {
     assert(inter.count == 2);
     assert(equal(inter.itersection[0].t, -6.0f));
     assert(equal(inter.itersection[1].t, -4.0f));
-    return 1;
+    return 0;
 }
 
 // 63 An intersection encapsulates t and object
@@ -1822,7 +1881,7 @@ int aggregating_intersections_test() {
     assert(intersects.count == 2);
     assert(equal(intersects.itersection[0].t, 1.0f));
     assert(equal(intersects.itersection[1].t, 2.0f));
-    return 1;
+    return 0;
 }
 
 // 64 Intersect sets the object on the intersection
@@ -1833,7 +1892,7 @@ int intersect_sets_object_on_intersection_test() {
     assert(intersects.count == 2);
     assert(intersects.itersection[0].object_id == &sp);
     assert(intersects.itersection[1].object_id == &sp);
-    return 1;
+    return 0;
 }
 
 // Clear Intersections List
@@ -1848,7 +1907,7 @@ int clear_intersections_test() {
         assert(equal(intersects.itersection[i].t, DBL_MIN));
         assert(intersects.itersection[i].object_id == NULL);
     }
-    return 1;
+    return 0;
 }
 
 // 64  NOTE: All hit tests have been put together
@@ -1894,8 +1953,7 @@ int hit_tests(){
     intersect = hit(&intersects);
     assert(intersect->object_id == &sp);
     assert(equal(intersect->t, 2.0f));
-
-    return 1;
+    return 0;
 }
 
 // 69 Translating a ray
@@ -1915,7 +1973,7 @@ int translating_ray_test() {
     assert(equal(r2.directionVector.y, 1.0f));
     assert(equal(r2.directionVector.z, 0.0f));
     assert(equal(r2.directionVector.w, 0.0f));
-    return 1;
+    return 0;
 }
 
 // 69 Scaling a ray
@@ -1936,7 +1994,7 @@ int scaling_ray_test() {
     assert(equal(r2.directionVector.y, 3.0f));
     assert(equal(r2.directionVector.z, 0.0f));
     assert(equal(r2.directionVector.w, 0.0f));
-    return 1;
+    return 0;
 }
 
 // 69 Sphere default transformation
@@ -1945,7 +2003,7 @@ int sphere_default_transformation_test() {
     Mat4x4 identMat;
     Mat4x4_set_ident(identMat);
     assert(mat4x4_equal(sp.transform, identMat) == true);
-    return 1;
+    return 0;
 }
 
 // 69 Changing a sphere's transformation
@@ -1955,7 +2013,7 @@ int change_sphere_transform_test() {
     gen_translate_matrix(2.0f, 3.0f, 4.0f, transMat);
     set_transform(&sp, transMat);
     assert(mat4x4_equal(sp.transform, transMat) == true);
-    return 1;
+    return 0;
 }
 
 int set_transform_test() {
@@ -1980,7 +2038,7 @@ int set_transform_test() {
     assert(mat4x4_equal(sp.transform, transMat));
     // two seperate matrixes
     assert(&sp.transform != &identMat);
-    return 1;
+    return 0;
 }
 
 // 69 Intersecting a scaled sphere with a ray
@@ -2007,7 +2065,7 @@ int intersect_scaled_sphere_test() {
 
     assert(intersects.itersection[1].object_id == &sp);
     assert(equal(intersects.itersection[1].t, 7.0f));
-    return 1;
+    return 0;
 }
 
 // 70 Intersecting a translated sphere with a ray
@@ -2025,7 +2083,7 @@ int intersecting_translated_sphere_test() {
 
     intersections intersects = intersect(&sp, &r2);
     assert(intersects.count == 0);
-    return 1;
+    return 0;
 }
 
 int normals_test() {
@@ -2063,7 +2121,7 @@ int normals_test() {
     assert(equal(n.y, nonaxial));
     assert(equal(n.z, nonaxial));
     assert(equal(n.w, 0.0f));
-    return 1;
+    return 0;
 }
 
 // 78 The normal is a normalized vector.
@@ -2078,7 +2136,7 @@ int normal_is_normal_test() {
     assert(equal(n.y, nn.y));
     assert(equal(n.z, nn.z));
     assert(equal(n.w, 0.0f));
-    return 1;
+    return 0;
 }
 
 // 80 Computing the normal on a translated sphere
@@ -2091,7 +2149,7 @@ int compute_normal_on_sphere_test() {
     assert(equal(n.y, sqrt(2) / 2));
     assert(equal(n.z, -sqrt(2) / 2));
     assert(equal(n.w, 0.0f));
-    return 1;
+    return 0;
 }
  
 // 80 Computing the normal on a transformed sphere
@@ -2109,7 +2167,7 @@ int compute_normal_on_transformed_sphere_test(){
     assert(equal(norm_at.x, 0.0f));
     assert(equal(norm_at.y, 0.97014250014533188f));
     assert(equal(norm_at.z, -0.24253562503633294f));
-    return 1;
+    return 0;
 }
 
 // 83 Reflecting a vector approaching at 45deg
@@ -2120,7 +2178,7 @@ int reflect_vector_approach_at_45_deg_test() {
     assert(equal(r.x, 1.0f));
     assert(equal(r.y, 1.0f));
     assert(equal(r.z, 0.0f));
-    return 1;
+    return 0;
 }
 
 // 83 Reflecting a vector off a slanted surface
@@ -2131,7 +2189,7 @@ int reflect_vector_off_slanted_surf_test() {
     assert(equal(r.x, 1.0f));
     assert(equal(r.y, 0.0f));
     assert(equal(r.z, 0.0f));
-    return 1;
+    return 0;
 }
 
 // 84 A point light has a position and intensity
@@ -2148,7 +2206,7 @@ int point_light_position_intensity_test() {
     assert(equal(pl.position.y, position.y));
     assert(equal(pl.position.z, position.z));
     assert(equal(pl.position.w, position.w));
-    return 1;
+    return 0;
 }
 
 // 85 The default material
@@ -2179,7 +2237,7 @@ int default_material_test() {
     assert(equal(m2.specular, 0.9f));
     assert(equal(m2.shininess, 200.0f));
 
-    return 1;
+    return 0;
 }
 
 // 85 Sphere has a default material
@@ -2196,7 +2254,7 @@ int sphere_has_default_material_test() {
     assert(equal(m1.diffuse, 0.9f));
     assert(equal(m1.specular, 0.9f));
     assert(equal(m1.shininess, 200.0f));
-    return 1;
+    return 0;
 }
 
 // 86 Lighting with the eye between the light and the surface
@@ -2212,7 +2270,7 @@ int lighting_with_eye_between_light_and_surface_test() {
     assert(equal(light1.x, 1.9f));
     assert(equal(light1.y, 1.9f));
     assert(equal(light1.z, 1.9f));
-    return 1;
+    return 0;
 }
 
 // 86 Lighting with the eye between light and surface, eye offset 45 deg
@@ -2228,7 +2286,7 @@ int lighting_with_eye_between_light_and_surface_eye_offset_test() {
     assert(equal(light1.x, 1.0f));
     assert(equal(light1.y, 1.0f));
     assert(equal(light1.z, 1.0f));
-    return 1;
+    return 0;
 }
 
 // 87 Lighting with the eye opposite surface, light offset 45 deg
@@ -2244,7 +2302,7 @@ int lighting_with_eye_opposite_surface_test() {
     assert(equal(light1.x, 0.73639608769926945f));
     assert(equal(light1.y, 0.73639608769926945f));
     assert(equal(light1.z, 0.73639608769926945f));
-    return 1;
+    return 0;
 }
 
 // 87 Lighting with the eye in the path of the reflection vector
@@ -2260,7 +2318,7 @@ int lighting_with_eye_in_path_of_reflect_vector_test() {
     assert(equal(light1.x, 1.6363960638574115f));
     assert(equal(light1.y, 1.6363960638574115f));
     assert(equal(light1.z, 1.6363960638574115f));
-    return 1;
+    return 0;
 }
 
 // 88 Lighting with the light behind the surface
@@ -2276,8 +2334,10 @@ int lighting_with_the_light_behind_surface_test() {
     assert(equal(light1.x, 0.1f));
     assert(equal(light1.y, 0.1f));
     assert(equal(light1.z, 0.1f));
-    return 1;
+    return 0;
 }
+
+#endif
 
 // 72 Hint #4
 void render_sphere() {
@@ -2293,9 +2353,21 @@ void render_sphere() {
   m.color.x = 1.0f; m.color.y = 0.2f; m.color.z = 1.0f;
   sphere sphere1 = create_sphere();
   sphere1.material = m;
+  sphere1.material.ambient = 0.15f;
+  sphere1.material.color.x = 0.254901;
+  sphere1.material.color.y = 0.423529;
+  sphere1.material.color.z = 0.58823;
+  sphere1.material.shininess = 100.0f;
+
+  gen_shear_matrix(1.25, -.09, 1.0, 1.11, 1, .7, sphere1.transform);
+
+  Mat4x4 transMat;
+  gen_translate_matrix(1.25, -.09, 1.0, transMat);
+      
+  mat4x4_mul_in_place(transMat, sphere1.transform, sphere1.transform);
 
   tuple l_color = create_vector(1.0f, 1.0f, 1.0f);
-  tuple l_position = create_point(-10.0f, 10.0f, -10.0f);
+  tuple l_position = create_point(-10.0f, -10.0f, -10.0f);
   point_light p_light = create_point_light(l_position, l_color);
 
   for (int y = 0; y < WIDTH; ++y) {
@@ -2310,20 +2382,21 @@ void render_sphere() {
       intersections intersects = intersect(&sphere1, &ray_to_draw);
       intersection* hit_intersection = hit(&intersects);
       if (hit_intersection) {
-          tuple point2 = position(ray_to_draw, hit_intersection->t);
-          tuple normal = normal_at(hit_intersection->object_id, point2);
-          tuple eye = tuple_negate(ray_to_draw.directionVector);
-          tuple pix_color = lighting(hit_intersection->object_id->material, p_light, point2, eye, normal);
-          //assert(pix_color.x <= 255 && pix_color.x >= 0);
-          //assert(pix_color.y <= 255 && pix_color.y >= 0);
-          //assert(pix_color.z <= 255 && pix_color.z >= 0);
-          write_pixel(x, y, pix_color);
+        tuple point2 = position(ray_to_draw, hit_intersection->t);
+        tuple normal = normal_at(hit_intersection->object_id, point2);
+        tuple eye = tuple_negate(ray_to_draw.directionVector);
+        tuple pix_color = lighting(hit_intersection->object_id->material, p_light, point2, eye, normal);
+        //assert(pix_color.x <= 255 && pix_color.x >= 0);
+        //assert(pix_color.y <= 255 && pix_color.y >= 0);
+        //assert(pix_color.z <= 255 && pix_color.z >= 0);
+        write_pixel(x, y, pix_color);
       }
     }
   }
 }
 
 int main() {
+#if defined _DEBUG
   unit_test("Create Point Test", create_point_test());
   unit_test("Create Vector Test", create_vector_test());
   unit_test("Tuple With 0 Is A Point Test", tuple_with_W_0_is_point_test());
@@ -2345,6 +2418,7 @@ int main() {
   unit_test("Color Conversion Test", color_convert_test());
   unit_test("Matrix Equality Test", mat_equal_test());
   unit_test("4x4 Matrix Multiply Test", mat4x4_mul_test());
+  unit_test("4x4 Matrix Multiply In Place Test", mat4x4_mul_in_place_test());
   unit_test("4x4 Matrix Multiply By Tuple Test", mat4x4_mul_tuple_test());
   unit_test("4x4 Matrix Multiply By Identity Test", mat4x4_mult_ident_test());
   unit_test("4x4 Matrix Transposition Test", mat4x4_transpose_test());
@@ -2406,8 +2480,8 @@ int main() {
   unit_test("Lighting With Eye Opposite Surface, Light Offset 45 Degrees Test", lighting_with_eye_opposite_surface_test());
   unit_test("Lighting With Eye In Path Of Reflect Vector Test", lighting_with_eye_in_path_of_reflect_vector_test());
   unit_test("Lighting With The Light Behind Surface Test", lighting_with_the_light_behind_surface_test());
-
+#endif
   render_sphere();
-  unit_test("Write Canvas To File Test", write_canvas_to_file());
+  write_canvas_to_file();
   return 0;
 }
