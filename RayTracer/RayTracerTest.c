@@ -12,8 +12,8 @@
 
 #define EPSILON 0.000001
 
-#define HEIGHT 100
-#define WIDTH  100
+#define HEIGHT 600
+#define WIDTH  600
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -185,6 +185,11 @@ tuple tupleMultScalar(tuple t, double s) {
 tuple tupleDivScalar(tuple t, double s) {
   tuple ret = { t.x / s, t.y / s, t.z / s, t.w / s };
   return ret;
+}
+
+tuple tupleMultTuple(tuple t, tuple s) {
+    tuple ret = { t.x * s.x, t.y * s.y, t.z * s.z, t.w * s.w };
+    return ret;
 }
 
 double tupleMagVec(tuple t) {
@@ -537,6 +542,43 @@ tuple reflect(tuple in, tuple normal) {
     return tupleSub(in, tupleMultScalar(normTwo, dotNNormal));
 }
 
+tuple lighting(material material, point_light light, tuple point, tuple eyev, tuple normalv) {
+    tuple effective_color = tupleMultTuple(material.color, light.intensity);
+    tuple diffuse  = createPoint(0.0f, 0.0f, 0.0f);
+    tuple specular = createPoint(0.0f, 0.0f, 0.0f);
+    tuple ambient  = createPoint(0.0f, 0.0f, 0.0f);
+
+    tuple color_black = createVector(0.0f, 0.0f, 0.0f);
+    tuple light_pos_point = createVector(0.0f, 0.0f, 0.0f);
+    tuple light_sub_point = tupleSub(light.position, point);
+    tuple lightv = normVec(light_sub_point);
+
+    ambient = tupleMultScalar(effective_color, material.ambient);
+
+    double light_dot_normal = dot(lightv, normalv);
+
+    if (light_dot_normal < 0) {
+        diffuse = color_black;
+        specular = color_black;
+    }
+    else {
+        diffuse = tupleMultScalar( tupleMultScalar(effective_color, material.diffuse), light_dot_normal);
+
+        tuple reflectv = reflect( tupleNegate(lightv), normalv);
+        double reflect_dot_eye = dot(reflectv, eyev);
+
+        if (reflect_dot_eye <= 0) {
+            specular = color_black;
+        }
+        else {
+            double factor = pow(reflect_dot_eye, material.shininess);
+            specular = tupleMultScalar(tupleMultScalar(light.intensity, material.specular), factor);
+        }
+    }
+    tuple light_out = tupleAdd(tupleAdd(ambient, specular),diffuse);
+    return light_out;
+}
+
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -558,8 +600,13 @@ void unitTest(char* msg, int assert) {
   }
 }
 
-// TODO: Clamp the values between 0.0 and 1.0
-int colorConvert(double x) { return (int)(x * 255); }
+
+int colorConvert(double x) {
+    int color = (int)(x * 255);
+    if (color < 0) { color = 0; }
+    if (color > 255) { color = 255; }
+    return color;
+}
 
 #pragma warning(disable:4996)
 
@@ -2160,9 +2207,89 @@ int sphereHasDefaultMaterialTest() {
     return 1;
 }
 
+// 86 Lighting with the eye between the light and the surface
+int lightingWithEyeBetweenLightAndSurfaceTest() {
+    material m = createMaterialDefault();
+    tuple position = createVector(0.0f, 0.0f, 0.0f);
+    tuple eyev = createVector(0.0f, 0.0f, -1.0f);
+    tuple normalv = createVector(0.0f, 0.0f, -1.0f);
+    tuple intensity = createVector(1.0f, 1.0f, 1.0f);
+    tuple p_light_position = createPoint(0.0f, 0.0f, -10.0f);
+    point_light p_light = createPointLight(p_light_position, intensity);
+    tuple light1 = lighting(m, p_light, position, eyev, normalv);
+    assert(equal(light1.x, 1.9f));
+    assert(equal(light1.y, 1.9f));
+    assert(equal(light1.z, 1.9f));
+    return 1;
+}
+
+// 86 Lighting with the eye between light and surface, eye offset 45 deg
+int lightingWithEyeBetweenLightAndSurfaceEyeOffsetTest() {
+    material m = createMaterialDefault();
+    tuple position = createPoint(0.0f, 0.0f, 0.0f);
+    tuple eyev = createVector(0.0f, sqrt(2)/2, -sqrt(2)/2);
+    tuple normalv = createVector(0.0f, 0.0f, -1.0f);
+    tuple intensity = createVector(1.0f, 1.0f, 1.0f);
+    tuple p_light_position = createPoint(0.0f, 0.0f, -10.0f);
+    point_light p_light = createPointLight(p_light_position, intensity);
+    tuple light1 = lighting(m, p_light, position, eyev, normalv);
+    assert(equal(light1.x, 1.0f));
+    assert(equal(light1.y, 1.0f));
+    assert(equal(light1.z, 1.0f));
+    return 1;
+}
+
+// 87 Lighting with the eye opposite surface, light offset 45 deg
+int lightingWithEyeOppositeSurfaceTest() {
+    material m = createMaterialDefault();
+    tuple position = createPoint(0.0f, 0.0f, 0.0f);
+    tuple eyev = createVector(0.0f, 0.0f, -1.0f);
+    tuple normalv = createVector(0.0f, 0.0f, -1.0f);
+    tuple intensity = createVector(1.0f, 1.0f, 1.0f);
+    tuple p_light_position = createPoint(0.0f, 10.0f, -10.0f);
+    point_light p_light = createPointLight(p_light_position, intensity);
+    tuple light1 = lighting(m, p_light, position, eyev, normalv);
+    assert(equal(light1.x, 0.73639608769926945f));
+    assert(equal(light1.y, 0.73639608769926945f));
+    assert(equal(light1.z, 0.73639608769926945f));
+    return 1;
+}
+
+// 87 Lighting with the eye in the path of the reflection vector
+int lightingWithEyeInPathOfReflectVectorTest() {
+    material m = createMaterialDefault();
+    tuple position = createPoint(0.0f, 0.0f, 0.0f);
+    tuple eyev = createVector(0.0f, -sqrt(2) / 2, -sqrt(2) / 2);
+    tuple normalv = createVector(0.0f, 0.0f, -1.0f);
+    tuple intensity = createVector(1.0f, 1.0f, 1.0f);
+    tuple p_light_position = createPoint(0.0f, 10.0f, -10.0f);
+    point_light p_light = createPointLight(p_light_position, intensity);
+    tuple light1 = lighting(m, p_light, position, eyev, normalv);
+    assert(equal(light1.x, 1.6363960638574115f));
+    assert(equal(light1.y, 1.6363960638574115f));
+    assert(equal(light1.z, 1.6363960638574115f));
+    return 1;
+}
+
+// 88 Lighting with the light behind the surface
+int lightingWithTheLightBehindSurfaceTest() {
+    material m = createMaterialDefault();
+    tuple position = createPoint(0.0f, 0.0f, 0.0f);
+    tuple eyev = createVector(0.0f, 0.0f, 1.0f);
+    tuple normalv = createVector(0.0f, 0.0f, -1.0f);
+    tuple intensity = createVector(1.0f, 1.0f, 1.0f);
+    tuple p_light_position = createPoint(0.0f, 0.0f, 10.0f);
+    point_light p_light = createPointLight(p_light_position, intensity);
+    tuple light1 = lighting(m, p_light, position, eyev, normalv);
+    assert(equal(light1.x, 0.1f));
+    assert(equal(light1.y, 0.1f));
+    assert(equal(light1.z, 0.1f));
+    return 1;
+}
+
 // 72 Hint #4
 void renderSphere1() {
-  tuple color_red = createVector(1.0f, 0.0f, 0.0f);
+  
   tuple ray_origin = createPoint(0.0f, 0.0f, -5.0f);
 
   double wall_z = 10.0f;
@@ -2170,20 +2297,36 @@ void renderSphere1() {
   double pixel_size = wall_size / WIDTH;
   double half = wall_size / 2.0f;
 
+  material m = createMaterialDefault();
+  m.color.x = 1.0f; m.color.y = 0.2f; m.color.z = 1.0f;
   tuple location = createPoint(0.0f, 0.0f, 0.0f);
   sphere* sphere1 = generateSphere(location);
+  sphere1->material = m;
+
+  tuple l_color = createVector(1.0f, 1.0f, 1.0f);
+  tuple l_position = createPoint(-10.0f, 10.0f, -10.0f);
+  point_light p_light = createPointLight(l_position, l_color);
 
   for (int y = 0; y < WIDTH; ++y) {
     double world_y = half - pixel_size * y;
     for (int x = 0; x < HEIGHT; ++x) {
       double world_x = -half + pixel_size * x;
-      tuple position = createPoint(world_x, world_y, wall_z);
-      tuple posRayOrigin = tupleSub(position, ray_origin);
+      tuple position1 = createPoint(world_x, world_y, wall_z);
+      tuple posRayOrigin = tupleSub(position1, ray_origin);
       tuple normRayOrigin = normVec(posRayOrigin);
-      ray tempRay = createRay(ray_origin.x, ray_origin.y, ray_origin.z, normRayOrigin.x, normRayOrigin.y, normRayOrigin.z );
-      intersections intersects = intersect(sphere1, &tempRay);
-      if (hit(&intersects)) {
-        writePixel(x, y, color_red);
+      ray ray_to_draw = createRay(ray_origin.x, ray_origin.y, ray_origin.z, normRayOrigin.x, normRayOrigin.y, normRayOrigin.z );
+      ray_to_draw.directionVector = normVec(ray_to_draw.directionVector);
+      intersections intersects = intersect(sphere1, &ray_to_draw);
+      intersection* hit_intersection = hit(&intersects);
+      if (hit_intersection) {
+          tuple point2 = position(ray_to_draw, hit_intersection->t);
+          tuple normal = normal_at(hit_intersection->object_id, point2);
+          tuple eye = tupleNegate(ray_to_draw.directionVector);
+          tuple pix_color = lighting(hit_intersection->object_id->material, p_light, point2, eye, normal);
+          //assert(pix_color.x <= 255 && pix_color.x >= 0);
+          //assert(pix_color.y <= 255 && pix_color.y >= 0);
+          //assert(pix_color.z <= 255 && pix_color.z >= 0);
+          writePixel(x, y, pix_color);
       }
     }
   }
@@ -2267,6 +2410,12 @@ int main() {
   unitTest("Point Light Position Intensity Test", pointLightPositionIntensityTest());
   unitTest("Default Material Test", defaultMaterialTest());
   unitTest("Sphere Has A Default Material Test", sphereHasDefaultMaterialTest());
+  //unitTest("Lighting With Eye Between Light And Surface Test", lightingWithEyeBetweenLightAndSurfaceTest());
+  //unitTest("Lighting With Eye Between Light And Surface Eye Offset 45 Degrees Test", lightingWithEyeBetweenLightAndSurfaceEyeOffsetTest());
+  //unitTest("Lighting With Eye Opposite Surface, Light Offset 45 Degrees Test", lightingWithEyeOppositeSurfaceTest());
+  //unitTest("Lighting With Eye In Path Of Reflect Vector Test", lightingWithEyeInPathOfReflectVectorTest());
+  //unitTest("Lighting With The Light Behind Surface Test", lightingWithTheLightBehindSurfaceTest());
+  
 
   renderSphere1();
   unitTest("Write Canvas To File Test", writeCanvasToFile());
