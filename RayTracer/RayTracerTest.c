@@ -666,7 +666,7 @@ int create_point_test() {
   assert(equal(t.y, -4.0f));
   assert(equal(t.z, 3.0f));
   assert(equal(t.w, 1.0f));
-  return 1;
+  return 0;
 }
 
 // 4 creates tuples with w=0
@@ -676,7 +676,7 @@ int create_vector_test() {
   assert(equal(t.y, -4.0f));
   assert(equal(t.z, 3.0f));
   assert(equal(t.w, 0.0f));
-  return 1;
+  return 0;
 }
 
 // 4 A tuple with w=1.0 is a point
@@ -697,7 +697,7 @@ int tuple_with_W_0_is_point_test()
   assert(equal(b.w,  0.0f));
   assert(tuple_is_point(b)  == false);
   assert(tuple_is_vector(b) == true);
-  return 1;
+  return 0;
 }
 
 // 6 Adding two tuples
@@ -709,7 +709,7 @@ int tuple_add_test() {
   assert(equal(c.y, 1.0f));
   assert(equal(c.z, 6.0f));
   assert(equal(c.w, 1.0f));
-  return 1;
+  return 0;
 }
 
 // 6 Subtracting two points
@@ -720,7 +720,7 @@ int tuple_sub_test() {
   assert(equal(c.x, -2.0f));
   assert(equal(c.y, -4.0f));
   assert(equal(c.z, -6.0f));
-  return 1;
+  return 0;
 }
 
 // 6 Subtracting vector from a point
@@ -731,7 +731,7 @@ int subtract_vector_from_point_test() {
   assert(equal(ans.x, -2.0f));
   assert(equal(ans.y, -4.0f));
   assert(equal(ans.z, -6.0f));
-  return 1;
+  return 0;
 }
 
 // 7 Subtracting two vectors
@@ -742,7 +742,7 @@ int subtract_two_vectors_test() {
   assert(equal(vec3.x, -2.0f));
   assert(equal(vec3.y, -4.0f));
   assert(equal(vec3.z, -6.0f));
-  return 1;
+  return 0;
 }
 
 // 7 Subtracting a vector from zero vector
@@ -753,7 +753,7 @@ int subtract_vector_from_zero_vector_test() {
   assert(equal(vec2.x, -1.0f));
   assert(equal(vec2.y,  2.0f));
   assert(equal(vec2.z, -3.0f));
-  return 1;
+  return 0;
 }
 
 // 7 Negating a tuple
@@ -763,7 +763,7 @@ int negating_tuple_test() {
   assert(equal(vec1.x, -1.0f));
   assert(equal(vec1.y,  2.0f));
   assert(equal(vec1.z, -3.0f));
-  return 1;
+  return 0;
 }
 
 // 8 Multiply tuple by a scalar
@@ -775,7 +775,7 @@ int tuple_mult_scalar_test() {
   assert(equal(vec1.y,  -7.0f));
   assert(equal(vec1.z,  10.5f));
   assert(equal(vec1.w, -14.0f));
-  return 1;
+  return 0;
 }
 
 // 8 Multiply tuple by a fraction
@@ -787,7 +787,7 @@ int tuple_mult_scalar_fraction_test() {
   assert(equal(vec1.y, -1.0f));
   assert(equal(vec1.z, 1.5f));
   assert(equal(vec1.w, -2.0f));
-  return 1;
+  return 0;
 }
 
 // 8 Divide a tuple by a scalar
@@ -799,7 +799,7 @@ int tuple_div_scalar_test() {
   assert(equal(vec1.y, -1.0f));
   assert(equal(vec1.z, 1.5f));
   assert(equal(vec1.w, -2.0f));
-  return 1;
+  return 0;
 }
 
 // 8 Computing the magnitude of vector(1, 0, 0)
@@ -823,7 +823,7 @@ int tuple_mag_vec_test() {
   tuple vec5 = create_vector(-1.0f, -2.0f, -3.0f);
   mag = tuple_mag_vec(vec5);
   assert(equal(mag, sqrt(14.0f)));
-  return 1;
+  return 0;
 }
 
 // 10 Normalizing vector(4,0,0) gives (1,0,0)
@@ -847,7 +847,7 @@ int norm_vec_test() {
   norm = norm_vec(vec3);
   double mag = tuple_mag_vec(norm);
   assert(equal(mag, 1.0f));
-  return 1;
+  return 0;
 }
 
 // 10 dot rpoduct of two tuples
@@ -856,7 +856,7 @@ int dot_prod_test() {
   tuple vec2 = create_vector(2.0f, 3.0f, 4.0f);
   double dotProd = dot(vec1, vec2);
   assert(equal(dotProd, 20.0f));
-  return 1;
+  return 0;
 }
 
 // 11 cross product of two vectors
@@ -871,7 +871,7 @@ int cross_prod_test() {
   assert(equal(cross2.x,  1.0f));
   assert(equal(cross2.y, -2.0f));
   assert(equal(cross2.z,  1.0f));
-  return 1;
+  return 0;
 }
 
 // 18 Hadamard product
@@ -882,7 +882,7 @@ int hadamard_product_test() {
   assert(equal(col3.x, 0.899999976f));
   assert(equal(col3.y, 0.2f));
   assert(equal(col3.z, 0.04f));
-  return 1;
+  return 0;
 }
 
 int write_pixel_test() {
@@ -922,7 +922,7 @@ int write_pixel_test() {
   assert(equal(canvas[1][2].x, 1.0f));
   assert(equal(canvas[1][2].y, 0.5f));
   assert(equal(canvas[1][2].z, 0.25f));
-  return 1;
+  return 0;
 }
 
 int color_convert_test() {
@@ -936,7 +936,7 @@ int color_convert_test() {
   assert(color == 255);
   color = color_convert(-2.0f);
   assert(color == 0);
-  return 1;
+  return 0;
 }
 
 int mat_equal_test() {
@@ -994,7 +994,7 @@ int mat_equal_test() {
       mat4x4a[i][j] = oldValue;
     }
   }
-  return 1;
+  return 0;
 }
 
 int mat4x4_mul_test() {
@@ -1020,7 +1020,7 @@ int mat4x4_mul_test() {
   assert(equal(m[3][1],  26.0f));
   assert(equal(m[3][2],  46.0f));
   assert(equal(m[3][3],  42.0f));
-  return 1;
+  return 0;
 }
 
 int mat4x4_mul_in_place_test() {
@@ -1064,7 +1064,7 @@ int mat4x4_mul_in_place_test() {
     assert(equal(b[3][1], 26.0f));
     assert(equal(b[3][2], 46.0f));
     assert(equal(b[3][3], 42.0f));
-    return 1;
+    return 0;
 }
 
 // 30 Matrix multipled by a tuple
@@ -1078,7 +1078,7 @@ int mat4x4_mul_tuple_test() {
   assert(equal(c.y, 24.0f));
   assert(equal(c.z, 33.0f));
   assert(equal(c.w,  1.0f));
-  return 1;
+  return 0;
 }
 
 // 32 Multiply matrix by identity matrix
@@ -1095,7 +1095,7 @@ int mat4x4_mult_ident_test() {
       assert(equal(a[i][j], b[i][j]));
     }
   }
-  return 1;
+  return 0;
 }
 
 // 33 Transpose a matrix
@@ -2358,13 +2358,6 @@ void render_sphere() {
   sphere1.material.color.y = 0.423529;
   sphere1.material.color.z = 0.58823;
   sphere1.material.shininess = 100.0f;
-
-  gen_shear_matrix(1.25, -.09, 1.0, 1.11, 1, .7, sphere1.transform);
-
-  Mat4x4 transMat;
-  gen_translate_matrix(1.25, -.09, 1.0, transMat);
-      
-  mat4x4_mul_in_place(transMat, sphere1.transform, sphere1.transform);
 
   tuple l_color = create_vector(1.0f, 1.0f, 1.0f);
   tuple l_position = create_point(-10.0f, -10.0f, -10.0f);
