@@ -656,6 +656,7 @@ void unit_test(char* msg, int assert) {
     printf("PASSED\n");
   } else {
     printf("FAILED\n");
+    exit(1);
   }
 }
 
