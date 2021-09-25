@@ -510,16 +510,17 @@ void mat4x4_reset_to_zero(Mat4x4 mat) {
 }
 
 sphere* create_sphere() {
-    sphere* s;
-    s = (sphere*)malloc(sizeof(sphere));
-    s->t = 1.0f;
-    s->location.x = 0.0f;
-    s->location.y = 0.0f;
-    s->location.z = 0.0f;
-    s->location.w = 0.0f;
-    Mat4x4_set_ident(s->transform);
-    s->material = create_material_default();
-    s->next = NULL;
+    sphere* s = (sphere*)malloc(sizeof(sphere));
+    if (s) {
+        s->t = 1.0f;
+        s->location.x = 0.0f;
+        s->location.y = 0.0f;
+        s->location.z = 0.0f;
+        s->location.w = 0.0f;
+        Mat4x4_set_ident(s->transform);
+        s->material = create_material_default();
+        s->next = NULL;
+    }
     return s;
 }
 
@@ -539,10 +540,15 @@ ray transform(ray* r, Mat4x4 m) {
 void intersect(sphere* sp, ray* r, intersections* intersects) {
     assert(sp != NULL);
     assert(r != NULL);
+    Mat4x4 invScaleMat;
+    Mat4x4_set_ident(invScaleMat);
+    mat4x4_inverse(sp->transform, invScaleMat);
+    ray r2 = transform(r, invScaleMat);
+
     tuple origin = create_point(0.0f, 0.0f, 0.0f);
-    tuple sphere_to_ray = tuple_sub(r->originPoint, origin);
-    double a = dot(r->directionVector, r->directionVector);
-    double b = 2 * dot(r->directionVector, sphere_to_ray);
+    tuple sphere_to_ray = tuple_sub(r2.originPoint, origin);
+    double a = dot(r2.directionVector, r2.directionVector);
+    double b = 2 * dot(r2.directionVector, sphere_to_ray);
     double c = dot(sphere_to_ray, sphere_to_ray) - 1.0f;
     double discriminant = b * b - 4 * a * c;
     if (discriminant < 0) { return; }
@@ -2122,14 +2128,8 @@ int intersect_scaled_sphere_test() {
     assert(mat4x4_equal(sp->transform, scaleMat) == true);
     assert(&sp->transform != &scaleMat);
 
-    // NOTE: This set of lines might need to be in intersect()
-    Mat4x4 invScaleMat;
-    Mat4x4_set_ident(invScaleMat);
-    mat4x4_inverse(sp->transform, invScaleMat);
-    ray r2 = transform(&r1, invScaleMat);
-
     intersections inter = create_intersections();
-    intersect(sp, &r2, &inter);
+    intersect(sp, &r1, &inter);
 
     assert(inter.count == 2);
     assert(inter.itersection[0].object_id == sp);
@@ -2532,7 +2532,7 @@ int default_world_test() {
 // 92 Intersect a world with a ray
 int intersect_world_with_ray_test() {
     world w = default_world();
-    ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0);
+    ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     intersections inter = create_intersections();
     intersect_world(&w, &r, &inter);
     assert(inter.count == 4);
