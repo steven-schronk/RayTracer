@@ -3,3 +3,13 @@
 ################################################################################
 
 /RayTracer/x64/Debug/RayTracer.tlog
+/RayTracer/x64/Debug
+/RayTracer/x64/Release/RayTracer.tlog
+/RayTracer/x64/Release
+/RayTracer/cpplint-cppcheck-build-dir
+/.vs/RayTracer/v16
+/.vs/RayTracer/v17/Preview
+/.vs/RayTracer/v17
+/.vs/RayTracer/project-colors.json
+/x64/Debug
+/x64/Release

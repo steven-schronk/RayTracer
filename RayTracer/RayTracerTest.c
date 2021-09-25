@@ -100,17 +100,17 @@ void sort_intersects(intersections* intersects) {
 intersection* hit(intersections *intersection_list) {
   assert(intersection_list != NULL);
   if (0 == intersection_list->count) return NULL;
-  intersection* intersect = NULL;
+  intersection* intersect1 = NULL;
   double t = DBL_MAX;
   for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
       if (intersection_list->itersection[i].t == DBL_MIN) { break; } // sentinal value
       if (intersection_list->itersection[i].t < 0) { continue; }
       if(intersection_list->itersection[i].t < t) {
           t = intersection_list->itersection[i].t;
-          intersect = &intersection_list->itersection[i];
+          intersect1 = &intersection_list->itersection[i];
       }
   }
-  return intersect;
+  return intersect1;
 }
 
 void add_intersection_to_list(intersections* intersection_list, double t, sphere *sp ) {
@@ -410,9 +410,8 @@ double mat4x4_cofactor(Mat4x4 a, int row, int col) {
 
 double mat4x4_det(Mat4x4 m, int size) {
   double detVal = 0.0f;
-  double mat3Cof = 0.0f;
   for (int column = 0; column < size; ++column) {
-    mat3Cof = mat4x4_cofactor(m, 0, column);
+    double mat3Cof = mat4x4_cofactor(m, 0, column);
     detVal = detVal + m[0][column] * mat3Cof;
   }
   return detVal;
@@ -525,8 +524,7 @@ sphere* create_sphere() {
 }
 
 tuple position(ray r, double t) {
-    tuple pos = create_point(0.0f, 0.0f, 0.0f);
-    pos = tuple_mult_scalar(r.directionVector, t);
+    tuple pos = tuple_mult_scalar(r.directionVector, t); 
     pos = tuple_add(r.originPoint, pos);
     return pos;
 }
@@ -586,9 +584,8 @@ tuple normal_at(sphere* sphere, tuple world_point) {
     mat4x4_mul_tuple(inverse_sphere, world_point, &object_point);
 
     // Line 2
-    tuple objectNormal = create_point(0.0f, 0.0f, 0.0f);
     tuple temp_point = create_point(0.0f, 0.0f, 0.0f);
-    objectNormal = tuple_sub(object_point, temp_point);
+    tuple objectNormal = tuple_sub(object_point, temp_point);
 
     // Line 3
     tuple world_normal;
@@ -642,9 +639,9 @@ world default_world() {
 
 tuple lighting(material material, point_light light, tuple point, tuple eyev, tuple normalv) {
     tuple effective_color = tuple_mult_tuple(material.color, light.intensity);
-    tuple diffuse  = create_point(0.0f, 0.0f, 0.0f);
-    tuple specular = create_point(0.0f, 0.0f, 0.0f);
-    tuple ambient  = create_point(0.0f, 0.0f, 0.0f);
+    tuple diffuse;
+    tuple specular;
+    tuple ambient;
 
     tuple color_black = create_vector(0.0f, 0.0f, 0.0f);
     tuple light_sub_point = tuple_sub(light.position, point);
@@ -1365,6 +1362,7 @@ int inverse_matrix_test() {
   assert(equal(cof, -160.0f));
   assert(equal(b[3][2], -160.0f/532.0f));
   cof = mat4x4_cofactor(a, 3, 2);
+  assert(equal(cof, 105.0f));
   assert(equal(b[2][3], 105.0f/532.0f));
   assert(mat4x4_equal(b, c) == true);
 
@@ -1383,8 +1381,6 @@ int inverse_matrix_test() {
         { -4.0f, 9.0f, 6.0f, 4.0f},{ -7.0f, 6.0f, 6.0f, 2.0f } };
   Mat4x4 h = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f },\
     { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f } };
-  Mat4x4 i = { { -0.04074074f, -0.07777778f, 0.14444445f, -0.22222222f },{ -0.07777778f, 0.03333334f, 0.36666667f, -0.33333334f },\
-      { -0.02901234f, -0.14629629f, -0.10925926f, 0.12962963f },{ 0.17777778f, 0.06666667f, -0.26666668f, 0.33333334f } };
 
   inversable = mat4x4_inverse(g, h);
   assert(inversable == true);
@@ -1994,9 +1990,9 @@ int hit_tests(){
     add_intersection_to_list(&intersects, 1.0, sp);
     add_intersection_to_list(&intersects, 2.0, sp);
     assert(intersects.count == 2);
-    intersection* intersect = hit(&intersects);
-    assert(intersect->object_id == sp);
-    assert(equal(intersect->t, 1.0f));
+    intersection* intersect1 = hit(&intersects);
+    assert(intersect1->object_id == sp);
+    assert(equal(intersect1->t, 1.0f));
 
     //65 The hit when some intersections have a negative t
     clear_intersections(&intersects);
@@ -2004,9 +2000,9 @@ int hit_tests(){
     add_intersection_to_list(&intersects, -1.0, sp);
     add_intersection_to_list(&intersects, 1.0, sp);
     assert(intersects.count == 2);
-    intersect = hit(&intersects);
-    assert(intersect->object_id == sp);
-    assert(equal(intersect->t, 1.0f));
+    intersect1 = hit(&intersects);
+    assert(intersect1->object_id == sp);
+    assert(equal(intersect1->t, 1.0f));
 
     // 65 The hit when all intersections have negative t
     clear_intersections(&intersects);
@@ -2014,8 +2010,8 @@ int hit_tests(){
     add_intersection_to_list(&intersects, -2.0, sp);
     add_intersection_to_list(&intersects, -1.0, sp);
     assert(intersects.count == 2);
-    intersect = hit(&intersects);
-    assert(intersect == NULL);
+    intersect1 = hit(&intersects);
+    assert(intersect1 == NULL);
 
     // 66 The hit is always the lowest nonnegative intersection
     clear_intersections(&intersects);
@@ -2025,9 +2021,9 @@ int hit_tests(){
     add_intersection_to_list(&intersects, -3.0, sp);
     add_intersection_to_list(&intersects, 2.0, sp);
     assert(intersects.count == 4);
-    intersect = hit(&intersects);
-    assert(intersect->object_id == sp);
-    assert(equal(intersect->t, 2.0f));
+    intersect1 = hit(&intersects);
+    assert(intersect1->object_id == sp);
+    assert(equal(intersect1->t, 2.0f));
     return 0;
 }
 
@@ -2164,10 +2160,9 @@ int intersecting_translated_sphere_test() {
 
 int normals_test() {
     sphere* sphere1 = create_sphere();
-    tuple n = create_point(0.0f, 0.0f, 0.0f);
     // 78 The normal on a sphere at a point on the X axis.
     tuple location1 = create_point(1.0f, 0.0f, 0.0f);
-    n = normal_at(sphere1, location1);
+    tuple n = normal_at(sphere1, location1);
     assert(equal(n.x, 1.0f));
     assert(equal(n.y, 0.0f));
     assert(equal(n.z, 0.0f));
@@ -2203,10 +2198,9 @@ int normals_test() {
 // 78 The normal is a normalized vector.
 int normal_is_normal_test() {
     sphere* sp = create_sphere();
-    tuple n = create_point(0.0f, 0.0f, 0.0f);
     double nonaxial = sqrt(3) / 3.0f;
     tuple location1 = create_point(nonaxial, nonaxial, nonaxial);
-    n = normal_at(sp, location1);
+    tuple n = normal_at(sp, location1);
     tuple nn = norm_vec(n);
     assert(equal(n.x, nn.x));
     assert(equal(n.y, nn.y));
@@ -2271,18 +2265,18 @@ int reflect_vector_off_slanted_surf_test() {
 // 84 A point light has a position and intensity
 int point_light_position_intensity_test() {
     tuple intensity = create_point(1.0f, 2.0f, 3.0f);
-    tuple position = create_point(4.0f, 5.0f, 6.0f);
-    point_light pl = create_point_light(position, intensity);
+    tuple position1 = create_point(4.0f, 5.0f, 6.0f);
+    point_light pl = create_point_light(position1, intensity);
     assert(pl.next == NULL);
     assert(equal(pl.intensity.x, intensity.x));
     assert(equal(pl.intensity.y, intensity.y));
     assert(equal(pl.intensity.z, intensity.z));
     assert(equal(pl.intensity.w, intensity.w));
 
-    assert(equal(pl.position.x, position.x));
-    assert(equal(pl.position.y, position.y));
-    assert(equal(pl.position.z, position.z));
-    assert(equal(pl.position.w, position.w));
+    assert(equal(pl.position.x, position1.x));
+    assert(equal(pl.position.y, position1.y));
+    assert(equal(pl.position.z, position1.z));
+    assert(equal(pl.position.w, position1.w));
     return 0;
 }
 
@@ -2337,13 +2331,13 @@ int sphere_has_default_material_test() {
 // 86 Lighting with the eye between the light and the surface
 int lighting_with_eye_between_light_and_surface_test() {
     material m = create_material_default();
-    tuple position = create_vector(0.0f, 0.0f, 0.0f);
+    tuple position1 = create_vector(0.0f, 0.0f, 0.0f);
     tuple eyev = create_vector(0.0f, 0.0f, -1.0f);
     tuple normalv = create_vector(0.0f, 0.0f, -1.0f);
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 0.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, p_light, position, eyev, normalv);
+    tuple light1 = lighting(m, p_light, position1, eyev, normalv);
     assert(equal(light1.x, 1.9f));
     assert(equal(light1.y, 1.9f));
     assert(equal(light1.z, 1.9f));
@@ -2353,13 +2347,13 @@ int lighting_with_eye_between_light_and_surface_test() {
 // 86 Lighting with the eye between light and surface, eye offset 45 deg
 int lighting_with_eye_between_light_and_surface_eye_offset_test() {
     material m = create_material_default();
-    tuple position = create_point(0.0f, 0.0f, 0.0f);
+    tuple position1 = create_point(0.0f, 0.0f, 0.0f);
     tuple eyev = create_vector(0.0f, sqrt(2)/2, -sqrt(2)/2);
     tuple normalv = create_vector(0.0f, 0.0f, -1.0f);
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 0.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, p_light, position, eyev, normalv);
+    tuple light1 = lighting(m, p_light, position1, eyev, normalv);
     assert(equal(light1.x, 1.0f));
     assert(equal(light1.y, 1.0f));
     assert(equal(light1.z, 1.0f));
@@ -2369,13 +2363,13 @@ int lighting_with_eye_between_light_and_surface_eye_offset_test() {
 // 87 Lighting with the eye opposite surface, light offset 45 deg
 int lighting_with_eye_opposite_surface_test() {
     material m = create_material_default();
-    tuple position = create_point(0.0f, 0.0f, 0.0f);
+    tuple position1 = create_point(0.0f, 0.0f, 0.0f);
     tuple eyev = create_vector(0.0f, 0.0f, -1.0f);
     tuple normalv = create_vector(0.0f, 0.0f, -1.0f);
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 10.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, p_light, position, eyev, normalv);
+    tuple light1 = lighting(m, p_light, position1, eyev, normalv);
     assert(equal(light1.x, 0.73639608769926945f));
     assert(equal(light1.y, 0.73639608769926945f));
     assert(equal(light1.z, 0.73639608769926945f));
@@ -2385,13 +2379,13 @@ int lighting_with_eye_opposite_surface_test() {
 // 87 Lighting with the eye in the path of the reflection vector
 int lighting_with_eye_in_path_of_reflect_vector_test() {
     material m = create_material_default();
-    tuple position = create_point(0.0f, 0.0f, 0.0f);
+    tuple position1 = create_point(0.0f, 0.0f, 0.0f);
     tuple eyev = create_vector(0.0f, -sqrt(2) / 2, -sqrt(2) / 2);
     tuple normalv = create_vector(0.0f, 0.0f, -1.0f);
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 10.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, p_light, position, eyev, normalv);
+    tuple light1 = lighting(m, p_light, position1, eyev, normalv);
     assert(equal(light1.x, 1.6363960638574115f));
     assert(equal(light1.y, 1.6363960638574115f));
     assert(equal(light1.z, 1.6363960638574115f));
@@ -2401,13 +2395,13 @@ int lighting_with_eye_in_path_of_reflect_vector_test() {
 // 88 Lighting with the light behind the surface
 int lighting_with_the_light_behind_surface_test() {
     material m = create_material_default();
-    tuple position = create_point(0.0f, 0.0f, 0.0f);
+    tuple position1 = create_point(0.0f, 0.0f, 0.0f);
     tuple eyev = create_vector(0.0f, 0.0f, 1.0f);
     tuple normalv = create_vector(0.0f, 0.0f, -1.0f);
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 0.0f, 10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, p_light, position, eyev, normalv);
+    tuple light1 = lighting(m, p_light, position1, eyev, normalv);
     assert(equal(light1.x, 0.1f));
     assert(equal(light1.y, 0.1f));
     assert(equal(light1.z, 0.1f));
@@ -2423,7 +2417,7 @@ int intersect_compare_test() {
     intersection i1 = { 0.0f, sp1 };
     intersection i2 = { 1.0f, sp2 };
     intersection i3 = { -1.0f, sp3 };
-    /*
+
     assert(intersect_compare(&i1, &i2) == -1);
     assert(intersect_compare(&i1, &i1) == 0);
     assert(intersect_compare(&i2, &i1) == 1);
@@ -2431,7 +2425,6 @@ int intersect_compare_test() {
     assert(intersect_compare(&i1, &i3) == 1);
     assert(intersect_compare(&i3, &i3) == 0);
     assert(intersect_compare(&i3, &i1) == -1);
-    */
     return 0;
 }
 
@@ -2653,6 +2646,7 @@ int main() {
   unit_test("Generate Sheer Matrix Test", gen_shear_matrix_test());
   unit_test("Transformations Applied In Sequence Test", transform_applied_in_sequence_test());
   //unitTest("Draw Clock Test", drawClockTest());
+  unit_test("Tuple Copy Test", tuple_copy_test());
   unit_test("Create Ray Test", create_ray_test());
   unit_test("Create Sphere Test", create_sphere_test());
   unit_test("Create Intersections Test", create_intersections_test());
