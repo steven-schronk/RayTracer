@@ -13,3 +13,10 @@
 /.vs/RayTracer/project-colors.json
 /x64/Debug
 /x64/Release
+
+*.gif
+*.ppm
+*.png
+*.jpg
+*.jpeg
+*.diff
