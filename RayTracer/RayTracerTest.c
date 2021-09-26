@@ -762,6 +762,34 @@ tuple color_at(world* w, ray* r) {
     }
     return create_point(0.0f, 0.0f, 0.0f);
 }
+
+void view_transform(tuple from, tuple up, tuple to, Mat4x4 m) {
+    tuple forward = norm_vec(tuple_sub(to, from));
+    tuple upn = norm_vec(up);
+    tuple left = cross(forward, upn);
+    tuple true_up = cross(left, forward);
+    m[0][0] = left.x;
+    m[1][0] = true_up.x;
+    m[2][0] = -forward.x;
+    m[3][0] = 0.0f;
+
+    m[0][1] = left.y;
+    m[1][1] = true_up.y;
+    m[2][1] = -forward.y;
+    m[3][1] = 0.0f;
+
+    m[0][2] = left.z;
+    m[1][2] = true_up.z;
+    m[2][2] = -forward.z;
+    m[3][2] = 0.0f;
+
+    m[0][3] = 0.0f;
+    m[1][3] = 0.0f;
+    m[2][3] = 0.0f;
+    m[3][3] = 1.0f;
+    return;
+}
+
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -2846,6 +2874,74 @@ int color_when_ray_hits_test() {
     return 0;
 }
 
+// 98 The transformation matrix for the default orientation
+int transformation_for_default_orientation_test() {
+    tuple from = create_point(0.0f, 0.0f, 0.0f);
+    tuple to = create_point(0.0f, 0.0f, -1.0f);
+    tuple up = create_vector(0.0f, 1.0f, 0.0f);
+    Mat4x4 view;
+    view_transform(from, up, to, view);
+    Mat4x4 ident;
+    Mat4x4_set_ident(ident);
+    assert(mat4x4_equal(view, ident) == true);
+    return 0;
+}
+
+// 98 A view transformation matrix looking in positive z direction
+int view_transform_mat_looking_positive_z_dir_test() {
+    tuple from = create_point(0.0f, 0.0f, 0.0f);
+    tuple to = create_point(0.0f, 0.0f, 1.0f);
+    tuple up = create_vector(0.0f, 1.0f, 0.0f);
+    Mat4x4 view;
+    view_transform(from, up, to, view);
+    Mat4x4 scaling;
+    gen_scale_matrix(-1.0f, 1.0f, -1.0f, scaling);
+    assert(mat2x2_equal(view, scaling) == true);
+    return 0;
+}
+
+// 99 The view transformation moves the world
+int view_transform_moves_world_test() {
+    tuple from = create_point(0.0f, 0.0f, 8.0f);
+    tuple to = create_point(0.0f, 0.0f, 0.0f);
+    tuple up = create_vector(0.0f, 1.0f, 0.0f);
+    Mat4x4 view;
+    view_transform(from, up, to, view);
+    Mat4x4 translate;
+    gen_translate_matrix(0.0f, 0.0f, -8.0f, translate);
+    assert(mat2x2_equal(view, translate) == true);
+    return 0;
+}
+
+// 99 The arbitrary view transformation
+int arbitrary_view_transform_test() {
+    tuple from = create_point(1.0f, 3.0f, 2.0f);
+    tuple to = create_point(4.0f, -2.0f, 8.0f);
+    tuple up = create_vector(1.0f, 1.0f, 0.0f);
+    Mat4x4 view;
+    view_transform(from, up, to, view);
+    assert(equal(view[0][0], -0.50709255283710986f));
+    assert(equal(view[1][0], 0.76771593385968007f));
+    assert(equal(view[2][0], -0.35856858280031806f));
+    assert(equal(view[3][0], 0.0f));
+
+    assert(equal(view[0][1], 0.50709255283710986f));
+    assert(equal(view[1][1], 0.60609152673132627f));
+    assert(equal(view[2][1], 0.59761430466719678f));
+    assert(equal(view[3][1], 0.0f));
+
+    assert(equal(view[0][2], 0.67612340378281321f));
+    assert(equal(view[1][2], 0.12121830534626524f));
+    assert(equal(view[2][2], -0.71713716560063612f));
+    assert(equal(view[3][2], 0.0f));
+
+    assert(equal(view[0][3], 0.0f));
+    assert(equal(view[1][3], 0.0f));
+    assert(equal(view[2][3], 0.0f));
+    assert(equal(view[3][3], 1.0f));
+    return 0;
+}
+
 #endif
 
 // 72 Hint #4
@@ -2996,6 +3092,10 @@ int main() {
   unit_test("Shading Intersection From Inside Test", shading_intersection_from_inside());
   unit_test("Color When Ray Misses Test", color_when_ray_misses_test());
   unit_test("Color When Ray Hits Test", color_when_ray_hits_test());
+  unit_test("Transformation For Default Orientation Test", transformation_for_default_orientation_test());
+  unit_test("View Transform Matrix Looking Positive In Z Direction Test", view_transform_mat_looking_positive_z_dir_test());
+  unit_test("View Transform Moves World Test", view_transform_moves_world_test());
+  unit_test("Arbitrary View Transform Test", arbitrary_view_transform_test());
 #endif
   render_sphere();
   write_canvas_to_file();
