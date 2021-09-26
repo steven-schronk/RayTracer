@@ -750,6 +750,18 @@ tuple shade_hit(world* w, comps *comp) {
     return lighting(comp->object->material, w->lights, comp->point, comp->eyev, comp->normalv);
 }
 
+tuple color_at(world* w, ray* r) {
+    assert(w);
+    assert(r);
+    intersections inter = create_intersections();
+    intersect_world(w, r, &inter);
+    intersection* hit1 = hit(&inter);
+    if (hit1 != NULL) { // note difference!
+        comps comp = prepare_computations(hit1, r);
+        return shade_hit(w, &comp);
+    }
+    return create_point(0.0f, 0.0f, 0.0f);
+}
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -2732,6 +2744,108 @@ int shading_an_intersection_test() {
     return 0;
 }
 
+// 95 Shading an intersection from the inside
+int shading_intersection_from_inside() {
+    world w = create_default_world();
+    tuple light_pos = create_point(0.0f, 0.25f, 0.0f);
+    tuple light_color = create_point(1.0f, 1.0f, 1.0f);
+
+    *w.lights = create_point_light(light_pos, light_color);
+
+    ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+    intersection inter = { 0.5f, w.objects->next };
+    comps comp = prepare_computations(&inter, &r);
+
+    // testing if prepare_computations overwrote stack
+    assert(equal(r.directionVector.x, 0.0f));
+    assert(equal(r.directionVector.y, 0.0f));
+    assert(equal(r.directionVector.z, 1.0f));
+    assert(equal(r.originPoint.x, 0.0f));
+    assert(equal(r.originPoint.y, 0.0f));
+    assert(equal(r.originPoint.z, 0.0f));
+    assert(equal(inter.t, 0.5f));
+
+    Mat4x4 ident;
+    Mat4x4_set_ident(ident);
+
+    // w contains s1
+    sphere* sp = w.objects;
+    assert(mat4x4_equal(sp->transform, ident));
+
+    // w contains s2
+    sp = sp->next;
+    assert(equal(sp->transform[0][0], 0.5f));
+    assert(equal(sp->transform[1][1], 0.5f));
+    assert(equal(sp->transform[2][2], 0.5f));
+    assert(equal(sp->transform[3][3], 1.0f));
+
+    assert(equal(w.lights->intensity.x, 1.0f));
+    assert(equal(w.lights->intensity.y, 1.0f));
+    assert(equal(w.lights->intensity.z, 1.0f));
+    assert(equal(w.lights->position.x, 0.0f));
+    assert(equal(w.lights->position.y, 0.25f));
+    assert(equal(w.lights->position.z, 0.0f));
+    assert(w.objects != NULL);
+    assert(w.objects->next != NULL);
+    assert(w.objects->next->next == NULL);
+    assert(equal(w.objects->location.x, 0.0f));
+    assert(equal(w.objects->location.y, 0.0f));
+    assert(equal(w.objects->location.z, 0.0f));
+
+    // w contains s1
+    sp = w.objects;
+    assert(mat4x4_equal(sp->transform, ident));
+
+    // w contains s2
+    sp = sp->next;
+    assert(equal(sp->transform[0][0], 0.5f));
+    assert(equal(sp->transform[1][1], 0.5f));
+    assert(equal(sp->transform[2][2], 0.5f));
+    assert(equal(sp->transform[3][3], 1.0f));
+
+    assert(equal(w.lights->intensity.x, 1.0f));
+    assert(equal(w.lights->intensity.y, 1.0f));
+    assert(equal(w.lights->intensity.z, 1.0f));
+    assert(equal(w.lights->position.x, 0.0f));
+    assert(equal(w.lights->position.y, 0.25f));
+    assert(equal(w.lights->position.z, 0.0f));
+    assert(w.objects != NULL);
+    assert(w.objects->next != NULL);
+    assert(w.objects->next->next == NULL);
+    assert(equal(w.objects->location.x, 0.0f));
+    assert(equal(w.objects->location.y, 0.0f));
+    assert(equal(w.objects->location.z, 0.0f));
+
+    // continue normal testing
+    tuple color = shade_hit(&w, &comp);
+    assert(equal(color.x, 0.90498445224856761f));
+    assert(equal(color.y, 0.90498445224856761f));
+    assert(equal(color.z, 0.90498445224856761f));
+    return 0;
+}
+
+// 96 Color when a ray misses
+int color_when_ray_misses_test() {
+    world w = create_default_world();
+    ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 1.0f, 0.0f);
+    tuple color = color_at(&w, &r);
+    assert(equal(color.x, 0.0f));
+    assert(equal(color.y, 0.0f));
+    assert(equal(color.z, 0.0f));
+    return 0;
+}
+
+// 96 Color when a ray hits
+int color_when_ray_hits_test() {
+    world w = create_default_world();
+    ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+    tuple color = color_at(&w, &r);
+    assert(equal(color.x, 0.38066119994542108f));
+    assert(equal(color.y, 0.47582649284140904f));
+    assert(equal(color.z, 0.28549590704943306f));
+    return 0;
+}
+
 #endif
 
 // 72 Hint #4
@@ -2879,6 +2993,9 @@ int main() {
   unit_test("Hit When Intersection Occurs On Outside Test", hit_when_intersect_on_outside_test());
   unit_test("Hit When Intersect Occurs On Inside Test", hit_when_intersect_occurs_on_inside_test());
   unit_test("Shading An Intersection Test", shading_an_intersection_test());
+  unit_test("Shading Intersection From Inside Test", shading_intersection_from_inside());
+  unit_test("Color When Ray Misses Test", color_when_ray_misses_test());
+  unit_test("Color When Ray Hits Test", color_when_ray_hits_test());
 #endif
   render_sphere();
   write_canvas_to_file();
