@@ -33,6 +33,8 @@ typedef struct { double t; sphere *object_id; } intersection;
 
 typedef struct { struct _sphere* objects; point_light* lights; } world;
 
+typedef struct { double t; sphere* object; tuple point; tuple eyev; tuple normalv; bool inside; } comps;
+
 #define INTERSECTIONS_SIZE 10
 
 typedef struct { intersection itersection[10]; int count; } intersections;
@@ -617,14 +619,22 @@ world create_world() {
     return w;
 }
 
-world default_world() {
+world create_default_world() {
     world w;
     w.lights = NULL;
     w.objects = NULL;
     tuple light_pos = create_point(-10.0f, 10.0f, -10.0f);
     tuple light_intensity = create_point(1.0f, 1.0f, 1.0f);
     point_light light = create_point_light(light_pos, light_intensity);
-    w.lights = &light;
+    w.lights = (point_light*)malloc(sizeof(point_light));
+    assert(w.lights != NULL);
+    w.lights->intensity.x = light.intensity.x;
+    w.lights->intensity.y = light.intensity.y;
+    w.lights->intensity.z = light.intensity.z;
+    w.lights->position.x = light.position.x;
+    w.lights->position.y = light.position.y;
+    w.lights->position.z = light.position.z;
+
     w.lights->next = NULL;
     sphere* s1 = create_sphere();
     tuple material_color = create_point(0.8f, 1.0f, 0.6f);
@@ -643,14 +653,14 @@ world default_world() {
     return w;
 }
 
-tuple lighting(material material, point_light light, tuple point, tuple eyev, tuple normalv) {
-    tuple effective_color = tuple_mult_tuple(material.color, light.intensity);
+tuple lighting(material material, point_light* light, tuple point, tuple eyev, tuple normalv) {
+    tuple effective_color = tuple_mult_tuple(material.color, light->intensity);
     tuple diffuse;
     tuple specular;
     tuple ambient;
 
     tuple color_black = create_vector(0.0f, 0.0f, 0.0f);
-    tuple light_sub_point = tuple_sub(light.position, point);
+    tuple light_sub_point = tuple_sub(light->position, point);
     tuple lightv = norm_vec(light_sub_point);
 
     ambient = tuple_mult_scalar(effective_color, material.ambient);
@@ -672,7 +682,7 @@ tuple lighting(material material, point_light light, tuple point, tuple eyev, tu
         }
         else {
             double factor = pow(reflect_dot_eye, material.shininess);
-            specular = tuple_mult_scalar(tuple_mult_scalar(light.intensity, material.specular), factor);
+            specular = tuple_mult_scalar(tuple_mult_scalar(light->intensity, material.specular), factor);
         }
     }
     tuple light_out = tuple_add(tuple_add(ambient, specular),diffuse);
@@ -704,6 +714,40 @@ int write_canvas_to_file() {
         }
     }
     return 1;
+}
+
+comps create_comp() {
+    comps comp;
+    comp.eyev = create_vector(0.0f, 0.0f, 0.0f);
+    comp.normalv = create_vector(0.0f, 0.0f, 0.0f);
+    comp.object = NULL;
+    comp.point = create_point(0.0f, 0.0f, 0.0f);
+    comp.t = 0.0f;
+    return comp;
+}
+
+comps prepare_computations(intersection* inter, ray* r) {
+    comps comp = create_comp();
+    comp.t = inter->t;
+    comp.object = inter->object_id;
+    comp.point = position(*r, comp.t);
+    tuple eyev_pos = create_vector(r->directionVector.x, r->directionVector.y, r->directionVector.z);
+    comp.eyev = tuple_negate(eyev_pos);
+    comp.normalv = normal_at(comp.object, comp.point);
+    if (dot(comp.normalv, comp.eyev) < 0.0f) {
+        comp.inside = true;
+        comp.normalv = tuple_negate(comp.normalv);
+    }
+    else {
+        comp.inside = false;
+    }
+    return comp;
+}
+
+tuple shade_hit(world* w, comps *comp) {
+    //assert(w->lights != NULL);
+    //assert(w->objects != NULL);
+    return lighting(comp->object->material, w->lights, comp->point, comp->eyev, comp->normalv);
 }
 
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -2337,7 +2381,7 @@ int lighting_with_eye_between_light_and_surface_test() {
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 0.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, p_light, position1, eyev, normalv);
+    tuple light1 = lighting(m, &p_light, position1, eyev, normalv);
     assert(equal(light1.x, 1.9f));
     assert(equal(light1.y, 1.9f));
     assert(equal(light1.z, 1.9f));
@@ -2353,7 +2397,7 @@ int lighting_with_eye_between_light_and_surface_eye_offset_test() {
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 0.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, p_light, position1, eyev, normalv);
+    tuple light1 = lighting(m, &p_light, position1, eyev, normalv);
     assert(equal(light1.x, 1.0f));
     assert(equal(light1.y, 1.0f));
     assert(equal(light1.z, 1.0f));
@@ -2369,7 +2413,7 @@ int lighting_with_eye_opposite_surface_test() {
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 10.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, p_light, position1, eyev, normalv);
+    tuple light1 = lighting(m, &p_light, position1, eyev, normalv);
     assert(equal(light1.x, 0.73639608769926945f));
     assert(equal(light1.y, 0.73639608769926945f));
     assert(equal(light1.z, 0.73639608769926945f));
@@ -2385,7 +2429,7 @@ int lighting_with_eye_in_path_of_reflect_vector_test() {
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 10.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, p_light, position1, eyev, normalv);
+    tuple light1 = lighting(m, &p_light, position1, eyev, normalv);
     assert(equal(light1.x, 1.6363960638574115f));
     assert(equal(light1.y, 1.6363960638574115f));
     assert(equal(light1.z, 1.6363960638574115f));
@@ -2401,7 +2445,7 @@ int lighting_with_the_light_behind_surface_test() {
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 0.0f, 10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, p_light, position1, eyev, normalv);
+    tuple light1 = lighting(m, &p_light, position1, eyev, normalv);
     assert(equal(light1.x, 0.1f));
     assert(equal(light1.y, 0.1f));
     assert(equal(light1.z, 0.1f));
@@ -2499,8 +2543,7 @@ int creating_a_world_test() {
 
 // 92 Default World
 int default_world_test() {
-    world w = default_world();
-    // w.light = light
+    world w = create_default_world();
     assert(equal(w.lights->intensity.x,  1.0f));
     assert(equal(w.lights->intensity.y,  1.0f));
     assert(equal(w.lights->intensity.z,  1.0f));
@@ -2531,7 +2574,7 @@ int default_world_test() {
 
 // 92 Intersect a world with a ray
 int intersect_world_with_ray_test() {
-    world w = default_world();
+    world w = create_default_world();
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     intersections inter = create_intersections();
     intersect_world(&w, &r, &inter);
@@ -2540,6 +2583,152 @@ int intersect_world_with_ray_test() {
     assert(equal(inter.itersection[1].t, 4.5f));
     assert(equal(inter.itersection[2].t, 5.5f));
     assert(equal(inter.itersection[3].t, 6.0f));
+    return 0;
+}
+
+// 93 Precomputing the state of an intersection
+int prepare_computations_test() {
+    ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+    sphere* sp1 = create_sphere();
+    intersection inter = { 4.0f, sp1 };
+    comps comp = prepare_computations(&inter, &r);
+    assert(equal(comp.t, inter.t));
+    assert(comp.object == sp1);
+    assert(equal(comp.point.x, 0.0f));
+    assert(equal(comp.point.y, 0.0f));
+    assert(equal(comp.point.z, -1.0f));
+
+    assert(equal(comp.eyev.x, 0.0f));
+    assert(equal(comp.eyev.y, 0.0f));
+    assert(equal(comp.eyev.z, -1.0f));
+
+    assert(equal(comp.normalv.x, 0.0f));
+    assert(equal(comp.normalv.y, 0.0f));
+    assert(equal(comp.normalv.z, -1.0f));
+    return 0;
+}
+
+// 94 The hit when an intersection occurs on the outside
+int hit_when_intersect_on_outside_test() {
+    ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+    sphere* sp1 = create_sphere();
+    intersection inter = { 4.0f, sp1 };
+    comps comp = prepare_computations(&inter, &r);
+    assert(comp.inside == false);
+    return 0;
+}
+
+// 95 The hit when an intersection occurs on the inside
+int hit_when_intersect_occurs_on_inside_test() {
+    ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+    sphere* sp1 = create_sphere();
+    intersection inter = { 1.0f, sp1 };
+    comps comp = prepare_computations(&inter, &r);
+
+    assert(equal(comp.point.x, 0.0f));
+    assert(equal(comp.point.y, 0.0f));
+    assert(equal(comp.point.z, 1.0f));
+
+    assert(equal(comp.eyev.x, 0.0f));
+    assert(equal(comp.eyev.y, 0.0f));
+    assert(equal(comp.eyev.z, -1.0f));
+
+    assert(equal(comp.normalv.x, 0.0f));
+    assert(equal(comp.normalv.y, 0.0f));
+    assert(equal(comp.normalv.z, -1.0f));
+    assert(comp.inside == true);
+
+    // testing if prepare_computations overwrote stack
+    assert(equal(sp1->location.x, 0.0f));
+    assert(equal(sp1->location.y, 0.0f));
+    assert(equal(sp1->location.z, 0.0f));
+    assert(equal(sp1->t, 1.0f));
+
+    assert(equal(r.directionVector.x, 0.0f));
+    assert(equal(r.directionVector.y, 0.0f));
+    assert(equal(r.directionVector.z, 1.0f));
+    assert(equal(r.originPoint.x, 0.0f));
+    assert(equal(r.originPoint.y, 0.0f));
+    assert(equal(r.originPoint.z, 0.0f));
+    assert(equal(inter.t, 1.0f));
+    assert(inter.object_id == sp1);
+
+    return 0;
+}
+
+// 95 Shading an intersection
+int shading_an_intersection_test() {
+    world w = create_default_world();
+    ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+    // shape <- the first object in w
+    intersection inter = { 4.0f, w.objects };
+    comps comp = prepare_computations(&inter, &r);
+
+    // testing if prepare_computations overwrote stack
+    assert(equal(r.directionVector.x, 0.0f));
+    assert(equal(r.directionVector.y, 0.0f));
+    assert(equal(r.directionVector.z, 1.0f));
+    assert(equal(r.originPoint.x, 0.0f));
+    assert(equal(r.originPoint.y, 0.0f));
+    assert(equal(r.originPoint.z, -5.0f));
+    assert(equal(inter.t, 4.0f));
+
+    Mat4x4 ident;
+    Mat4x4_set_ident(ident);
+
+    // w contains s1
+    sphere* sp = w.objects;
+    assert(mat4x4_equal(sp->transform, ident));
+
+    // w contains s2
+    sp = sp->next;
+    assert(equal(sp->transform[0][0], 0.5f));
+    assert(equal(sp->transform[1][1], 0.5f));
+    assert(equal(sp->transform[2][2], 0.5f));
+    assert(equal(sp->transform[3][3], 1.0f));
+
+    assert(equal(w.lights->intensity.x, 1.0f));
+    assert(equal(w.lights->intensity.y, 1.0f));
+    assert(equal(w.lights->intensity.z, 1.0f));
+    assert(equal(w.lights->position.x, -10.0f));
+    assert(equal(w.lights->position.y, 10.0f));
+    assert(equal(w.lights->position.z, -10.0f));
+    assert(w.objects != NULL);
+    assert(w.objects->next != NULL);
+    assert(w.objects->next->next == NULL);
+    assert(equal(w.objects->location.x, 0.0f));
+    assert(equal(w.objects->location.y, 0.0f));
+    assert(equal(w.objects->location.z, 0.0f));
+
+    // w contains s1
+    sp = w.objects;
+    assert(mat4x4_equal(sp->transform, ident));
+
+    // w contains s2
+    sp = sp->next;
+    assert(equal(sp->transform[0][0], 0.5f));
+    assert(equal(sp->transform[1][1], 0.5f));
+    assert(equal(sp->transform[2][2], 0.5f));
+    assert(equal(sp->transform[3][3], 1.0f));
+
+    assert(equal(w.lights->intensity.x, 1.0f));
+    assert(equal(w.lights->intensity.y, 1.0f));
+    assert(equal(w.lights->intensity.z, 1.0f));
+    assert(equal(w.lights->position.x, -10.0f));
+    assert(equal(w.lights->position.y, 10.0f));
+    assert(equal(w.lights->position.z, -10.0f));
+    assert(w.objects != NULL);
+    assert(w.objects->next != NULL);
+    assert(w.objects->next->next == NULL);
+    assert(equal(w.objects->location.x, 0.0f));
+    assert(equal(w.objects->location.y, 0.0f));
+    assert(equal(w.objects->location.z, 0.0f));
+
+    // continue normal testing
+    tuple color = shade_hit(&w, &comp);
+    assert(equal(color.x, 0.38066119994542108f));
+    assert(equal(color.y, 0.47582649284140904f));
+    assert(equal(color.z, 0.28549590704943306f));
     return 0;
 }
 
@@ -2585,7 +2774,7 @@ void render_sphere() {
         tuple point2 = position(ray_to_draw, hit_intersection->t);
         tuple normal = normal_at(hit_intersection->object_id, point2);
         tuple eye = tuple_negate(ray_to_draw.directionVector);
-        tuple pix_color = lighting(hit_intersection->object_id->material, p_light, point2, eye, normal);
+        tuple pix_color = lighting(hit_intersection->object_id->material, &p_light, point2, eye, normal);
         //assert(pix_color.x <= 255 && pix_color.x >= 0);
         //assert(pix_color.y <= 255 && pix_color.y >= 0);
         //assert(pix_color.z <= 255 && pix_color.z >= 0);
@@ -2686,6 +2875,10 @@ int main() {
   unit_test("Create New World Test", creating_a_world_test());
   unit_test("Default World Test", default_world_test());
   unit_test("Intersect World With Ray Test", intersect_world_with_ray_test());
+  unit_test("Prepare Computations Test", prepare_computations_test());
+  unit_test("Hit When Intersection Occurs On Outside Test", hit_when_intersect_on_outside_test());
+  unit_test("Hit When Intersect Occurs On Inside Test", hit_when_intersect_occurs_on_inside_test());
+  unit_test("Shading An Intersection Test", shading_an_intersection_test());
 #endif
   render_sphere();
   write_canvas_to_file();
