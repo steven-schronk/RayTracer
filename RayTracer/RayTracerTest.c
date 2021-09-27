@@ -1,3 +1,16 @@
+/*
+
+Ray Tracer - By Steven Schronk
+
+Generates PPM ray traced image.
+
+Compile For Linux Raspberry Pi
+    gcc RayTracer.c -lm -lrt -O3 -mcpu=cortex-a7 -mfpu=neon-vfpv4 -o RayTracer
+
+Copyright 2021 Steven Ray Schronk
+
+*/
+
 #include <assert.h>
 #include <float.h>
 #include <math.h>
@@ -768,26 +781,33 @@ void view_transform(tuple from, tuple up, tuple to, Mat4x4 m) {
     tuple upn = norm_vec(up);
     tuple left = cross(forward, upn);
     tuple true_up = cross(left, forward);
-    m[0][0] = left.x;
-    m[1][0] = true_up.x;
-    m[2][0] = -forward.x;
-    m[3][0] = 0.0f;
+    Mat4x4 unoriented;
 
-    m[0][1] = left.y;
-    m[1][1] = true_up.y;
-    m[2][1] = -forward.y;
-    m[3][1] = 0.0f;
+    unoriented[0][0] = left.x;
+    unoriented[1][0] = true_up.x;
+    unoriented[2][0] = -forward.x;
+    unoriented[3][0] = 0.0f;
 
-    m[0][2] = left.z;
-    m[1][2] = true_up.z;
-    m[2][2] = -forward.z;
-    m[3][2] = 0.0f;
+    unoriented[0][1] = left.y;
+    unoriented[1][1] = true_up.y;
+    unoriented[2][1] = -forward.y;
+    unoriented[3][1] = 0.0f;
 
-    m[0][3] = 0.0f;
-    m[1][3] = 0.0f;
-    m[2][3] = 0.0f;
-    m[3][3] = 1.0f;
-    return;
+    unoriented[0][2] = left.z;
+    unoriented[1][2] = true_up.z;
+    unoriented[2][2] = -forward.z;
+    unoriented[3][2] = 0.0f;
+
+    unoriented[0][3] = 0.0f;
+    unoriented[1][3] = 0.0f;
+    unoriented[2][3] = 0.0f;
+    unoriented[3][3] = 1.0f;
+
+    Mat4x4 translate;
+    gen_translate_matrix(-from.x, -from.y, -from.z, translate);
+
+    mat4x4_mul(unoriented, translate, m);
+    return m;
 }
 
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -2896,7 +2916,7 @@ int view_transform_mat_looking_positive_z_dir_test() {
     view_transform(from, up, to, view);
     Mat4x4 scaling;
     gen_scale_matrix(-1.0f, 1.0f, -1.0f, scaling);
-    assert(mat2x2_equal(view, scaling) == true);
+    assert(mat4x4_equal(view, scaling) == true);
     return 0;
 }
 
@@ -2909,7 +2929,7 @@ int view_transform_moves_world_test() {
     view_transform(from, up, to, view);
     Mat4x4 translate;
     gen_translate_matrix(0.0f, 0.0f, -8.0f, translate);
-    assert(mat2x2_equal(view, translate) == true);
+    assert(mat4x4_equal(view, translate) == true);
     return 0;
 }
 
@@ -2935,8 +2955,8 @@ int arbitrary_view_transform_test() {
     assert(equal(view[2][2], -0.71713716560063612f));
     assert(equal(view[3][2], 0.0f));
 
-    assert(equal(view[0][3], 0.0f));
-    assert(equal(view[1][3], 0.0f));
+    assert(equal(view[0][3], -2.3664319132398459f));
+    assert(equal(view[1][3], -2.8284271247461894f));
     assert(equal(view[2][3], 0.0f));
     assert(equal(view[3][3], 1.0f));
     return 0;
