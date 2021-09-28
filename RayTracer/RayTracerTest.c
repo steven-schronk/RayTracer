@@ -855,6 +855,16 @@ ray ray_for_pixel(camera* camera, double px, double py) {
     return r;
 }
 
+void render(camera* c, world* w) {
+    for (int y = 0; y < HEIGHT; ++y) {
+        for (int x = 0; x < WIDTH; ++x) {
+            ray r = ray_for_pixel(c, x, y);
+            tuple c = color_at(w, &r);
+            write_pixel(x, y, c);
+        }
+    }
+}
+
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -3077,6 +3087,20 @@ int const_a_ray_when_camera_is_transformed() {
     return 0;
 }
 
+// 104 Rendering a world with a camera
+int render_a_world_with_camera_test() {
+    world w = create_default_world();
+    camera* c = create_camera(11.0f, 11.0f, M_PI / 2);
+    tuple from = create_point(0.0f, 0.0f, -5.0f);
+    tuple to = create_point(0.0f, 0.0f, 0.0f);
+    tuple up = create_vector(0.0f, 1.0f, 0.0f);
+    view_transform(from, up, to, c->view_transform);
+    render(c, &w);
+    assert(equal(canvas[5][5].x, 0.38066119994542108f));
+    assert(equal(canvas[5][5].y, 0.47582649284140904f));
+    assert(equal(canvas[5][5].z, 0.28549590704943306));
+    return 0;
+}
 
 #endif
 
@@ -3238,8 +3262,9 @@ int main() {
   unit_test("Construct A Ray Through Center Of Canvas", const_a_ray_through_center_of_canvas());
   unit_test("Construct A Ray Through Corner Of Canvas", const_a_ray_through_corner_of_canvas());
   unit_test("Construcy A Ray When Camera Is Transformed", const_a_ray_when_camera_is_transformed());
+  unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
 #endif
-  render_sphere();
+  //render_sphere();
   write_canvas_to_file();
   return 0;
 }
