@@ -40,13 +40,15 @@ typedef struct { tuple position; tuple intensity; struct point_light* next; } po
 
 typedef struct _sphere { tuple location; double t; Mat4x4 transform; material material; struct _sphere* next; } sphere;
 
-typedef struct { tuple originPoint; tuple directionVector; } ray;
+typedef struct { tuple origin_point; tuple direction_vector; } ray;
 
 typedef struct { double t; sphere *object_id; } intersection;
 
 typedef struct { struct _sphere* objects; point_light* lights; } world;
 
 typedef struct { double t; sphere* object; tuple point; tuple eyev; tuple normalv; bool inside; } comps;
+
+typedef struct { double hsize; double vsize; double field_of_view; double pixel_size; double half_width; double half_height; Mat4x4 view_transform; } camera;
 
 #define INTERSECTIONS_SIZE 10
 
@@ -167,17 +169,17 @@ tuple create_vector(double x, double y, double z) {
   return t;
 }
 
-ray create_ray(double originPoint_x, double originPoint_y, double originPoint_z, double dirVector_x, double dirVector_y, double dirVector_z) {
+ray create_ray(double origin_point_x, double origin_point_y, double origin_point_z, double dirVector_x, double dirVector_y, double dirVector_z) {
     ray r;
-    r.originPoint.x = originPoint_x;
-    r.originPoint.y = originPoint_y;
-    r.originPoint.z = originPoint_z;
-    r.originPoint.w = 1.0f;
+    r.origin_point.x = origin_point_x;
+    r.origin_point.y = origin_point_y;
+    r.origin_point.z = origin_point_z;
+    r.origin_point.w = 1.0f;
 
-    r.directionVector.x = dirVector_x;
-    r.directionVector.y = dirVector_y;
-    r.directionVector.z = dirVector_z;
-    r.directionVector.w = 0.0f;
+    r.direction_vector.x = dirVector_x;
+    r.direction_vector.y = dirVector_y;
+    r.direction_vector.z = dirVector_z;
+    r.direction_vector.w = 0.0f;
     return r;
 }
 
@@ -540,15 +542,15 @@ sphere* create_sphere() {
 }
 
 tuple position(ray r, double t) {
-    tuple pos = tuple_mult_scalar(r.directionVector, t); 
-    pos = tuple_add(r.originPoint, pos);
+    tuple pos = tuple_mult_scalar(r.direction_vector, t); 
+    pos = tuple_add(r.origin_point, pos);
     return pos;
 }
 
 ray transform(ray* r, Mat4x4 m) {
     ray ray_out = *r;
-    mat4x4_mul_tuple(m, r->originPoint, &ray_out.originPoint);
-    mat4x4_mul_tuple(m, r->directionVector, &ray_out.directionVector);
+    mat4x4_mul_tuple(m, r->origin_point, &ray_out.origin_point);
+    mat4x4_mul_tuple(m, r->direction_vector, &ray_out.direction_vector);
     return ray_out;
 }
 
@@ -561,9 +563,9 @@ void intersect(sphere* sp, ray* r, intersections* intersects) {
     ray r2 = transform(r, invScaleMat);
 
     tuple origin = create_point(0.0f, 0.0f, 0.0f);
-    tuple sphere_to_ray = tuple_sub(r2.originPoint, origin);
-    double a = dot(r2.directionVector, r2.directionVector);
-    double b = 2 * dot(r2.directionVector, sphere_to_ray);
+    tuple sphere_to_ray = tuple_sub(r2.origin_point, origin);
+    double a = dot(r2.direction_vector, r2.direction_vector);
+    double b = 2 * dot(r2.direction_vector, sphere_to_ray);
     double c = dot(sphere_to_ray, sphere_to_ray) - 1.0f;
     double discriminant = b * b - 4 * a * c;
     if (discriminant < 0) { return; }
@@ -666,6 +668,28 @@ world create_default_world() {
     return w;
 }
 
+camera* create_camera(double hsize, double vsize, double field_of_view) {
+    camera* c = (camera*)malloc(sizeof(camera));
+    if (!c) { return NULL; }
+    c->hsize = hsize;
+    c->vsize = vsize;
+    c->field_of_view = field_of_view;
+    Mat4x4_set_ident(c->view_transform);
+    c->half_width = 0.0f;
+    c->half_height = 0.0f;
+    double half_view = tan(c->field_of_view / 2.0f);
+    double aspect = c->hsize / c->vsize;
+    if (aspect >= 1.0f) {
+        c->half_width = half_view;
+        c->half_height = half_view / aspect;
+    } else {
+        c->half_width = half_view * aspect;
+        c->half_height = half_view;
+    }
+    c->pixel_size = (c->half_width * 2.0f) / c->hsize;
+    return c;
+}
+
 tuple lighting(material material, point_light* light, tuple point, tuple eyev, tuple normalv) {
     tuple effective_color = tuple_mult_tuple(material.color, light->intensity);
     tuple diffuse;
@@ -744,7 +768,7 @@ comps prepare_computations(intersection* inter, ray* r) {
     comp.t = inter->t;
     comp.object = inter->object_id;
     comp.point = position(*r, comp.t);
-    tuple eyev_pos = create_vector(r->directionVector.x, r->directionVector.y, r->directionVector.z);
+    tuple eyev_pos = create_vector(r->direction_vector.x, r->direction_vector.y, r->direction_vector.z);
     comp.eyev = tuple_negate(eyev_pos);
     comp.normalv = normal_at(comp.object, comp.point);
     if (dot(comp.normalv, comp.eyev) < 0.0f) {
@@ -807,7 +831,28 @@ void view_transform(tuple from, tuple up, tuple to, Mat4x4 m) {
     gen_translate_matrix(-from.x, -from.y, -from.z, translate);
 
     mat4x4_mul(unoriented, translate, m);
-    return m;
+    return;
+}
+
+ray ray_for_pixel(camera* camera, double px, double py) {
+    ray r = create_ray(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    double x_offset = (px + 0.5) * camera->pixel_size;
+    double y_offset = (py + 0.5) * camera->pixel_size;
+
+    double world_x = camera->half_width - x_offset;
+    double world_y = camera->half_height - y_offset;
+    tuple point = create_point(world_x, world_y, -1);
+    Mat4x4 inverse;
+    mat4x4_inverse(camera->view_transform, inverse);
+    tuple pixel = create_point(0.0f, 0.0f, 0.0f);
+    r.origin_point = create_point(0.0f, 0.0f, 0.0f);
+    mat4x4_mul_tuple(inverse, point, &pixel);
+    mat4x4_mul_tuple(inverse, r.origin_point, &r.origin_point);
+    r.direction_vector = create_vector(0.0f, 0.0f, 0.0f);
+    tuple pixel_origin_diff = create_point(0.0f, 0.0f, 0.0f);
+    pixel_origin_diff = tuple_sub(pixel, r.origin_point);
+    r.direction_vector = norm_vec(pixel_origin_diff);
+    return r;
 }
 
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -1888,15 +1933,15 @@ int Mat4x4_copy_test() {
 int create_ray_test() {
   ray r = create_ray(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f);
 
-  assert(equal(r.originPoint.x, 1.0f));
-  assert(equal(r.originPoint.y, 2.0f));
-  assert(equal(r.originPoint.z, 3.0f));
-  assert(equal(r.originPoint.w, 1.0f));
+  assert(equal(r.origin_point.x, 1.0f));
+  assert(equal(r.origin_point.y, 2.0f));
+  assert(equal(r.origin_point.z, 3.0f));
+  assert(equal(r.origin_point.w, 1.0f));
 
-  assert(equal(r.directionVector.x, 4.0f));
-  assert(equal(r.directionVector.y, 5.0f));
-  assert(equal(r.directionVector.z, 6.0f));
-  assert(equal(r.directionVector.w, 0.0f));
+  assert(equal(r.direction_vector.x, 4.0f));
+  assert(equal(r.direction_vector.y, 5.0f));
+  assert(equal(r.direction_vector.z, 6.0f));
+  assert(equal(r.direction_vector.w, 0.0f));
 
   return 0;
 }
@@ -2145,15 +2190,15 @@ int translating_ray_test() {
 
     ray r2 = transform(&r1, transMat);
     assert(&r1 != &r2);
-    assert(equal(r2.originPoint.x, 4.0f));
-    assert(equal(r2.originPoint.y, 6.0f));
-    assert(equal(r2.originPoint.z, 8.0f));
-    assert(equal(r2.originPoint.w, 1.0f));
+    assert(equal(r2.origin_point.x, 4.0f));
+    assert(equal(r2.origin_point.y, 6.0f));
+    assert(equal(r2.origin_point.z, 8.0f));
+    assert(equal(r2.origin_point.w, 1.0f));
 
-    assert(equal(r2.directionVector.x, 0.0f));
-    assert(equal(r2.directionVector.y, 1.0f));
-    assert(equal(r2.directionVector.z, 0.0f));
-    assert(equal(r2.directionVector.w, 0.0f));
+    assert(equal(r2.direction_vector.x, 0.0f));
+    assert(equal(r2.direction_vector.y, 1.0f));
+    assert(equal(r2.direction_vector.z, 0.0f));
+    assert(equal(r2.direction_vector.w, 0.0f));
     return 0;
 }
 
@@ -2166,15 +2211,15 @@ int scaling_ray_test() {
 
     assert(&r1 != &r2);
 
-    assert(equal(r2.originPoint.x, 2.0f));
-    assert(equal(r2.originPoint.y, 6.0f));
-    assert(equal(r2.originPoint.z, 12.0f));
-    assert(equal(r2.originPoint.w, 1.0f));
+    assert(equal(r2.origin_point.x, 2.0f));
+    assert(equal(r2.origin_point.y, 6.0f));
+    assert(equal(r2.origin_point.z, 12.0f));
+    assert(equal(r2.origin_point.w, 1.0f));
 
-    assert(equal(r2.directionVector.x, 0.0f));
-    assert(equal(r2.directionVector.y, 3.0f));
-    assert(equal(r2.directionVector.z, 0.0f));
-    assert(equal(r2.directionVector.w, 0.0f));
+    assert(equal(r2.direction_vector.x, 0.0f));
+    assert(equal(r2.direction_vector.y, 3.0f));
+    assert(equal(r2.direction_vector.z, 0.0f));
+    assert(equal(r2.direction_vector.w, 0.0f));
     return 0;
 }
 
@@ -2704,12 +2749,12 @@ int hit_when_intersect_occurs_on_inside_test() {
     assert(equal(sp1->location.z, 0.0f));
     assert(equal(sp1->t, 1.0f));
 
-    assert(equal(r.directionVector.x, 0.0f));
-    assert(equal(r.directionVector.y, 0.0f));
-    assert(equal(r.directionVector.z, 1.0f));
-    assert(equal(r.originPoint.x, 0.0f));
-    assert(equal(r.originPoint.y, 0.0f));
-    assert(equal(r.originPoint.z, 0.0f));
+    assert(equal(r.direction_vector.x, 0.0f));
+    assert(equal(r.direction_vector.y, 0.0f));
+    assert(equal(r.direction_vector.z, 1.0f));
+    assert(equal(r.origin_point.x, 0.0f));
+    assert(equal(r.origin_point.y, 0.0f));
+    assert(equal(r.origin_point.z, 0.0f));
     assert(equal(inter.t, 1.0f));
     assert(inter.object_id == sp1);
 
@@ -2725,12 +2770,12 @@ int shading_an_intersection_test() {
     comps comp = prepare_computations(&inter, &r);
 
     // testing if prepare_computations overwrote stack
-    assert(equal(r.directionVector.x, 0.0f));
-    assert(equal(r.directionVector.y, 0.0f));
-    assert(equal(r.directionVector.z, 1.0f));
-    assert(equal(r.originPoint.x, 0.0f));
-    assert(equal(r.originPoint.y, 0.0f));
-    assert(equal(r.originPoint.z, -5.0f));
+    assert(equal(r.direction_vector.x, 0.0f));
+    assert(equal(r.direction_vector.y, 0.0f));
+    assert(equal(r.direction_vector.z, 1.0f));
+    assert(equal(r.origin_point.x, 0.0f));
+    assert(equal(r.origin_point.y, 0.0f));
+    assert(equal(r.origin_point.z, -5.0f));
     assert(equal(inter.t, 4.0f));
 
     Mat4x4 ident;
@@ -2805,12 +2850,12 @@ int shading_intersection_from_inside() {
     comps comp = prepare_computations(&inter, &r);
 
     // testing if prepare_computations overwrote stack
-    assert(equal(r.directionVector.x, 0.0f));
-    assert(equal(r.directionVector.y, 0.0f));
-    assert(equal(r.directionVector.z, 1.0f));
-    assert(equal(r.originPoint.x, 0.0f));
-    assert(equal(r.originPoint.y, 0.0f));
-    assert(equal(r.originPoint.z, 0.0f));
+    assert(equal(r.direction_vector.x, 0.0f));
+    assert(equal(r.direction_vector.y, 0.0f));
+    assert(equal(r.direction_vector.z, 1.0f));
+    assert(equal(r.origin_point.x, 0.0f));
+    assert(equal(r.origin_point.y, 0.0f));
+    assert(equal(r.origin_point.z, 0.0f));
     assert(equal(inter.t, 0.5f));
 
     Mat4x4 ident;
@@ -2962,6 +3007,77 @@ int arbitrary_view_transform_test() {
     return 0;
 }
 
+// 101 Constructing a camera
+int constructing_camera_test() {
+    camera* c = create_camera(160.0f, 120.0f, M_PI / 2.0f);
+    assert(equal(c->hsize, 160.0f));
+    assert(equal(c->vsize, 120.0f));
+    assert(equal(c->field_of_view, M_PI / 2.0f));
+    Mat4x4 view;
+    Mat4x4_set_ident(view);
+    assert(mat4x4_equal(c->view_transform, view));
+    return 0;
+}
+
+// 101 The pixel size for a horizontal canvas
+int pixel_size_for_horizontal_canvas_test() {
+    camera* c = create_camera(200.0f, 125.0f, M_PI / 2.0f);
+    assert(equal(c->pixel_size, 0.01f));
+    return 0;
+}
+
+// 101 The pixel size for a vertical canvas
+int pixel_size_for_vertical_canvas_test() {
+    camera* c = create_camera(125.0f, 200.0f, M_PI / 2.0f);
+    assert(equal(c->pixel_size, 0.01f));
+    return 0;
+}
+
+// 103 Constructing a ray through the center of the canvas
+int const_a_ray_through_center_of_canvas() {
+    camera* c = create_camera(201.0f, 101.0f, M_PI / 2.0f);
+    ray r = ray_for_pixel(c, 100.0f, 50.0f);
+    assert(equal(r.origin_point.x, 0.0f));
+    assert(equal(r.origin_point.y, 0.0f));
+    assert(equal(r.origin_point.z, 0.0f));
+    assert(equal(r.direction_vector.x, 0.0f));
+    assert(equal(r.direction_vector.y, 0.0f));
+    assert(equal(r.direction_vector.z, -1.0f));
+    return 0;
+}
+
+// 103 Constructing a ray through a corner of the canvas
+int const_a_ray_through_corner_of_canvas() {
+    camera* c = create_camera(201.0f, 101.0f, M_PI / 2.0f);
+    ray r = ray_for_pixel(c, 0.0f, 0.0f);
+    assert(equal(r.origin_point.x, 0.0f));
+    assert(equal(r.origin_point.y, 0.0f));
+    assert(equal(r.origin_point.z, 0.0f));
+    assert(equal(r.direction_vector.x, 0.66518642611945078f));
+    assert(equal(r.direction_vector.y, 0.33259321305972539f));
+    assert(equal(r.direction_vector.z, -0.66851235825004807f));
+    return 0;
+}
+
+// 103 Constructng a ray when the camera is transformed
+int const_a_ray_when_camera_is_transformed() {
+    camera* c = create_camera(201.0f, 101.0f, M_PI / 2.0f);
+    Mat4x4 rotate;
+    Mat4x4 translate;
+    gen_rotate_matrix_Y(M_PI / 4.0f, rotate);
+    gen_translate_matrix(0.0f, -2.0f, 5.0f, translate);
+    mat4x4_mul(rotate, translate, *c->view_transform);
+    ray r = ray_for_pixel(c, 100.0f, 50.0f);
+    assert(equal(r.origin_point.x, 0.0f));
+    assert(equal(r.origin_point.y, 2.0f));
+    assert(equal(r.origin_point.z, -5.0f));
+    assert(equal(r.direction_vector.x, sqrt(2)/2));
+    assert(equal(r.direction_vector.y, 0.0f));
+    assert(equal(r.direction_vector.z, -sqrt(2)/2));
+    return 0;
+}
+
+
 #endif
 
 // 72 Hint #4
@@ -2996,14 +3112,14 @@ void render_sphere() {
       tuple posRayOrigin = tuple_sub(position1, ray_origin);
       tuple normRayOrigin = norm_vec(posRayOrigin);
       ray ray_to_draw = create_ray(ray_origin.x, ray_origin.y, ray_origin.z, normRayOrigin.x, normRayOrigin.y, normRayOrigin.z );
-      ray_to_draw.directionVector = norm_vec(ray_to_draw.directionVector);
+      ray_to_draw.direction_vector = norm_vec(ray_to_draw.direction_vector);
       intersections inter = create_intersections();
       intersect(sphere1, &ray_to_draw, &inter);
       intersection* hit_intersection = hit(&inter);
       if (hit_intersection) {
         tuple point2 = position(ray_to_draw, hit_intersection->t);
         tuple normal = normal_at(hit_intersection->object_id, point2);
-        tuple eye = tuple_negate(ray_to_draw.directionVector);
+        tuple eye = tuple_negate(ray_to_draw.direction_vector);
         tuple pix_color = lighting(hit_intersection->object_id->material, &p_light, point2, eye, normal);
         //assert(pix_color.x <= 255 && pix_color.x >= 0);
         //assert(pix_color.y <= 255 && pix_color.y >= 0);
@@ -3116,6 +3232,12 @@ int main() {
   unit_test("View Transform Matrix Looking Positive In Z Direction Test", view_transform_mat_looking_positive_z_dir_test());
   unit_test("View Transform Moves World Test", view_transform_moves_world_test());
   unit_test("Arbitrary View Transform Test", arbitrary_view_transform_test());
+  unit_test("Constructing New Camera Test", constructing_camera_test());
+  unit_test("Pixel Size For Horizontal Canvas Test", pixel_size_for_horizontal_canvas_test());
+  unit_test("Pixel Size For Vertical Canvas Test", pixel_size_for_vertical_canvas_test());
+  unit_test("Construct A Ray Through Center Of Canvas", const_a_ray_through_center_of_canvas());
+  unit_test("Construct A Ray Through Corner Of Canvas", const_a_ray_through_corner_of_canvas());
+  unit_test("Construcy A Ray When Camera Is Transformed", const_a_ray_when_camera_is_transformed());
 #endif
   render_sphere();
   write_canvas_to_file();
