@@ -3161,8 +3161,9 @@ void render_complete_world() {
     sphere* floor = create_sphere();
     gen_scale_matrix(10.0f, 0.01f, 10.0f, floor->transform);
     material floor_material= create_material_default();
-    floor->material.color = create_point(1.0f, 0.9f, 0.9f);
-    floor->material.specular = 0.0f;
+    floor_material.color = create_point(1.0f, 0.9f, 0.9f);
+    floor_material.specular = 0.0f;
+    floor->material = floor_material;
 
     // 2. wall on left has same scale and color but also rotated and translated into place
     sphere* left_wall = create_sphere();
@@ -3205,10 +3206,11 @@ void render_complete_world() {
     middle_material.color = create_point(0.1f, 1.0f, 0.5);
     middle_material.diffuse = 0.7f;
     middle_material.specular = 0.3f;
+    middle_sphere->material = middle_material;
+
 
     // 5. Smaller green sphere on the right is scaled in half
     sphere* right_sphere = create_sphere();
-
     Mat4x4 translate_right_sphere;
     gen_translate_matrix(1.5f, 0.5f, -0.5f, translate_right_sphere);
     Mat4x4 scale_right_sphere;
@@ -3222,11 +3224,10 @@ void render_complete_world() {
     right_sphere_material.color = create_point(0.5f, 1.0f, 0.1);
     right_sphere_material.diffuse = 0.7f;
     right_sphere_material.specular = 0.3f;
-
+    right_sphere->material = right_sphere_material;
 
     // 6. Smallest sphere is scaled by a tird, before being translated
     sphere* small_sphere = create_sphere();
-
     Mat4x4 translate_small_sphere;
     gen_translate_matrix(-1.5f, 0.33f, -0.75f, translate_small_sphere);
     Mat4x4 scale_small_sphere;
@@ -3235,6 +3236,12 @@ void render_complete_world() {
     mat4x4_mul(final_transform_small_sphere, final_transform_small_sphere, final_transform_small_sphere);
     mat4x4_mul(final_transform_small_sphere, scale_left, final_transform_small_sphere);
 
+    material small_sphere_material = create_material_default();
+    small_sphere_material.color = create_point(1.0f, 0.8f, 0.1);
+    small_sphere_material.diffuse = 0.7f;
+    small_sphere_material.specular = 0.3f;
+    small_sphere->material = small_sphere_material;
+
     // putting geometry together
     right_sphere->next = NULL;
     middle_sphere->next = right_sphere;
@@ -3242,7 +3249,6 @@ void render_complete_world() {
     right_wall->next = small_sphere;
     left_wall->next = right_wall;
     w.objects = left_wall;
-
 
     // lighting
     tuple light_position = create_point(-10.0f, 10.0f, -10.0f);
