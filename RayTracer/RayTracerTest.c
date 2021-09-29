@@ -25,8 +25,8 @@ Copyright 2021 Steven Ray Schronk
 
 #define EPSILON 0.000001
 
-#define HEIGHT 120
-#define WIDTH  240
+#define VERTICAL_SIZE   50
+#define HORIZONTAL_SIZE 100
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -145,7 +145,7 @@ void add_intersection_to_list(intersections* intersection_list, double t, sphere
   intersection_list->itersection[i].t = t;
 }
 
-tuple canvas[WIDTH][HEIGHT];
+tuple canvas[HORIZONTAL_SIZE][VERTICAL_SIZE];
 
 void write_pixel(int x, int y, tuple color) {
   canvas[x][y] = color;
@@ -670,22 +670,28 @@ world create_default_world() {
 }
 
 camera* create_camera(double hsize, double vsize, double field_of_view) {
+    double half_view = tan(field_of_view / 2.0f);
+    double half_height = 0.0f;
+    double half_width = 0.0f;
+    double aspect = hsize / vsize;
+    if (aspect >= 1) {
+         half_width = half_view;
+        half_height = half_view / aspect;
+    } else {
+        half_height = half_view;
+        half_width = half_view * aspect;
+    }
+    double pixel_size = (half_width * 2.0f) / hsize;
+
     camera* c = (camera*)malloc(sizeof(camera));
     if (!c) { return NULL; }
+    Mat4x4_set_ident(c->view_transform); // render method sets this later
     c->hsize = hsize;
     c->vsize = vsize;
+    c->half_height = half_height;
+    c->half_width = half_width;
+    c->pixel_size = pixel_size;
     c->field_of_view = field_of_view;
-    Mat4x4_set_ident(c->view_transform);
-    double half_view = tan(c->field_of_view / 2.0f);
-    double aspect = c->hsize / c->vsize;
-    if (aspect >= 1) {
-        c->half_width = half_view;
-        c->half_height = half_view / aspect;
-    } else {
-        c->half_width = half_view * aspect;
-        c->half_height = half_view;
-    }
-    c->pixel_size = (c->half_width * 2.0f) / c->hsize;
     return c;
 }
 
@@ -738,9 +744,9 @@ int write_canvas_to_file() {
     FILE* fp;
     fp = fopen("canvas.ppm", "w");
     fprintf(fp, "P3\n");
-    fprintf(fp, "%d %d\n255\n", WIDTH, HEIGHT);
-    for (int i = 0; i < WIDTH; ++i) {
-        for (int j = 0; j < HEIGHT; ++j) {
+    fprintf(fp, "%d %d\n255\n", HORIZONTAL_SIZE, VERTICAL_SIZE);
+    for (int i = 0; i < HORIZONTAL_SIZE; ++i) {
+        for (int j = 0; j < VERTICAL_SIZE; ++j) {
             int color = color_convert(canvas[i][j].x);
             fprintf(fp, "%d ", color);
             color = color_convert(canvas[i][j].y);
@@ -767,8 +773,7 @@ comps prepare_computations(intersection* inter, ray* r) {
     comp.t = inter->t;
     comp.object = inter->object_id;
     comp.point = position(*r, comp.t);
-    tuple eyev_pos = create_vector(r->direction_vector.x, r->direction_vector.y, r->direction_vector.z);
-    comp.eyev = tuple_negate(eyev_pos);
+    comp.eyev = tuple_negate(r->direction_vector);
     comp.normalv = normal_at(comp.object, comp.point);
     if (dot(comp.normalv, comp.eyev) < 0.0f) {
         comp.inside = true;
@@ -781,8 +786,8 @@ comps prepare_computations(intersection* inter, ray* r) {
 }
 
 tuple shade_hit(world* w, comps *comp) {
-    //assert(w->lights != NULL);
-    //assert(w->objects != NULL);
+    assert(w->lights);
+    assert(w->objects);
     return lighting(comp->object->material, w->lights, comp->point, comp->eyev, comp->normalv);
 }
 
@@ -792,44 +797,45 @@ tuple color_at(world* w, ray* r) {
     intersections inter = create_intersections();
     intersect_world(w, r, &inter);
     intersection* hit1 = hit(&inter);
-    if (hit1 != NULL) { // note difference!
+    if (hit1 == NULL) {
+        return create_point(0.0f, 0.0f, 0.0f);
+    } else {
         comps comp = prepare_computations(hit1, r);
         return shade_hit(w, &comp);
     }
-    return create_point(0.0f, 0.0f, 0.0f);
 }
 
-void view_transform(tuple from, tuple up, tuple to, Mat4x4 m) {
+void view_transform(tuple from, tuple to, tuple up, Mat4x4 m) {
     tuple forward = norm_vec(tuple_sub(to, from));
     tuple upn = norm_vec(up);
     tuple left = cross(forward, upn);
     tuple true_up = cross(left, forward);
-    Mat4x4 unoriented;
+    Mat4x4 orientation;
 
-    unoriented[0][0] = left.x;
-    unoriented[1][0] = true_up.x;
-    unoriented[2][0] = -forward.x;
-    unoriented[3][0] = 0.0f;
+    orientation[0][0] = left.x;
+    orientation[1][0] = true_up.x;
+    orientation[2][0] = -forward.x;
+    orientation[3][0] = 0.0f;
 
-    unoriented[0][1] = left.y;
-    unoriented[1][1] = true_up.y;
-    unoriented[2][1] = -forward.y;
-    unoriented[3][1] = 0.0f;
+    orientation[0][1] = left.y;
+    orientation[1][1] = true_up.y;
+    orientation[2][1] = -forward.y;
+    orientation[3][1] = 0.0f;
 
-    unoriented[0][2] = left.z;
-    unoriented[1][2] = true_up.z;
-    unoriented[2][2] = -forward.z;
-    unoriented[3][2] = 0.0f;
+    orientation[0][2] = left.z;
+    orientation[1][2] = true_up.z;
+    orientation[2][2] = -forward.z;
+    orientation[3][2] = 0.0f;
 
-    unoriented[0][3] = 0.0f;
-    unoriented[1][3] = 0.0f;
-    unoriented[2][3] = 0.0f;
-    unoriented[3][3] = 1.0f;
+    orientation[0][3] = 0.0f;
+    orientation[1][3] = 0.0f;
+    orientation[2][3] = 0.0f;
+    orientation[3][3] = 1.0f;
 
     Mat4x4 translate;
     gen_translate_matrix(-from.x, -from.y, -from.z, translate);
 
-    mat4x4_mul_in_place(unoriented, translate, m);
+    mat4x4_mul_in_place(orientation, translate, m);
     return;
 }
 
@@ -869,9 +875,12 @@ ray ray_for_pixel(camera* camera, double px, double py) {
 }
 
 void render(camera* c, world* w) {
-    for (int y = 0; y < HEIGHT - 1; ++y) {
-        for (int x = 0; x < WIDTH - 1; ++x) {
+    for (int y = 0; y < VERTICAL_SIZE; ++y) {
+        for (int x = 0; x < HORIZONTAL_SIZE; ++x) {
             ray r = ray_for_pixel(c, x, y);
+
+            printf("[%d][%d] o.x=%4.1f o.y=%4.1f o.z=%4.1f d.x=%4.1f d.y=%4.1f d.z=%4.1f\n", y, x, r.origin_point.x, r.origin_point.y, r.origin_point.z, r.direction_vector.x, r.direction_vector.y, r.direction_vector.z);
+
             tuple c = color_at(w, &r);
             write_pixel(x, y, c);
         }
@@ -2780,7 +2789,6 @@ int hit_when_intersect_occurs_on_inside_test() {
     assert(equal(r.origin_point.z, 0.0f));
     assert(equal(inter.t, 1.0f));
     assert(inter.object_id == sp1);
-
     return 0;
 }
 
@@ -2968,7 +2976,7 @@ int transformation_for_default_orientation_test() {
     tuple to = create_point(0.0f, 0.0f, -1.0f);
     tuple up = create_vector(0.0f, 1.0f, 0.0f);
     Mat4x4 view;
-    view_transform(from, up, to, view);
+    view_transform(from, to, up, view);
     Mat4x4 ident;
     Mat4x4_set_ident(ident);
     assert(mat4x4_equal(view, ident) == true);
@@ -2981,7 +2989,7 @@ int view_transform_mat_looking_positive_z_dir_test() {
     tuple to = create_point(0.0f, 0.0f, 1.0f);
     tuple up = create_vector(0.0f, 1.0f, 0.0f);
     Mat4x4 view;
-    view_transform(from, up, to, view);
+    view_transform(from, to, up, view);
     Mat4x4 scaling;
     gen_scale_matrix(-1.0f, 1.0f, -1.0f, scaling);
     assert(mat4x4_equal(view, scaling) == true);
@@ -2994,7 +3002,7 @@ int view_transform_moves_world_test() {
     tuple to = create_point(0.0f, 0.0f, 0.0f);
     tuple up = create_vector(0.0f, 1.0f, 0.0f);
     Mat4x4 view;
-    view_transform(from, up, to, view);
+    view_transform(from, to, up, view);
     Mat4x4 translate;
     gen_translate_matrix(0.0f, 0.0f, -8.0f, translate);
     assert(mat4x4_equal(view, translate) == true);
@@ -3007,7 +3015,7 @@ int arbitrary_view_transform_test() {
     tuple to = create_point(4.0f, -2.0f, 8.0f);
     tuple up = create_vector(1.0f, 1.0f, 0.0f);
     Mat4x4 view;
-    view_transform(from, up, to, view);
+    view_transform(from, to, up, view);
     assert(equal(view[0][0], -0.50709255283710986f));
     assert(equal(view[1][0], 0.76771593385968007f));
     assert(equal(view[2][0], -0.35856858280031806f));
@@ -3124,7 +3132,7 @@ void render_sphere() {
 
   double wall_z = 10.0f;
   double wall_size = 7.0f;
-  double pixel_size = wall_size / WIDTH;
+  double pixel_size = wall_size / HORIZONTAL_SIZE;
   double half = wall_size / 2.0f;
 
   material m = create_material_default();
@@ -3141,9 +3149,9 @@ void render_sphere() {
   tuple l_position = create_point(-10.0f, -10.0f, -10.0f);
   point_light p_light = create_point_light(l_position, l_color);
 
-  for (int y = 0; y < WIDTH; ++y) {
+  for (int y = 0; y < HORIZONTAL_SIZE; ++y) {
     double world_y = half - pixel_size * y;
-    for (int x = 0; x < HEIGHT; ++x) {
+    for (int x = 0; x < VERTICAL_SIZE; ++x) {
       double world_x = -half + pixel_size * x;
       tuple position1 = create_point(world_x, world_y, wall_z);
       tuple posRayOrigin = tuple_sub(position1, ray_origin);
@@ -3173,7 +3181,10 @@ void render_complete_world() {
 
     // 1. floor extremely flattened sphere with matte texture
     sphere* floor = create_sphere();
-    gen_scale_matrix(10.0f, 0.01f, 10.0f, floor->transform);
+    Mat4x4 floor_transform;
+    gen_scale_matrix(10.0f, 0.01f, 10.0f, floor_transform);
+    mat4x4_mul_in_place(floor_transform, floor->transform, floor->transform);
+
     material floor_material= create_material_default();
     floor_material.color = create_point(1.0f, 0.9f, 0.9f);
     floor_material.specular = 0.0f;
@@ -3258,6 +3269,13 @@ void render_complete_world() {
     small_sphere_material.specular = 0.3f;
     small_sphere->material = small_sphere_material;
 
+    /*
+    // putting geometry together
+    small_sphere->next = NULL;
+    floor->next = small_sphere;
+    w.objects = floor;
+     */
+    
     // putting geometry together
     right_sphere->next = NULL;
     middle_sphere->next = right_sphere;
@@ -3271,11 +3289,11 @@ void render_complete_world() {
     tuple light_intensity = create_point(1.0f, 1.0f, 1.0f);
     *w.lights = create_point_light(light_position, light_intensity);
 
-    camera* c = create_camera(WIDTH, HEIGHT, M_PI / 3);
+    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, M_PI / 3);
     tuple from = create_point(0.0f, 1.5f, -5.0f);
     tuple to = create_point(0.0f, 1.0f, 0.0f);
-    tuple up = create_vector(0.0f, 1.0f, 0.0f);
-    view_transform(from, up, to, c->view_transform);
+    tuple up = create_vector(1.0f, 0.0f, 0.0f);
+    view_transform(from, to, up, c->view_transform);
 
     render(c, &w);
 }
