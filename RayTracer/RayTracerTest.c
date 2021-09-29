@@ -294,6 +294,7 @@ bool mat4x4_equal(double m1[][4], double m2[][4]) {
   return true;
 }
 
+/*
 void mat4x4_mul(const Mat4x4 a, const Mat4x4 b, Mat4x4 m) {
   for (int row = 0; row < 4; ++row) {
     for (int col = 0; col < 4; ++col) {
@@ -305,10 +306,10 @@ void mat4x4_mul(const Mat4x4 a, const Mat4x4 b, Mat4x4 m) {
     }
   }
 }
+*/
 
 void mat4x4_mul_in_place(const Mat4x4 a, const Mat4x4 b, Mat4x4 m) {
     Mat4x4 orig;
-    Mat4x4_copy(m, orig);
     for (int row = 0; row < 4; ++row) {
         for (int col = 0; col < 4; ++col) {
             orig[row][col] =
@@ -675,11 +676,9 @@ camera* create_camera(double hsize, double vsize, double field_of_view) {
     c->vsize = vsize;
     c->field_of_view = field_of_view;
     Mat4x4_set_ident(c->view_transform);
-    c->half_width = 0.0f;
-    c->half_height = 0.0f;
     double half_view = tan(c->field_of_view / 2.0f);
     double aspect = c->hsize / c->vsize;
-    if (aspect >= 1.0f) {
+    if (aspect >= 1) {
         c->half_width = half_view;
         c->half_height = half_view / aspect;
     } else {
@@ -830,34 +829,48 @@ void view_transform(tuple from, tuple up, tuple to, Mat4x4 m) {
     Mat4x4 translate;
     gen_translate_matrix(-from.x, -from.y, -from.z, translate);
 
-    mat4x4_mul(unoriented, translate, m);
+    mat4x4_mul_in_place(unoriented, translate, m);
     return;
 }
 
 ray ray_for_pixel(camera* camera, double px, double py) {
-    ray r = create_ray(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    
+    // the offset from the edge of the canvas tp the pixel's center
     double x_offset = (px + 0.5) * camera->pixel_size;
     double y_offset = (py + 0.5) * camera->pixel_size;
 
+    // the untransformed coordinates of the pixel in world space
+    // (remember that the camera looks toward -z sor +x is to the **left**)
     double world_x = camera->half_width - x_offset;
     double world_y = camera->half_height - y_offset;
-    tuple point = create_point(world_x, world_y, -1);
+
+    // using the camera matrix, transform the canvas point and the origin,
+    // and then compute the ray's direction vector.
+    // remeber that the canvas is at x=-1
+
+    // pixel
+    tuple pixel = create_point(0.0f, 0.0f, 0.0f);
     Mat4x4 inverse;
     mat4x4_inverse(camera->view_transform, inverse);
-    tuple pixel = create_point(0.0f, 0.0f, 0.0f);
-    r.origin_point = create_point(0.0f, 0.0f, 0.0f);
+    tuple point = create_point(world_x, world_y, -1);
     mat4x4_mul_tuple(inverse, point, &pixel);
-    mat4x4_mul_tuple(inverse, r.origin_point, &r.origin_point);
-    r.direction_vector = create_vector(0.0f, 0.0f, 0.0f);
-    tuple pixel_origin_diff = create_point(0.0f, 0.0f, 0.0f);
-    pixel_origin_diff = tuple_sub(pixel, r.origin_point);
-    r.direction_vector = norm_vec(pixel_origin_diff);
+
+    // origin
+    tuple origin = create_point(0.0f, 0.0f, 0.0f);
+    mat4x4_mul_tuple(inverse, create_point(0.0f, 0.0f, 0.0f), &origin);
+
+    //direction
+    tuple direction = norm_vec(tuple_sub(pixel, origin));
+    
+    ray r = create_ray(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    r.direction_vector = direction;
+    r.origin_point = origin;
     return r;
 }
 
 void render(camera* c, world* w) {
-    for (int y = 0; y < HEIGHT; ++y) {
-        for (int x = 0; x < WIDTH; ++x) {
+    for (int y = 0; y < HEIGHT - 1; ++y) {
+        for (int x = 0; x < WIDTH - 1; ++x) {
             ray r = ray_for_pixel(c, x, y);
             tuple c = color_at(w, &r);
             write_pixel(x, y, c);
@@ -1233,7 +1246,7 @@ int mat4x4_mul_test() {
   Mat4x4 b = { { -2.0f, 1.0f, 2.0f, 3.0f }, { 3.0f, 2.0f, 1.0f, -1.0f },\
     { 4.0f, 3.0f, 6.0f, 5.0f }, { 1.0f, 2.0f, 7.0f, 8.0f } };
   Mat4x4 m;
-  mat4x4_mul(a, b, m);
+  mat4x4_mul_in_place(a, b, m);
   assert(equal(m[0][0],  20.0f));
   assert(equal(m[0][1],  22.0f));
   assert(equal(m[0][2],  50.0f));
@@ -1319,7 +1332,7 @@ int mat4x4_mult_ident_test() {
     { 2.0f, 4.0f, 8.0f, 16.0f }, { 4.0f, 8.0f, 16.0f, 32.0f } };  
   Mat4x4 b = { { 0.0f, 1.0f, 2.0f, 4.0f }, { 1.0f, 2.0f, 4.0f, 8.0f },\
     { 2.0f, 4.0f, 8.0f, 16.0f }, { 4.0f, 8.0f, 16.0f, 32.0f } };
-  mat4x4_mul(a, ident, a);
+  mat4x4_mul_in_place(a, ident, a);
   for (int i = 0; i < 4; ++i) {
     for (int j = 0; j < 4; ++j) {
       assert(equal(a[i][j], b[i][j]));
@@ -1562,11 +1575,11 @@ int mult_prod_by_inverse_test() {
   Mat4x4 c = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f },\
     { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f } };
 
-  mat4x4_mul(a, b, c);
+  mat4x4_mul_in_place(a, b, c);
   Mat4x4 t;
   bool inversable = mat4x4_inverse(b, t);
   Mat4x4 u;
-  mat4x4_mul(c, t, u);
+  mat4x4_mul_in_place(c, t, u);
   assert(inversable == true);
   assert(equal(u[0][0], a[0][0]));
   assert(equal(u[0][1], a[0][1]));
@@ -1842,8 +1855,8 @@ int transform_applied_in_sequence_test() {
   assert(equal(p4.z, 7.0f));
   assert(equal(p4.w, 1.0f));
   p1.x = 1.0f; p1.y = 0.0f; p1.z = 1.0f;
-  mat4x4_mul(shearMat, scaleMat, scaleMat);
-  mat4x4_mul(scaleMat, rotMat, rotMat);
+  mat4x4_mul_in_place(shearMat, scaleMat, scaleMat);
+  mat4x4_mul_in_place(scaleMat, rotMat, rotMat);
   mat4x4_mul_tuple(rotMat, p1, &p2);
   assert(equal(p2.x, 15.0f));
   assert(equal(p2.y, 0.0f));
@@ -2389,7 +2402,7 @@ int compute_normal_on_transformed_sphere_test(){
     Mat4x4 rotMat;
     gen_rotate_matrix_Z(M_PI / 5.0f, rotMat);
     Mat4x4 translateMat;
-    mat4x4_mul(scaleMat, rotMat, translateMat);
+    mat4x4_mul_in_place(scaleMat, rotMat, translateMat);
     set_transform(sp, translateMat);
     tuple point = create_point(0.0f, sqrt(2) / 2.0f, -sqrt(2) / 2);
     tuple norm_at = normal_at(sp, point);
@@ -3076,7 +3089,7 @@ int const_a_ray_when_camera_is_transformed() {
     Mat4x4 translate;
     gen_rotate_matrix_Y(M_PI / 4.0f, rotate);
     gen_translate_matrix(0.0f, -2.0f, 5.0f, translate);
-    mat4x4_mul(rotate, translate, c->view_transform);
+    mat4x4_mul_in_place(rotate, translate, c->view_transform);
     ray r = ray_for_pixel(c, 100.0f, 50.0f);
     assert(equal(r.origin_point.x, 0.0f));
     assert(equal(r.origin_point.y, 2.0f));
@@ -3157,6 +3170,7 @@ void render_sphere() {
 // 106 Render complete world
 void render_complete_world() {
     world w = create_world();
+
     // 1. floor extremely flattened sphere with matte texture
     sphere* floor = create_sphere();
     gen_scale_matrix(10.0f, 0.01f, 10.0f, floor->transform);
@@ -3178,22 +3192,22 @@ void render_complete_world() {
     Mat4x4 final_transform_left;
     Mat4x4 identity;
     Mat4x4_set_ident(identity);
-    mat4x4_mul(identity, translate_left, final_transform_left);
-    mat4x4_mul(final_transform_left, rotate_y_left, final_transform_left);
-    mat4x4_mul(final_transform_left, rotate_x_left, final_transform_left);
-    mat4x4_mul(final_transform_left, scale_left, final_transform_left);
+    mat4x4_mul_in_place(identity, translate_left, final_transform_left);
+    mat4x4_mul_in_place(final_transform_left, rotate_y_left, final_transform_left);
+    mat4x4_mul_in_place(final_transform_left, rotate_x_left, final_transform_left);
+    mat4x4_mul_in_place(final_transform_left, scale_left, final_transform_left);
     Mat4x4_copy(final_transform_left, left_wall->transform);
     left_wall->material = floor_material;
 
     // 3. wall on right is identical to left, rotated opposite direction in y
     sphere* right_wall = create_sphere();
     Mat4x4_set_ident(final_transform_left);
-    mat4x4_mul(identity, translate_left, final_transform_left);
+    mat4x4_mul_in_place(identity, translate_left, final_transform_left);
     Mat4x4 rotate_y_right;
     gen_rotate_matrix_Y(M_PI / 4.0f, rotate_y_right);
-    mat4x4_mul(final_transform_left, rotate_y_right, final_transform_left);
-    mat4x4_mul(final_transform_left, rotate_x_left, final_transform_left);
-    mat4x4_mul(final_transform_left, scale_left, final_transform_left);
+    mat4x4_mul_in_place(final_transform_left, rotate_y_right, final_transform_left);
+    mat4x4_mul_in_place(final_transform_left, rotate_x_left, final_transform_left);
+    mat4x4_mul_in_place(final_transform_left, scale_left, final_transform_left);
     Mat4x4_copy(final_transform_left, left_wall->transform);
     left_wall->material = floor_material;
 
@@ -3208,7 +3222,6 @@ void render_complete_world() {
     middle_material.specular = 0.3f;
     middle_sphere->material = middle_material;
 
-
     // 5. Smaller green sphere on the right is scaled in half
     sphere* right_sphere = create_sphere();
     Mat4x4 translate_right_sphere;
@@ -3217,11 +3230,12 @@ void render_complete_world() {
     gen_scale_matrix(0.5f, 0.5f, 0.5f, scale_right_sphere);
     Mat4x4 final_transform_right_sphere;
     Mat4x4_set_ident(final_transform_right_sphere);
-    mat4x4_mul(final_transform_right_sphere, final_transform_right_sphere, final_transform_right_sphere);
-    mat4x4_mul(final_transform_right_sphere, scale_left, final_transform_right_sphere);
+
+    mat4x4_mul_in_place(translate_right_sphere, final_transform_right_sphere, final_transform_right_sphere);
+    mat4x4_mul_in_place(scale_right_sphere, final_transform_right_sphere, final_transform_right_sphere);
     Mat4x4_copy(final_transform_right_sphere, right_sphere->transform);
     material right_sphere_material = create_material_default();
-    right_sphere_material.color = create_point(0.5f, 1.0f, 0.1);
+    right_sphere_material.color = create_point(1.0f, 0.0f, 0.0);
     right_sphere_material.diffuse = 0.7f;
     right_sphere_material.specular = 0.3f;
     right_sphere->material = right_sphere_material;
@@ -3233,8 +3247,10 @@ void render_complete_world() {
     Mat4x4 scale_small_sphere;
     gen_scale_matrix(0.33f, 0.33f, 0.33f, scale_small_sphere);
     Mat4x4 final_transform_small_sphere;
-    mat4x4_mul(final_transform_small_sphere, final_transform_small_sphere, final_transform_small_sphere);
-    mat4x4_mul(final_transform_small_sphere, scale_left, final_transform_small_sphere);
+    Mat4x4_set_ident(final_transform_small_sphere);
+    mat4x4_mul_in_place(translate_small_sphere, final_transform_small_sphere, final_transform_small_sphere);
+    mat4x4_mul_in_place(scale_small_sphere, final_transform_small_sphere, final_transform_small_sphere);
+    Mat4x4_copy(final_transform_small_sphere, small_sphere->transform);
 
     material small_sphere_material = create_material_default();
     small_sphere_material.color = create_point(1.0f, 0.8f, 0.1);
@@ -3255,14 +3271,13 @@ void render_complete_world() {
     tuple light_intensity = create_point(1.0f, 1.0f, 1.0f);
     *w.lights = create_point_light(light_position, light_intensity);
 
-    camera* c = create_camera(100.0f, 50.0f, M_PI / 3);
+    camera* c = create_camera(WIDTH, HEIGHT, M_PI / 3);
     tuple from = create_point(0.0f, 1.5f, -5.0f);
     tuple to = create_point(0.0f, 1.0f, 0.0f);
     tuple up = create_vector(0.0f, 1.0f, 0.0f);
     view_transform(from, up, to, c->view_transform);
 
     render(c, &w);
-
 }
 
 
