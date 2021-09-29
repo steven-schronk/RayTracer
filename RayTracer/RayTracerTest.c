@@ -2970,6 +2970,19 @@ int color_when_ray_hits_test() {
     return 0;
 }
 
+// 97 Color with an intersection behind the ray
+int color_with_intersect_behind_ray_test() {
+    world w = create_default_world();
+    w.objects->material.ambient = 1.0f;
+    w.objects->next->material.ambient = 1.0f;
+    ray r = create_ray(0.0f, 0.0f, 0.75f, 0.0f, 0.0f, -1.0f);
+    tuple color = color_at(&w, &r);
+    assert(equal(w.objects->next->material.color.x, color.x));
+    assert(equal(w.objects->next->material.color.y, color.y));
+    assert(equal(w.objects->next->material.color.z, color.z));
+    return 0;
+}
+
 // 98 The transformation matrix for the default orientation
 int transformation_for_default_orientation_test() {
     tuple from = create_point(0.0f, 0.0f, 0.0f);
@@ -3269,13 +3282,13 @@ void render_complete_world() {
     small_sphere_material.specular = 0.3f;
     small_sphere->material = small_sphere_material;
 
-    /*
+    
     // putting geometry together
     small_sphere->next = NULL;
     floor->next = small_sphere;
     w.objects = floor;
-     */
     
+    /*
     // putting geometry together
     right_sphere->next = NULL;
     middle_sphere->next = right_sphere;
@@ -3283,6 +3296,7 @@ void render_complete_world() {
     right_wall->next = small_sphere;
     left_wall->next = right_wall;
     w.objects = left_wall;
+    */
 
     // lighting
     tuple light_position = create_point(-10.0f, 10.0f, -10.0f);
@@ -3397,6 +3411,7 @@ int main() {
   unit_test("Shading Intersection From Inside Test", shading_intersection_from_inside());
   unit_test("Color When Ray Misses Test", color_when_ray_misses_test());
   unit_test("Color When Ray Hits Test", color_when_ray_hits_test());
+  unit_test("Color With Intersect Behind Ray Test", color_with_intersect_behind_ray_test());
   unit_test("Transformation For Default Orientation Test", transformation_for_default_orientation_test());
   unit_test("View Transform Matrix Looking Positive In Z Direction Test", view_transform_mat_looking_positive_z_dir_test());
   unit_test("View Transform Moves World Test", view_transform_moves_world_test());
