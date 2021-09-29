@@ -25,8 +25,8 @@ Copyright 2021 Steven Ray Schronk
 
 #define EPSILON 0.000001
 
-#define HEIGHT 600
-#define WIDTH  600
+#define HEIGHT 120
+#define WIDTH  240
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -629,7 +629,7 @@ tuple reflect(tuple in, tuple normal) {
 
 world create_world() {
     world w;
-    w.lights = NULL;
+    w.lights = (point_light*)malloc(sizeof(point_light));
     w.objects = NULL;
     return w;
 }
@@ -2651,7 +2651,7 @@ int sort_intersects_test() {
 // 92 Creating A World
 int creating_a_world_test() {
     world w = create_world();
-    assert(w.lights  == NULL);
+    assert(w.lights  != NULL);
     assert(w.objects == NULL);
     return 0;
 }
@@ -3076,7 +3076,7 @@ int const_a_ray_when_camera_is_transformed() {
     Mat4x4 translate;
     gen_rotate_matrix_Y(M_PI / 4.0f, rotate);
     gen_translate_matrix(0.0f, -2.0f, 5.0f, translate);
-    mat4x4_mul(rotate, translate, *c->view_transform);
+    mat4x4_mul(rotate, translate, c->view_transform);
     ray r = ray_for_pixel(c, 100.0f, 50.0f);
     assert(equal(r.origin_point.x, 0.0f));
     assert(equal(r.origin_point.y, 2.0f));
@@ -3153,6 +3153,112 @@ void render_sphere() {
     }
   }
 }
+
+// 106 Render complete world
+void render_complete_world() {
+    world w = create_world();
+    // 1. floor extremely flattened sphere with matte texture
+    sphere* floor = create_sphere();
+    gen_scale_matrix(10.0f, 0.01f, 10.0f, floor->transform);
+    material floor_material= create_material_default();
+    floor->material.color = create_point(1.0f, 0.9f, 0.9f);
+    floor->material.specular = 0.0f;
+
+    // 2. wall on left has same scale and color but also rotated and translated into place
+    sphere* left_wall = create_sphere();
+    Mat4x4 translate_left;
+    gen_translate_matrix(0.0f, 0.0f, 5.0f, translate_left);
+    Mat4x4 rotate_y_left;
+    gen_rotate_matrix_Y(-M_PI / 4.0f, rotate_y_left);
+    Mat4x4 rotate_x_left;
+    gen_rotate_matrix_X(M_PI / 2.0f, rotate_x_left);
+    Mat4x4 scale_left;
+    gen_scale_matrix(10.0f, 0.01f, 10.0f, scale_left);
+    Mat4x4 final_transform_left;
+    Mat4x4 identity;
+    Mat4x4_set_ident(identity);
+    mat4x4_mul(identity, translate_left, final_transform_left);
+    mat4x4_mul(final_transform_left, rotate_y_left, final_transform_left);
+    mat4x4_mul(final_transform_left, rotate_x_left, final_transform_left);
+    mat4x4_mul(final_transform_left, scale_left, final_transform_left);
+    Mat4x4_copy(final_transform_left, left_wall->transform);
+    left_wall->material = floor_material;
+
+    // 3. wall on right is identical to left, rotated opposite direction in y
+    sphere* right_wall = create_sphere();
+    Mat4x4_set_ident(final_transform_left);
+    mat4x4_mul(identity, translate_left, final_transform_left);
+    Mat4x4 rotate_y_right;
+    gen_rotate_matrix_Y(M_PI / 4.0f, rotate_y_right);
+    mat4x4_mul(final_transform_left, rotate_y_right, final_transform_left);
+    mat4x4_mul(final_transform_left, rotate_x_left, final_transform_left);
+    mat4x4_mul(final_transform_left, scale_left, final_transform_left);
+    Mat4x4_copy(final_transform_left, left_wall->transform);
+    left_wall->material = floor_material;
+
+    // 4. Large sphere in middle is a unit sphere, translated upward slightly and colored green
+    sphere* middle_sphere = create_sphere();
+    Mat4x4 middle_transform;
+    gen_translate_matrix(-0.5, 1.0, 0.5, middle_transform);
+    Mat4x4_copy(middle_transform, middle_sphere->transform);
+    material middle_material = create_material_default();
+    middle_material.color = create_point(0.1f, 1.0f, 0.5);
+    middle_material.diffuse = 0.7f;
+    middle_material.specular = 0.3f;
+
+    // 5. Smaller green sphere on the right is scaled in half
+    sphere* right_sphere = create_sphere();
+
+    Mat4x4 translate_right_sphere;
+    gen_translate_matrix(1.5f, 0.5f, -0.5f, translate_right_sphere);
+    Mat4x4 scale_right_sphere;
+    gen_scale_matrix(0.5f, 0.5f, 0.5f, scale_right_sphere);
+    Mat4x4 final_transform_right_sphere;
+    Mat4x4_set_ident(final_transform_right_sphere);
+    mat4x4_mul(final_transform_right_sphere, final_transform_right_sphere, final_transform_right_sphere);
+    mat4x4_mul(final_transform_right_sphere, scale_left, final_transform_right_sphere);
+    Mat4x4_copy(final_transform_right_sphere, right_sphere->transform);
+    material right_sphere_material = create_material_default();
+    right_sphere_material.color = create_point(0.5f, 1.0f, 0.1);
+    right_sphere_material.diffuse = 0.7f;
+    right_sphere_material.specular = 0.3f;
+
+
+    // 6. Smallest sphere is scaled by a tird, before being translated
+    sphere* small_sphere = create_sphere();
+
+    Mat4x4 translate_small_sphere;
+    gen_translate_matrix(-1.5f, 0.33f, -0.75f, translate_small_sphere);
+    Mat4x4 scale_small_sphere;
+    gen_scale_matrix(0.33f, 0.33f, 0.33f, scale_small_sphere);
+    Mat4x4 final_transform_small_sphere;
+    mat4x4_mul(final_transform_small_sphere, final_transform_small_sphere, final_transform_small_sphere);
+    mat4x4_mul(final_transform_small_sphere, scale_left, final_transform_small_sphere);
+
+    // putting geometry together
+    right_sphere->next = NULL;
+    middle_sphere->next = right_sphere;
+    small_sphere->next = middle_sphere;
+    right_wall->next = small_sphere;
+    left_wall->next = right_wall;
+    w.objects = left_wall;
+
+
+    // lighting
+    tuple light_position = create_point(-10.0f, 10.0f, -10.0f);
+    tuple light_intensity = create_point(1.0f, 1.0f, 1.0f);
+    *w.lights = create_point_light(light_position, light_intensity);
+
+    camera* c = create_camera(100.0f, 50.0f, M_PI / 3);
+    tuple from = create_point(0.0f, 1.5f, -5.0f);
+    tuple to = create_point(0.0f, 1.0f, 0.0f);
+    tuple up = create_vector(0.0f, 1.0f, 0.0f);
+    view_transform(from, up, to, c->view_transform);
+
+    render(c, &w);
+
+}
+
 
 int main() {
 #if defined _DEBUG
@@ -3261,10 +3367,11 @@ int main() {
   unit_test("Pixel Size For Vertical Canvas Test", pixel_size_for_vertical_canvas_test());
   unit_test("Construct A Ray Through Center Of Canvas", const_a_ray_through_center_of_canvas());
   unit_test("Construct A Ray Through Corner Of Canvas", const_a_ray_through_corner_of_canvas());
-  unit_test("Construcy A Ray When Camera Is Transformed", const_a_ray_when_camera_is_transformed());
-  unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
+  unit_test("Construct A Ray When Camera Is Transformed", const_a_ray_when_camera_is_transformed());
+  //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
 #endif
   //render_sphere();
+  render_complete_world();
   write_canvas_to_file();
   return 0;
 }
