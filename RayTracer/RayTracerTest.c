@@ -138,7 +138,6 @@ void add_intersection_to_list(intersections* intersection_list, double t, sphere
       ++i;
       if (i >= INTERSECTIONS_SIZE) { assert("Not enough room in intersections list."); }
       temp_int = &intersection_list->itersection[i];
-      
   }
   intersection_list->count++;
   intersection_list->itersection[i].object_id = sp;
@@ -678,8 +677,8 @@ camera* create_camera(double hsize, double vsize, double field_of_view) {
          half_width = half_view;
         half_height = half_view / aspect;
     } else {
-        half_height = half_view;
         half_width = half_view * aspect;
+        half_height = half_view;
     }
     double pixel_size = (half_width * 2.0f) / hsize;
 
@@ -842,8 +841,8 @@ void view_transform(tuple from, tuple to, tuple up, Mat4x4 m) {
 ray ray_for_pixel(camera* camera, double px, double py) {
     
     // the offset from the edge of the canvas tp the pixel's center
-    double x_offset = (px + 0.5) * camera->pixel_size;
-    double y_offset = (py + 0.5) * camera->pixel_size;
+    double x_offset = camera->pixel_size * (px + 0.5f);
+    double y_offset = camera->pixel_size * (py + 0.5f);
 
     // the untransformed coordinates of the pixel in world space
     // (remember that the camera looks toward -z sor +x is to the **left**)
@@ -863,7 +862,11 @@ ray ray_for_pixel(camera* camera, double px, double py) {
 
     // origin
     tuple origin = create_point(0.0f, 0.0f, 0.0f);
-    mat4x4_mul_tuple(inverse, create_point(0.0f, 0.0f, 0.0f), &origin);
+    tuple temp = create_point(0.0f, 0.0f, 0.0f);
+    Mat4x4 inverse2;
+    Mat4x4_set_ident(inverse2);
+    mat4x4_inverse(camera->view_transform, inverse2);
+    mat4x4_mul_tuple(inverse2, temp, &origin);
 
     //direction
     tuple direction = norm_vec(tuple_sub(pixel, origin));
@@ -1979,45 +1982,46 @@ int create_ray_test() {
 }
 
 int create_sphere_test() {
-    sphere* s = create_sphere();
+    sphere* sp = create_sphere();
 
-    assert(s->next == NULL);
-    assert(equal(s->t, 1.0f));
+    assert(sp->next == NULL);
+    assert(equal(sp->t, 1.0f));
 
-    assert(equal(s->location.x, 0.0f));
-    assert(equal(s->location.y, 0.0f));
-    assert(equal(s->location.z, 0.0f));
-    assert(equal(s->location.w, 0.0f));
+    assert(equal(sp->location.x, 0.0f));
+    assert(equal(sp->location.y, 0.0f));
+    assert(equal(sp->location.z, 0.0f));
+    assert(equal(sp->location.w, 0.0f));
 
-    assert(equal(s->transform[0][0], 1.0f));
-    assert(equal(s->transform[1][0], 0.0f));
-    assert(equal(s->transform[2][0], 0.0f));
-    assert(equal(s->transform[3][0], 0.0f));
+    assert(equal(sp->transform[0][0], 1.0f));
+    assert(equal(sp->transform[1][0], 0.0f));
+    assert(equal(sp->transform[2][0], 0.0f));
+    assert(equal(sp->transform[3][0], 0.0f));
 
-    assert(equal(s->transform[0][1], 0.0f));
-    assert(equal(s->transform[1][1], 1.0f));
-    assert(equal(s->transform[2][1], 0.0f));
-    assert(equal(s->transform[3][1], 0.0f));
+    assert(equal(sp->transform[0][1], 0.0f));
+    assert(equal(sp->transform[1][1], 1.0f));
+    assert(equal(sp->transform[2][1], 0.0f));
+    assert(equal(sp->transform[3][1], 0.0f));
 
-    assert(equal(s->transform[0][2], 0.0f));
-    assert(equal(s->transform[1][2], 0.0f));
-    assert(equal(s->transform[2][2], 1.0f));
-    assert(equal(s->transform[3][2], 0.0f));
+    assert(equal(sp->transform[0][2], 0.0f));
+    assert(equal(sp->transform[1][2], 0.0f));
+    assert(equal(sp->transform[2][2], 1.0f));
+    assert(equal(sp->transform[3][2], 0.0f));
 
-    assert(equal(s->transform[0][3], 0.0f));
-    assert(equal(s->transform[1][3], 0.0f));
-    assert(equal(s->transform[2][3], 0.0f));
-    assert(equal(s->transform[3][3], 1.0f));
+    assert(equal(sp->transform[0][3], 0.0f));
+    assert(equal(sp->transform[1][3], 0.0f));
+    assert(equal(sp->transform[2][3], 0.0f));
+    assert(equal(sp->transform[3][3], 1.0f));
 
-    assert(equal(s->material.color.x, 1.0f));
-    assert(equal(s->material.color.y, 1.0f));
-    assert(equal(s->material.color.z, 1.0f));
-    assert(equal(s->material.color.w, 0.0f));
+    assert(equal(sp->material.color.x, 1.0f));
+    assert(equal(sp->material.color.y, 1.0f));
+    assert(equal(sp->material.color.z, 1.0f));
+    assert(equal(sp->material.color.w, 0.0f));
 
-    assert(equal(s->material.ambient, 0.1f));
-    assert(equal(s->material.diffuse, 0.9f));
-    assert(equal(s->material.specular, 0.9f));
-    assert(equal(s->material.shininess, 200.0f));
+    assert(equal(sp->material.ambient, 0.1f));
+    assert(equal(sp->material.diffuse, 0.9f));
+    assert(equal(sp->material.specular, 0.9f));
+    assert(equal(sp->material.shininess, 200.0f));
+    free(sp);
     return 0;
 }
 
@@ -2065,64 +2069,68 @@ int position_test() {
 // 59 A ray intersects a sphere at two points
 int ray_intersect_sphere_two_point_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* s = create_sphere();
+    sphere* sp = create_sphere();
     intersections inter = create_intersections();
-    intersect(s, &r, &inter);
+    intersect(sp, &r, &inter);
     assert(inter.count == 2);
     assert(equal(inter.itersection[0].t, 4.0f));
     assert(equal(inter.itersection[1].t, 6.0f));
+    free(sp);
     return 0;
 }
 
 // 60 A ray intersects a sphere at a tangent
 int ray_intersect_sphere_tangent_test() {
     ray r = create_ray(0.0f, 1.0f, -5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* s = create_sphere();
+    sphere* sp = create_sphere();
     intersections inter = create_intersections();
-    intersect(s, &r, &inter);
+    intersect(sp, &r, &inter);
     assert(inter.count == 2);
     assert(equal(inter.itersection[0].t, 5.0f));
     assert(equal(inter.itersection[1].t, 5.0f));
+    free(sp);
     return 0;
 }
 
 // 60 A ray misses a sphere
 int ray_misses_sphere_test() {
     ray r = create_ray(0.0f, 2.0f, -5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* s = create_sphere();
+    sphere* sp = create_sphere();
     intersections inter = create_intersections();
-    intersect(s, &r, &inter);
+    intersect(sp, &r, &inter);
     assert(inter.count == 0);
     assert(equal(inter.itersection[0].t, 0.0f)); // might as well check
     assert(equal(inter.itersection[1].t, 0.0f));
 
     assert(inter.itersection[0].object_id == NULL);
     assert(inter.itersection[1].object_id == NULL);
-
+    free(sp);
     return 0;
 }
 
 // 61 A ray originates inside a sphere
 int ray_originates_inside_sphere_test() {
     ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-    sphere* s = create_sphere();
+    sphere* sp = create_sphere();
     intersections inter = create_intersections();
-    intersect(s, &r, &inter);
+    intersect(sp, &r, &inter);
     assert(inter.count == 2);
     assert(equal(inter.itersection[0].t, -1.0f));
     assert(equal(inter.itersection[1].t, 1.0f));
+    free(sp);
     return 0;
 }
 
 // 62 A sphere is behind a ray
 int sphere_is_behind_ray_test() {
     ray r = create_ray(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* s = create_sphere();
+    sphere* sp = create_sphere();
     intersections inter = create_intersections();
-    intersect(s, &r, &inter);
+    intersect(sp, &r, &inter);
     assert(inter.count == 2);
     assert(equal(inter.itersection[0].t, -6.0f));
     assert(equal(inter.itersection[1].t, -4.0f));
+    free(sp);
     return 0;
 }
 
@@ -2132,12 +2140,13 @@ int sphere_is_behind_ray_test() {
 // 64 Aggegating intersections
 int aggregating_intersections_test() {
     intersections intersects = create_intersections();
-    sphere* s = create_sphere();
-    add_intersection_to_list(&intersects, 1.0, s);
-    add_intersection_to_list(&intersects, 2.0, s);
+    sphere* sp = create_sphere();
+    add_intersection_to_list(&intersects, 1.0, sp);
+    add_intersection_to_list(&intersects, 2.0, sp);
     assert(intersects.count == 2);
     assert(equal(intersects.itersection[0].t, 1.0f));
     assert(equal(intersects.itersection[1].t, 2.0f));
+    free(sp);
     return 0;
 }
 
@@ -2150,6 +2159,7 @@ int intersect_sets_object_on_intersection_test() {
     assert(inter.count == 2);
     assert(inter.itersection[0].object_id == sp);
     assert(inter.itersection[1].object_id == sp);
+    free(sp);
     return 0;
 }
 
@@ -2165,6 +2175,7 @@ int clear_intersections_test() {
         assert(equal(intersects.itersection[i].t, DBL_MIN));
         assert(intersects.itersection[i].object_id == NULL);
     }
+    free(sp);
     return 0;
 }
 
@@ -2211,6 +2222,7 @@ int hit_tests(){
     intersect1 = hit(&intersects);
     assert(intersect1->object_id == sp);
     assert(equal(intersect1->t, 2.0f));
+    free(sp);
     return 0;
 }
 
@@ -2261,6 +2273,7 @@ int sphere_default_transformation_test() {
     Mat4x4 identMat;
     Mat4x4_set_ident(identMat);
     assert(mat4x4_equal(sp->transform, identMat) == true);
+    free(sp);
     return 0;
 }
 
@@ -2271,6 +2284,7 @@ int change_sphere_transform_test() {
     gen_translate_matrix(2.0f, 3.0f, 4.0f, transMat);
     set_transform(sp, transMat);
     assert(mat4x4_equal(sp->transform, transMat) == true);
+    free(sp);
     return 0;
 }
 
@@ -2296,6 +2310,7 @@ int set_transform_test() {
     assert(mat4x4_equal(sp->transform, transMat));
     // two seperate matrixes
     assert(&sp->transform != &identMat);
+    free(sp);
     return 0;
 }
 
@@ -2318,6 +2333,7 @@ int intersect_scaled_sphere_test() {
 
     assert(inter.itersection[1].object_id == sp);
     assert(equal(inter.itersection[1].t, 7.0f));
+    free(sp);
     return 0;
 }
 
@@ -2336,6 +2352,7 @@ int intersecting_translated_sphere_test() {
     intersections inter = create_intersections();
     intersect(sp, &r2, &inter);
     assert(inter.count == 0);
+    free(sp);
     return 0;
 }
 
@@ -2373,6 +2390,7 @@ int normals_test() {
     assert(equal(n.y, nonaxial));
     assert(equal(n.z, nonaxial));
     assert(equal(n.w, 0.0f));
+    free(sphere1);
     return 0;
 }
 
@@ -2387,6 +2405,7 @@ int normal_is_normal_test() {
     assert(equal(n.y, nn.y));
     assert(equal(n.z, nn.z));
     assert(equal(n.w, 0.0f));
+    free(sp);
     return 0;
 }
 
@@ -2400,6 +2419,7 @@ int compute_normal_on_sphere_test() {
     assert(equal(n.y, sqrt(2) / 2));
     assert(equal(n.z, -sqrt(2) / 2));
     assert(equal(n.w, 0.0f));
+    free(sp);
     return 0;
 }
  
@@ -2418,6 +2438,7 @@ int compute_normal_on_transformed_sphere_test(){
     assert(equal(norm_at.x, 0.0f));
     assert(equal(norm_at.y, 0.97014250014533188f));
     assert(equal(norm_at.z, -0.24253562503633294f));
+    free(sp);
     return 0;
 }
 
@@ -2506,6 +2527,7 @@ int sphere_has_default_material_test() {
     assert(equal(m1.diffuse, 0.9f));
     assert(equal(m1.specular, 0.9f));
     assert(equal(m1.shininess, 200.0f));
+    free(sp);
     return 0;
 }
 
@@ -2606,6 +2628,10 @@ int intersect_compare_test() {
     assert(intersect_compare(&i1, &i3) == 1);
     assert(intersect_compare(&i3, &i3) == 0);
     assert(intersect_compare(&i3, &i1) == -1);
+    free(sp1);
+    free(sp2);
+    free(sp3);
+
     return 0;
 }
 
@@ -2667,6 +2693,11 @@ int sort_intersects_test() {
     assert(intersects.itersection[3].object_id == sp2);
     assert(equal(intersects.itersection[4].t, 57.0f));
     assert(intersects.itersection[4].object_id == sp3);
+
+    free(sp1);
+    free(sp2);
+    free(sp3);
+    free(sp4);
     return 0;
 }
 
@@ -2742,6 +2773,7 @@ int prepare_computations_test() {
     assert(equal(comp.normalv.x, 0.0f));
     assert(equal(comp.normalv.y, 0.0f));
     assert(equal(comp.normalv.z, -1.0f));
+    free(sp1);
     return 0;
 }
 
@@ -2752,6 +2784,7 @@ int hit_when_intersect_on_outside_test() {
     intersection inter = { 4.0f, sp1 };
     comps comp = prepare_computations(&inter, &r);
     assert(comp.inside == false);
+    free(sp1);
     return 0;
 }
 
@@ -2789,6 +2822,7 @@ int hit_when_intersect_occurs_on_inside_test() {
     assert(equal(r.origin_point.z, 0.0f));
     assert(equal(inter.t, 1.0f));
     assert(inter.object_id == sp1);
+    free(sp1);
     return 0;
 }
 
@@ -3060,6 +3094,7 @@ int constructing_camera_test() {
     Mat4x4 view;
     Mat4x4_set_ident(view);
     assert(mat4x4_equal(c->view_transform, view));
+    free(c);
     return 0;
 }
 
@@ -3067,6 +3102,7 @@ int constructing_camera_test() {
 int pixel_size_for_horizontal_canvas_test() {
     camera* c = create_camera(200.0f, 125.0f, M_PI / 2.0f);
     assert(equal(c->pixel_size, 0.01f));
+    free(c);
     return 0;
 }
 
@@ -3074,6 +3110,7 @@ int pixel_size_for_horizontal_canvas_test() {
 int pixel_size_for_vertical_canvas_test() {
     camera* c = create_camera(125.0f, 200.0f, M_PI / 2.0f);
     assert(equal(c->pixel_size, 0.01f));
+    free(c);
     return 0;
 }
 
@@ -3087,6 +3124,7 @@ int const_a_ray_through_center_of_canvas() {
     assert(equal(r.direction_vector.x, 0.0f));
     assert(equal(r.direction_vector.y, 0.0f));
     assert(equal(r.direction_vector.z, -1.0f));
+    free(c);
     return 0;
 }
 
@@ -3100,6 +3138,7 @@ int const_a_ray_through_corner_of_canvas() {
     assert(equal(r.direction_vector.x, 0.66518642611945078f));
     assert(equal(r.direction_vector.y, 0.33259321305972539f));
     assert(equal(r.direction_vector.z, -0.66851235825004807f));
+    free(c);
     return 0;
 }
 
@@ -3110,6 +3149,8 @@ int const_a_ray_when_camera_is_transformed() {
     Mat4x4 translate;
     gen_rotate_matrix_Y(M_PI / 4.0f, rotate);
     gen_translate_matrix(0.0f, -2.0f, 5.0f, translate);
+    print_mat(4, 4, rotate);
+    print_mat(4, 4, translate);
     mat4x4_mul_in_place(rotate, translate, c->view_transform);
     ray r = ray_for_pixel(c, 100.0f, 50.0f);
     assert(equal(r.origin_point.x, 0.0f));
@@ -3118,6 +3159,7 @@ int const_a_ray_when_camera_is_transformed() {
     assert(equal(r.direction_vector.x, sqrt(2)/2));
     assert(equal(r.direction_vector.y, 0.0f));
     assert(equal(r.direction_vector.z, -sqrt(2)/2));
+    free(c);
     return 0;
 }
 
@@ -3133,8 +3175,11 @@ int render_a_world_with_camera_test() {
     assert(equal(canvas[5][5].x, 0.38066119994542108f));
     assert(equal(canvas[5][5].y, 0.47582649284140904f));
     assert(equal(canvas[5][5].z, 0.28549590704943306));
+    free(c);
     return 0;
 }
+
+
 
 #endif
 
@@ -3190,7 +3235,7 @@ void render_sphere() {
 
 // 106 Render complete world
 void render_complete_world() {
-    world w = create_world();
+    world w = create_default_world();
 
     // 1. floor extremely flattened sphere with matte texture
     sphere* floor = create_sphere();
@@ -3198,10 +3243,29 @@ void render_complete_world() {
     gen_scale_matrix(10.0f, 0.01f, 10.0f, floor_transform);
     mat4x4_mul_in_place(floor_transform, floor->transform, floor->transform);
 
+    assert(equal(floor->t, 1.0f));
+    assert(equal(floor->location.x, 0.0f));
+    assert(equal(floor->location.y, 0.0f));
+    assert(equal(floor->location.z, 0.0f));
+    assert(equal(floor->location.w, 0.0f));
+
+    assert(equal(floor->transform[0][0], 10.0f));
+    assert(equal(floor->transform[1][1], 0.01f));
+    assert(equal(floor->transform[2][2], 10.0f));
+    assert(equal(floor->transform[3][3], 1.0f));
+
     material floor_material= create_material_default();
     floor_material.color = create_point(1.0f, 0.9f, 0.9f);
     floor_material.specular = 0.0f;
     floor->material = floor_material;
+
+    assert(equal(floor->material.color.x, 1.0f));
+    assert(equal(floor->material.color.y, 0.9f));
+    assert(equal(floor->material.color.z, 0.9f));
+    assert(equal(floor->material.specular, 0.0f));
+
+    assert(equal(floor->material.ambient, 0.1f));
+    assert(equal(floor->material.diffuse, 0.9f));
 
     // 2. wall on left has same scale and color but also rotated and translated into place
     sphere* left_wall = create_sphere();
@@ -3310,6 +3374,13 @@ void render_complete_world() {
     view_transform(from, to, up, c->view_transform);
 
     render(c, &w);
+
+    free(floor);
+    free(left_wall);
+    free(right_wall);
+    free(middle_sphere);
+    free(right_sphere);
+    free(small_sphere);
 }
 
 
