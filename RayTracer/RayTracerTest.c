@@ -343,19 +343,17 @@ void print_tuple(tuple t) {
   printf("{ %.8f, %.8f, %.8f, %.8f }\n", t.x, t.y, t.z, t.w);
 }
 
-void print_mat(const int rows, const int cols, const double* mat) {
-  printf("{ ");
-  for (int i = 0; i < rows; ++i) {
-    printf(" { ");
-    for (int j = 0; j < cols; ++j) {
-      printf("%.3f", mat[i * cols + j]);
-      if (j < cols-1) { printf(", "); }
+void print_mat(Mat4x4 mat) {
+  printf(" [ ");
+  for (int i = 0; i < 4; ++i) {
+    
+    for (int j = 0; j < 4; ++j) {
+      printf("%11.10f", mat[i][j]);
+      if (j < 3) { printf(", "); }
     }
-    printf(" }");
-    if (i < rows - 1) { printf(", "); }
-    printf("\n");
+    printf("; ");
   }
-  printf("}\n\n");
+  printf(" ]\n");
 }
 
 double mat2x2_det(Mat2x2 a) {
@@ -674,9 +672,17 @@ camera* create_camera(double hsize, double vsize, double field_of_view) {
     double half_width = 0.0f;
     double aspect = hsize / vsize;
     if (aspect >= 1) {
-         half_width = half_view;
+        // the text
+        //half_view = half_width;
+        //half_height = half_view / aspect;
+        // the example
+        half_width = half_view;
         half_height = half_view / aspect;
     } else {
+        // the text
+        //half_view = half_height;
+        //half_width = half_view * aspect;
+        // the example
         half_width = half_view * aspect;
         half_height = half_view;
     }
@@ -744,13 +750,13 @@ int write_canvas_to_file() {
     fp = fopen("canvas.ppm", "w");
     fprintf(fp, "P3\n");
     fprintf(fp, "%d %d\n255\n", HORIZONTAL_SIZE, VERTICAL_SIZE);
-    for (int i = 0; i < HORIZONTAL_SIZE; ++i) {
-        for (int j = 0; j < VERTICAL_SIZE; ++j) {
-            int color = color_convert(canvas[i][j].x);
+    for (int col = 0; col < VERTICAL_SIZE; ++col) {
+        for (int row = 0; row < HORIZONTAL_SIZE; ++row) {
+            int color = color_convert(canvas[col][row].x);
             fprintf(fp, "%d ", color);
-            color = color_convert(canvas[i][j].y);
+            color = color_convert(canvas[col][row].y);
             fprintf(fp, "%d ", color);
-            color = color_convert(canvas[i][j].z);
+            color = color_convert(canvas[col][row].z);
             fprintf(fp, "%d \n", color);
         }
     }
@@ -882,10 +888,13 @@ void render(camera* c, world* w) {
         for (int x = 0; x < HORIZONTAL_SIZE; ++x) {
             ray r = ray_for_pixel(c, x, y);
 
-            printf("[%d][%d] o.x=%4.1f o.y=%4.1f o.z=%4.1f d.x=%4.1f d.y=%4.1f d.z=%4.1f\n", y, x, r.origin_point.x, r.origin_point.y, r.origin_point.z, r.direction_vector.x, r.direction_vector.y, r.direction_vector.z);
+            //printf("[%d][%d] o.x=%4.1f o.y=%4.1f o.z=%4.1f d.x=%4.1f d.y=%4.1f d.z=%4.1f\n", y, x, r.origin_point.x, r.origin_point.y, r.origin_point.z, r.direction_vector.x, r.direction_vector.y, r.direction_vector.z);
 
-            tuple c = color_at(w, &r);
-            write_pixel(x, y, c);
+            tuple color = color_at(w, &r);
+            //color.x = r.direction_vector.x;
+            //color.y = r.direction_vector.x;
+            //color.z = r.direction_vector.x;
+            write_pixel(x, y, color);
         }
     }
 }
@@ -1891,7 +1900,6 @@ int draw_clock_test() {
     three.z = three.z * 40 + 50;
     canvas[(int)three.x][(int)three.z].x = 1.0f;
   }
-  canvas[50][50].y = 1.0f;
   return 0;
 }
 
@@ -3149,8 +3157,6 @@ int const_a_ray_when_camera_is_transformed() {
     Mat4x4 translate;
     gen_rotate_matrix_Y(M_PI / 4.0f, rotate);
     gen_translate_matrix(0.0f, -2.0f, 5.0f, translate);
-    print_mat(4, 4, rotate);
-    print_mat(4, 4, translate);
     mat4x4_mul_in_place(rotate, translate, c->view_transform);
     ray r = ray_for_pixel(c, 100.0f, 50.0f);
     assert(equal(r.origin_point.x, 0.0f));
@@ -3178,9 +3184,6 @@ int render_a_world_with_camera_test() {
     free(c);
     return 0;
 }
-
-
-
 #endif
 
 // 72 Hint #4
@@ -3270,6 +3273,7 @@ void render_complete_world() {
     // 2. wall on left has same scale and color but also rotated and translated into place
     sphere* left_wall = create_sphere();
     Mat4x4 translate_left;
+    
     gen_translate_matrix(0.0f, 0.0f, 5.0f, translate_left);
     Mat4x4 rotate_y_left;
     gen_rotate_matrix_Y(-M_PI / 4.0f, rotate_y_left);
@@ -3278,32 +3282,202 @@ void render_complete_world() {
     Mat4x4 scale_left;
     gen_scale_matrix(10.0f, 0.01f, 10.0f, scale_left);
     Mat4x4 final_transform_left;
-    Mat4x4 identity;
-    Mat4x4_set_ident(identity);
-    mat4x4_mul_in_place(identity, translate_left, final_transform_left);
+    Mat4x4_set_ident(final_transform_left);
+    mat4x4_mul_in_place(translate_left, final_transform_left, final_transform_left);
+    
+    assert(equal(final_transform_left[0][0], 1.0f));
+    assert(equal(final_transform_left[1][0], 0.0f));
+    assert(equal(final_transform_left[2][0], 0.0f));
+    assert(equal(final_transform_left[3][0], 0.0f));
+
+    assert(equal(final_transform_left[0][1], 0.0f));
+    assert(equal(final_transform_left[1][1], 1.0f));
+    assert(equal(final_transform_left[2][1], 0.0f));
+    assert(equal(final_transform_left[3][1], 0.0f));
+
+    assert(equal(final_transform_left[0][2], 0.0f));
+    assert(equal(final_transform_left[1][2], 0.0f));
+    assert(equal(final_transform_left[2][2], 1.0f));
+    assert(equal(final_transform_left[3][2], 0.0f));
+
+    assert(equal(final_transform_left[0][3], 0.0f));
+    assert(equal(final_transform_left[1][3], 0.0f));
+    assert(equal(final_transform_left[2][3], 5.0f));
+    assert(equal(final_transform_left[3][3], 1.0f));
+    
+    print_mat(final_transform_left);
+
     mat4x4_mul_in_place(final_transform_left, rotate_y_left, final_transform_left);
+
+    assert(equal(final_transform_left[0][0], 0.707106781200000f));
+    assert(equal(final_transform_left[1][0], 0.0f));
+    assert(equal(final_transform_left[2][0], 0.707106781200000f));
+    assert(equal(final_transform_left[3][0], 0.0f));
+
+    assert(equal(final_transform_left[0][1], 0.0f));
+    assert(equal(final_transform_left[1][1], 1.0f));
+    assert(equal(final_transform_left[2][1], 0.0f));
+    assert(equal(final_transform_left[3][1], 0.0f));
+
+    assert(equal(final_transform_left[0][2], -0.707106781200000f));
+    assert(equal(final_transform_left[1][2], 0.0f));
+    assert(equal(final_transform_left[2][2], 0.707106781200000f));
+    assert(equal(final_transform_left[3][2], 0.0f));
+
+    assert(equal(final_transform_left[0][3], 0.0f));
+    assert(equal(final_transform_left[1][3], 0.0f));
+    assert(equal(final_transform_left[2][3], 5.0f));
+    assert(equal(final_transform_left[3][3], 1.0f));
+    
     mat4x4_mul_in_place(final_transform_left, rotate_x_left, final_transform_left);
+    
+    assert(equal(final_transform_left[0][0], 0.707106781200000f));
+    assert(equal(final_transform_left[1][0], 0.0f));
+    assert(equal(final_transform_left[2][0], 0.707106781200000f));
+    assert(equal(final_transform_left[3][0], 0.0f));
+
+    assert(equal(final_transform_left[0][1], -0.707106781200000f));
+    assert(equal(final_transform_left[1][1], 0.0f));
+    assert(equal(final_transform_left[2][1], 0.707106781200000f));
+    assert(equal(final_transform_left[3][1], 0.0f));
+
+    assert(equal(final_transform_left[0][2], 0.0f));
+    assert(equal(final_transform_left[1][2], -1.0f));
+    assert(equal(final_transform_left[2][2], 0.0f));
+    assert(equal(final_transform_left[3][2], 0.0f));
+
+    assert(equal(final_transform_left[0][3], 0.0f));
+    assert(equal(final_transform_left[1][3], 0.0f));
+    assert(equal(final_transform_left[2][3], 5.0f));
+    assert(equal(final_transform_left[3][3], 1.0f));
+
     mat4x4_mul_in_place(final_transform_left, scale_left, final_transform_left);
+
+    assert(equal(final_transform_left[0][0], 7.071067812000001f));
+    assert(equal(final_transform_left[1][0], 0.0f));
+    assert(equal(final_transform_left[2][0], 7.071067812000001f));
+    assert(equal(final_transform_left[3][0], 0.0f));
+
+    assert(equal(final_transform_left[0][1], -.007071067670578643f));
+    assert(equal(final_transform_left[1][1], 0.0f));
+    assert(equal(final_transform_left[2][1], .007071067670578643f));
+    assert(equal(final_transform_left[3][1], 0.0f));
+
+    assert(equal(final_transform_left[0][2], 0.0f));
+    assert(equal(final_transform_left[1][2], -10.0f));
+    assert(equal(final_transform_left[2][2], 0.0f));
+    assert(equal(final_transform_left[3][2], 0.0f));
+
+    assert(equal(final_transform_left[0][3], 0.0f));
+    assert(equal(final_transform_left[1][3], 0.0f));
+    assert(equal(final_transform_left[2][3], 5.0f));
+    assert(equal(final_transform_left[3][3], 1.0f));
+
     Mat4x4_copy(final_transform_left, left_wall->transform);
+
+    assert(mat4x4_equal(final_transform_left, left_wall->transform));
+
+    assert(equal(left_wall->transform[0][0], 7.071067812000001f));
+    assert(equal(left_wall->transform[1][0], 0.0f));
+    assert(equal(left_wall->transform[2][0], 7.071067812000001f));
+    assert(equal(left_wall->transform[3][0], 0.0f));
+
+    assert(equal(left_wall->transform[0][1], -.007071067670578643f));
+    assert(equal(left_wall->transform[1][1], 0.0f));
+    assert(equal(left_wall->transform[2][1], .007071067670578643f));
+    assert(equal(left_wall->transform[3][1], 0.0f));
+
+    assert(equal(left_wall->transform[0][2], 0.0f));
+    assert(equal(left_wall->transform[1][2], -10.0f));
+    assert(equal(left_wall->transform[2][2], 0.0f));
+    assert(equal(left_wall->transform[3][2], 0.0f));
+
+    assert(equal(left_wall->transform[0][3], 0.0f));
+    assert(equal(left_wall->transform[1][3], 0.0f));
+    assert(equal(left_wall->transform[2][3], 5.0f));
+    assert(equal(left_wall->transform[3][3], 1.0f));
+
     left_wall->material = floor_material;
+
+    assert(equal(translate_left[0][3], 0.0f));
+    assert(equal(translate_left[1][3], 0.0f));
+    assert(equal(translate_left[2][3], 5.0f));
+    assert(equal(translate_left[3][3], 1.0f));
+
+    assert(equal(rotate_y_left[0][0], cos(-M_PI/4.0f)));
+    assert(equal(rotate_y_left[0][2], sin(-M_PI/4.0f)));
+    assert(equal(rotate_y_left[2][0], -sin(-M_PI / 4.0f)));
+    assert(equal(rotate_y_left[2][2], cos(-M_PI / 4.0f)));
+
+    assert(equal(rotate_x_left[0][0], 1.0f));
+    assert(equal(rotate_x_left[1][1], cos(M_PI / 2.0f)));
+    assert(equal(rotate_x_left[1][2], -sin(M_PI / 2.0f)));
+    assert(equal(rotate_x_left[2][1], sin(M_PI / 2.0f)));
+    assert(equal(rotate_x_left[2][2], cos(M_PI / 2.0f)));
+
+    assert(equal(scale_left[0][0], 10.0f));
+    assert(equal(scale_left[1][1], 0.01f));
+    assert(equal(scale_left[2][2], 10.0f));
 
     // 3. wall on right is identical to left, rotated opposite direction in y
     sphere* right_wall = create_sphere();
     Mat4x4_set_ident(final_transform_left);
-    mat4x4_mul_in_place(identity, translate_left, final_transform_left);
+    mat4x4_mul_in_place(final_transform_left, translate_left, final_transform_left);
     Mat4x4 rotate_y_right;
     gen_rotate_matrix_Y(M_PI / 4.0f, rotate_y_right);
     mat4x4_mul_in_place(final_transform_left, rotate_y_right, final_transform_left);
     mat4x4_mul_in_place(final_transform_left, rotate_x_left, final_transform_left);
     mat4x4_mul_in_place(final_transform_left, scale_left, final_transform_left);
-    Mat4x4_copy(final_transform_left, left_wall->transform);
+    Mat4x4_copy(final_transform_left, right_wall->transform);
     left_wall->material = floor_material;
+
+    assert(equal(right_wall->transform[0][0], 7.071067812000001f));
+    assert(equal(right_wall->transform[1][0], 0.0f));
+    assert(equal(right_wall->transform[2][0], -7.071067812000001f));
+    assert(equal(right_wall->transform[3][0], 0.0f));
+
+    assert(equal(right_wall->transform[0][1], .007071067670578643f));
+    assert(equal(right_wall->transform[1][1], 0.0f));
+    assert(equal(right_wall->transform[2][1], .007071067670578643f));
+    assert(equal(right_wall->transform[3][1], 0.0f));
+
+    assert(equal(right_wall->transform[0][2], 0.0f));
+    assert(equal(right_wall->transform[1][2], -10.0f));
+    assert(equal(right_wall->transform[2][2], 0.0f));
+    assert(equal(right_wall->transform[3][2], 0.0f));
+
+    assert(equal(right_wall->transform[0][3], 0.0f));
+    assert(equal(right_wall->transform[1][3], 0.0f));
+    assert(equal(right_wall->transform[2][3], 5.0f));
+    assert(equal(right_wall->transform[3][3], 1.0f));
 
     // 4. Large sphere in middle is a unit sphere, translated upward slightly and colored green
     sphere* middle_sphere = create_sphere();
     Mat4x4 middle_transform;
     gen_translate_matrix(-0.5, 1.0, 0.5, middle_transform);
+
     Mat4x4_copy(middle_transform, middle_sphere->transform);
+
+    assert(equal(middle_sphere->transform[0][0], 1.0f));
+    assert(equal(middle_sphere->transform[1][0], 0.0f));
+    assert(equal(middle_sphere->transform[2][0], 0.0f));
+    assert(equal(middle_sphere->transform[3][0], 0.0f));
+
+    assert(equal(middle_sphere->transform[0][1], 0.0f));
+    assert(equal(middle_sphere->transform[1][1], 1.0f));
+    assert(equal(middle_sphere->transform[2][1], 0.0f));
+    assert(equal(middle_sphere->transform[3][1], 0.0f));
+
+    assert(equal(middle_sphere->transform[0][2], 0.0f));
+    assert(equal(middle_sphere->transform[1][2], 0.0f));
+    assert(equal(middle_sphere->transform[2][2], 1.0f));
+    assert(equal(middle_sphere->transform[3][2], 0.0f));
+
+    assert(equal(middle_sphere->transform[0][3], -0.5f));
+    assert(equal(middle_sphere->transform[1][3], 1.0f));
+    assert(equal(middle_sphere->transform[2][3], 0.5f));
+    assert(equal(middle_sphere->transform[3][3], 1.0f));
+
     material middle_material = create_material_default();
     middle_material.color = create_point(0.1f, 1.0f, 0.5);
     middle_material.diffuse = 0.7f;
@@ -3319,11 +3493,33 @@ void render_complete_world() {
     Mat4x4 final_transform_right_sphere;
     Mat4x4_set_ident(final_transform_right_sphere);
 
-    mat4x4_mul_in_place(translate_right_sphere, final_transform_right_sphere, final_transform_right_sphere);
-    mat4x4_mul_in_place(scale_right_sphere, final_transform_right_sphere, final_transform_right_sphere);
+
+    mat4x4_mul_in_place(final_transform_right_sphere, translate_right_sphere, final_transform_right_sphere);
+    mat4x4_mul_in_place(final_transform_right_sphere, scale_right_sphere, final_transform_right_sphere);
     Mat4x4_copy(final_transform_right_sphere, right_sphere->transform);
+
+    assert(equal(right_sphere->transform[0][0], 0.5f));
+    assert(equal(right_sphere->transform[1][0], 0.0f));
+    assert(equal(right_sphere->transform[2][0], 0.0f));
+    assert(equal(right_sphere->transform[3][0], 0.0f));
+
+    assert(equal(right_sphere->transform[0][1], 0.0f));
+    assert(equal(right_sphere->transform[1][1], 0.5f));
+    assert(equal(right_sphere->transform[2][1], 0.0f));
+    assert(equal(right_sphere->transform[3][1], 0.0f));
+
+    assert(equal(right_sphere->transform[0][2], 0.0f));
+    assert(equal(right_sphere->transform[1][2], 0.0f));
+    assert(equal(right_sphere->transform[2][2], 0.5f));
+    assert(equal(right_sphere->transform[3][2], 0.0f));
+
+    assert(equal(right_sphere->transform[0][3], 1.5f));
+    assert(equal(right_sphere->transform[1][3], 0.5f));
+    assert(equal(right_sphere->transform[2][3], -0.5f));
+    assert(equal(right_sphere->transform[3][3], 1.0f));
+
     material right_sphere_material = create_material_default();
-    right_sphere_material.color = create_point(1.0f, 0.0f, 0.0);
+    right_sphere_material.color = create_point(0.5f, 1.0f, 0.1);
     right_sphere_material.diffuse = 0.7f;
     right_sphere_material.specular = 0.3f;
     right_sphere->material = right_sphere_material;
@@ -3336,8 +3532,8 @@ void render_complete_world() {
     gen_scale_matrix(0.33f, 0.33f, 0.33f, scale_small_sphere);
     Mat4x4 final_transform_small_sphere;
     Mat4x4_set_ident(final_transform_small_sphere);
-    mat4x4_mul_in_place(translate_small_sphere, final_transform_small_sphere, final_transform_small_sphere);
-    mat4x4_mul_in_place(scale_small_sphere, final_transform_small_sphere, final_transform_small_sphere);
+    mat4x4_mul_in_place(final_transform_small_sphere, translate_small_sphere, final_transform_small_sphere);
+    mat4x4_mul_in_place(final_transform_small_sphere, scale_small_sphere, final_transform_small_sphere);
     Mat4x4_copy(final_transform_small_sphere, small_sphere->transform);
 
     material small_sphere_material = create_material_default();
@@ -3346,31 +3542,63 @@ void render_complete_world() {
     small_sphere_material.specular = 0.3f;
     small_sphere->material = small_sphere_material;
 
-    
     // putting geometry together
     small_sphere->next = NULL;
-    floor->next = small_sphere;
-    w.objects = floor;
-    
-    /*
-    // putting geometry together
-    right_sphere->next = NULL;
+    right_sphere->next = small_sphere;
     middle_sphere->next = right_sphere;
-    small_sphere->next = middle_sphere;
-    right_wall->next = small_sphere;
+    right_wall->next = middle_sphere;
     left_wall->next = right_wall;
-    w.objects = left_wall;
-    */
+    floor->next = left_wall;
+    w.objects = floor;
 
-    // lighting
+    assert(equal(w.objects->material.color.x, 1.0f));
+    assert(equal(w.objects->material.color.y, 0.9f));
+    assert(equal(w.objects->material.color.z, 0.9f));
+    assert(equal(w.objects->material.specular, 0.0f));
+
+    assert(equal(w.objects->material.ambient, 0.1f));
+    assert(equal(w.objects->material.diffuse, 0.9f));
+
+    // Ensure the values here have not changed after stringing together the objects
+
+    sphere* test_object = w.objects; // floor
+
+    assert(equal(test_object->transform[0][0], 10.0f));
+    assert(equal(test_object->transform[1][1], 0.01f));
+    assert(equal(test_object->transform[2][2], 10.0f));
+    assert(equal(test_object->transform[3][3], 1.0f));
+
+    test_object = test_object->next; // left wall
+
+    assert(equal(test_object->transform[0][0], 7.071067812000001f));
+    assert(equal(test_object->transform[1][0], 0.0f));
+    assert(equal(test_object->transform[2][0], 7.071067812000001f));
+    assert(equal(test_object->transform[3][0], 0.0f));
+
+    assert(equal(test_object->transform[0][1], -.007071067670578643f));
+    assert(equal(test_object->transform[1][1], 0.0f));
+    assert(equal(test_object->transform[2][1], .007071067670578643f));
+    assert(equal(test_object->transform[3][1], 0.0f));
+
+    assert(equal(test_object->transform[0][2], 0.0f));
+    assert(equal(test_object->transform[1][2], -10.0f));
+    assert(equal(test_object->transform[2][2], 0.0f));
+    assert(equal(test_object->transform[3][2], 0.0f));
+
+    assert(equal(test_object->transform[0][3], 0.0f));
+    assert(equal(test_object->transform[1][3], 0.0f));
+    assert(equal(test_object->transform[2][3], 5.0f));
+    assert(equal(test_object->transform[3][3], 1.0f));
+
+     // lighting
     tuple light_position = create_point(-10.0f, 10.0f, -10.0f);
     tuple light_intensity = create_point(1.0f, 1.0f, 1.0f);
     *w.lights = create_point_light(light_position, light_intensity);
 
-    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, M_PI / 3);
+    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, M_PI/3.0f);
     tuple from = create_point(0.0f, 1.5f, -5.0f);
     tuple to = create_point(0.0f, 1.0f, 0.0f);
-    tuple up = create_vector(1.0f, 0.0f, 0.0f);
+    tuple up = create_vector(0.0f, 1.0f, 0.0f);
     view_transform(from, to, up, c->view_transform);
 
     render(c, &w);
@@ -3382,7 +3610,6 @@ void render_complete_world() {
     free(right_sphere);
     free(small_sphere);
 }
-
 
 int main() {
 #if defined _DEBUG
