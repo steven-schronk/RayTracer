@@ -580,6 +580,8 @@ void intersect(sphere* sp, ray* r, intersections* intersects) {
     return;
 }
 
+bool intersects_in_order_test(intersections* intersects); // wanted test to be in debug block
+
 void intersect_world(world* w, ray* r, intersections* intersects) {
     assert(w != NULL);
     assert(r != NULL);
@@ -590,6 +592,7 @@ void intersect_world(world* w, ray* r, intersections* intersects) {
         sp = sp->next;
     } while (sp != NULL);
     sort_intersects(intersects);
+    assert(intersects_in_order_test(intersects));
     return;
 }
 
@@ -3184,6 +3187,25 @@ int render_a_world_with_camera_test() {
     free(c);
     return 0;
 }
+
+// extra
+bool intersects_in_order_test(intersections* intersects) {
+    if (intersects->count == 0) { return true; }
+    bool in_order = true;
+    double previous_value = DBL_TRUE_MIN;
+    int count = 0;
+
+    do {
+        previous_value = intersects->itersection[count].t;
+        if (intersects->itersection[count].t < previous_value) {
+            in_order = false;
+            break;
+        }
+        ++count;
+    } while (count != intersects->count);
+    return in_order;
+}
+
 #endif
 
 // 72 Hint #4
