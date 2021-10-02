@@ -759,11 +759,11 @@ int write_canvas_to_file() {
     fprintf(fp, "%d %d\n255\n", HORIZONTAL_SIZE, VERTICAL_SIZE);
     for (int col = 0; col < VERTICAL_SIZE; ++col) {
         for (int row = 0; row < HORIZONTAL_SIZE; ++row) {
-            int color = color_convert(canvas[col][row].x);
+            int color = color_convert(canvas[row][col].x);
             fprintf(fp, "%d ", color);
-            color = color_convert(canvas[col][row].y);
+            color = color_convert(canvas[row][col].y);
             fprintf(fp, "%d ", color);
-            color = color_convert(canvas[col][row].z);
+            color = color_convert(canvas[row][col].z);
             fprintf(fp, "%d \n", color);
         }
     }
@@ -3231,11 +3231,10 @@ int render_a_world_with_camera_test() {
 bool intersects_in_order_test(intersections* intersects) {
     if (intersects->count == 0) { return true; }
     bool in_order = true;
-    double previous_value = DBL_TRUE_MIN;
     int count = 0;
 
     do {
-        previous_value = intersects->itersection[count].t;
+        double previous_value = intersects->itersection[count].t;
         if (intersects->itersection[count].t < previous_value) {
             in_order = false;
             break;
@@ -3554,7 +3553,6 @@ void render_complete_world() {
     Mat4x4 final_transform_right_sphere;
     Mat4x4_set_ident(final_transform_right_sphere);
 
-
     mat4x4_mul_in_place(final_transform_right_sphere, translate_right_sphere, final_transform_right_sphere);
     mat4x4_mul_in_place(final_transform_right_sphere, scale_right_sphere, final_transform_right_sphere);
     Mat4x4_copy(final_transform_right_sphere, right_sphere->transform);
@@ -3651,7 +3649,7 @@ void render_complete_world() {
     assert(equal(test_object->transform[2][3], 5.0f));
     assert(equal(test_object->transform[3][3], 1.0f));
 
-     // lighting
+    // lighting
     tuple light_position = create_point(-10.0f, 10.0f, -10.0f);
     tuple light_intensity = create_point(1.0f, 1.0f, 1.0f);
     *w.lights = create_point_light(light_position, light_intensity);
