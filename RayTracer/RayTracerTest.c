@@ -199,7 +199,7 @@ tuple tuple_add(tuple t1, tuple t2) {
 }
 
 tuple tuple_sub(tuple t1, tuple t2) {
-  tuple t3 = { t1.x - t2.x, t1.y - t2.y, t1.z - t2.z};
+  tuple t3 = { t1.x - t2.x, t1.y - t2.y, t1.z - t2.z, t1.w - t2.w};
   return t3;
 }
 
@@ -210,7 +210,7 @@ tuple tuple_negate(tuple t) {
 }
 
 tuple tuple_mult_scalar(tuple t, double s) {
-  tuple ret = { t.x * s, t.y * s, t.z * s, t.w *s };
+  tuple ret = { t.x * s, t.y * s, t.z * s, t.w * s };
   return ret;
 }
 
@@ -228,13 +228,14 @@ double tuple_mag_vec(tuple t) {
   double magx = pow(t.x, 2);
   double magy = pow(t.y, 2);
   double magz = pow(t.z, 2);
-  double mag = sqrt( magx + magy + magz);
+  double magw = pow(t.w, 2);
+  double mag = sqrt( magx + magy + magz + magw);
   return mag;
 }
 
 tuple norm_vec(tuple t) {
   double mag = tuple_mag_vec(t);
-  tuple ret = { t.x / mag, t.y / mag, t.z / mag};
+  tuple ret = { t.x / mag, t.y / mag, t.z / mag, t.w / mag};
   return ret;
 }
 
@@ -256,7 +257,7 @@ tuple cross(tuple a, tuple b) {
 }
 
 tuple hadamard_product(tuple c1, tuple c2) {
-  tuple color = { c1.x * c2.x, c1.y * c2.y, c1.z * c2.z };
+  tuple color = { c1.x * c2.x, c1.y * c2.y, c1.z * c2.z, 1.0f };
   return color;
 }
 
@@ -647,9 +648,12 @@ world create_default_world() {
     w.lights->intensity.x = light.intensity.x;
     w.lights->intensity.y = light.intensity.y;
     w.lights->intensity.z = light.intensity.z;
+    w.lights->intensity.w = 1.0;
+
     w.lights->position.x = light.position.x;
     w.lights->position.y = light.position.y;
     w.lights->position.z = light.position.z;
+    w.lights->position.w = 1.0;
 
     w.lights->next = NULL;
     sphere* s1 = create_sphere();
@@ -804,6 +808,7 @@ tuple color_at(world* w, ray* r) {
     assert(r);
     intersections inter = create_intersections();
     intersect_world(w, r, &inter);
+    assert(intersects_in_order_test(&inter));
     intersection* hit1 = hit(&inter);
     if (hit1 == NULL) {
         return create_point(0.0f, 0.0f, 0.0f);
@@ -987,6 +992,7 @@ int tuple_sub_test() {
   assert(equal(c.x, -2.0f));
   assert(equal(c.y, -4.0f));
   assert(equal(c.z, -6.0f));
+  assert(tuple_is_vector(c) == true);
   return 0;
 }
 
@@ -1009,6 +1015,7 @@ int subtract_two_vectors_test() {
   assert(equal(vec3.x, -2.0f));
   assert(equal(vec3.y, -4.0f));
   assert(equal(vec3.z, -6.0f));
+  assert(tuple_is_vector(vec3) == true);
   return 0;
 }
 
@@ -1020,6 +1027,7 @@ int subtract_vector_from_zero_vector_test() {
   assert(equal(vec2.x, -1.0f));
   assert(equal(vec2.y,  2.0f));
   assert(equal(vec2.z, -3.0f));
+  assert(tuple_is_vector(vec2) == true);
   return 0;
 }
 
@@ -1030,6 +1038,7 @@ int negating_tuple_test() {
   assert(equal(vec1.x, -1.0f));
   assert(equal(vec1.y,  2.0f));
   assert(equal(vec1.z, -3.0f));
+  assert(equal(vec1.w, 4.0f));
   return 0;
 }
 
@@ -1134,10 +1143,12 @@ int cross_prod_test() {
   assert(equal(cross1.x, -1.0f));
   assert(equal(cross1.y,  2.0f));
   assert(equal(cross1.z, -1.0f));
+  assert(equal(cross1.w,  0.0f));
   tuple cross2 = cross(vec2, vec1);
   assert(equal(cross2.x,  1.0f));
   assert(equal(cross2.y, -2.0f));
   assert(equal(cross2.z,  1.0f));
+  assert(equal(cross2.w,  0.0f));
   return 0;
 }
 
@@ -1149,6 +1160,7 @@ int hadamard_product_test() {
   assert(equal(col3.x, 0.899999976f));
   assert(equal(col3.y, 0.2f));
   assert(equal(col3.z, 0.04f));
+  assert(equal(col3.w, 1.0f));
   return 0;
 }
 
@@ -1270,23 +1282,50 @@ int mat4x4_mul_test() {
   Mat4x4 b = { { -2.0f, 1.0f, 2.0f, 3.0f }, { 3.0f, 2.0f, 1.0f, -1.0f },\
     { 4.0f, 3.0f, 6.0f, 5.0f }, { 1.0f, 2.0f, 7.0f, 8.0f } };
   Mat4x4 m;
+
   mat4x4_mul_in_place(a, b, m);
   assert(equal(m[0][0],  20.0f));
   assert(equal(m[0][1],  22.0f));
   assert(equal(m[0][2],  50.0f));
   assert(equal(m[0][3],  48.0f));
+
   assert(equal(m[1][0],  44.0f));
   assert(equal(m[1][1],  54.0f));
   assert(equal(m[1][2], 114.0f));
   assert(equal(m[1][3], 108.0f));
+
   assert(equal(m[2][0],  40.0f));
   assert(equal(m[2][1],  58.0f));
   assert(equal(m[2][2], 110.0f));
   assert(equal(m[2][3], 102.0f));
+
   assert(equal(m[3][0],  16.0f));
   assert(equal(m[3][1],  26.0f));
   assert(equal(m[3][2],  46.0f));
   assert(equal(m[3][3],  42.0f));
+
+  mat4x4_mul_in_place(b, a, m);
+
+  assert(equal(m[0][0], 36.0f));
+  assert(equal(m[0][1], 30.0f));
+  assert(equal(m[0][2], 24.0f));
+  assert(equal(m[0][3], 18.0f));
+
+  assert(equal(m[1][0], 17.0f));
+  assert(equal(m[1][1], 22.0f));
+  assert(equal(m[1][2], 27.0f));
+  assert(equal(m[1][3], 32.0f));
+
+  assert(equal(m[2][0], 98.0f));
+  assert(equal(m[2][1], 94.0f));
+  assert(equal(m[2][2], 90.0f));
+  assert(equal(m[2][3], 86.0f));
+
+  assert(equal(m[3][0], 114.0f));
+  assert(equal(m[3][1], 102.0f));
+  assert(equal(m[3][2], 90.0f));
+  assert(equal(m[3][3], 78.0f));
+
   return 0;
 }
 
@@ -2548,9 +2587,9 @@ int lighting_with_eye_between_light_and_surface_test() {
     tuple position1 = create_vector(0.0f, 0.0f, 0.0f);
     tuple eyev = create_vector(0.0f, 0.0f, -1.0f);
     tuple normalv = create_vector(0.0f, 0.0f, -1.0f);
-    tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
-    tuple p_light_position = create_point(0.0f, 0.0f, -10.0f);
-    point_light p_light = create_point_light(p_light_position, intensity);
+    tuple p_light_color = create_point(1.0f, 1.0f, 1.0f);
+    tuple p_light_position = create_vector(0.0f, 0.0f, -10.0f);
+    point_light p_light = create_point_light(p_light_position, p_light_color);
     tuple light1 = lighting(m, &p_light, position1, eyev, normalv);
     assert(equal(light1.x, 1.9f));
     assert(equal(light1.y, 1.9f));
