@@ -46,7 +46,7 @@ typedef struct { double t; sphere *object_id; } intersection;
 
 typedef struct { struct _sphere* objects; point_light* lights; } world;
 
-typedef struct { double t; sphere* object; tuple point; tuple eyev; tuple normalv; bool inside; } comps;
+typedef struct { double t; sphere* object; tuple point; tuple eyev; tuple normalv; bool inside; tuple over_point; } comps;
 
 typedef struct { double hsize; double vsize; double field_of_view; double pixel_size; double half_width; double half_height; Mat4x4 view_transform; } camera;
 
@@ -707,7 +707,7 @@ camera* create_camera(double hsize, double vsize, double field_of_view) {
     return c;
 }
 
-tuple lighting(material material, point_light* light, tuple point, tuple eyev, tuple normalv) {
+tuple lighting(material material, point_light* light, tuple point, tuple eyev, tuple normalv, bool in_shadow) {
     tuple effective_color = tuple_mult_tuple(material.color, light->intensity);
     tuple diffuse;
     tuple specular;
@@ -739,8 +739,12 @@ tuple lighting(material material, point_light* light, tuple point, tuple eyev, t
             specular = tuple_mult_scalar(tuple_mult_scalar(light->intensity, material.specular), factor);
         }
     }
-    tuple light_out = tuple_add(tuple_add(ambient, specular),diffuse);
-    return light_out;
+    if (in_shadow) {
+        return ambient;
+    }
+    else {
+        return tuple_add(tuple_add(ambient, specular), diffuse);
+    }
 }
 
 int color_convert(double x) {
@@ -794,13 +798,29 @@ comps prepare_computations(intersection* inter, ray* r) {
     else {
         comp.inside = false;
     }
+    comp.over_point = tuple_add(comp.point, tuple_mult_scalar(comp.normalv, EPSILON));
     return comp;
+}
+
+bool is_shadowed(world* world, tuple* point) {
+    tuple v = tuple_sub(world->lights->position, *point);
+    double distance = tuple_mag_vec(v);
+    tuple direction = norm_vec(v);
+    ray r = { *point, direction };
+    intersections inter = create_intersections();
+    intersect_world(world, &r, &inter);
+    intersection* h = hit(&inter);
+    if (h != NULL && h->t < distance) {
+        return true;
+    }
+    return false;
 }
 
 tuple shade_hit(world* w, comps *comp) {
     assert(w->lights);
     assert(w->objects);
-    return lighting(comp->object->material, w->lights, comp->point, comp->eyev, comp->normalv);
+    bool shadowed = is_shadowed(w, &comp->over_point);
+    return lighting(comp->object->material, w->lights, comp->point, comp->eyev, comp->normalv, shadowed);
 }
 
 tuple color_at(world* w, ray* r) {
@@ -2590,7 +2610,7 @@ int lighting_with_eye_between_light_and_surface_test() {
     tuple p_light_color = create_point(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_vector(0.0f, 0.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, p_light_color);
-    tuple light1 = lighting(m, &p_light, position1, eyev, normalv);
+    tuple light1 = lighting(m, &p_light, position1, eyev, normalv, false);
     assert(equal(light1.x, 1.9f));
     assert(equal(light1.y, 1.9f));
     assert(equal(light1.z, 1.9f));
@@ -2606,7 +2626,7 @@ int lighting_with_eye_between_light_and_surface_eye_offset_test() {
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 0.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, &p_light, position1, eyev, normalv);
+    tuple light1 = lighting(m, &p_light, position1, eyev, normalv, false);
     assert(equal(light1.x, 1.0f));
     assert(equal(light1.y, 1.0f));
     assert(equal(light1.z, 1.0f));
@@ -2622,7 +2642,7 @@ int lighting_with_eye_opposite_surface_test() {
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 10.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, &p_light, position1, eyev, normalv);
+    tuple light1 = lighting(m, &p_light, position1, eyev, normalv, false);
     assert(equal(light1.x, 0.73639608769926945f));
     assert(equal(light1.y, 0.73639608769926945f));
     assert(equal(light1.z, 0.73639608769926945f));
@@ -2638,7 +2658,7 @@ int lighting_with_eye_in_path_of_reflect_vector_test() {
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 10.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, &p_light, position1, eyev, normalv);
+    tuple light1 = lighting(m, &p_light, position1, eyev, normalv, false);
     assert(equal(light1.x, 1.6363960638574115f));
     assert(equal(light1.y, 1.6363960638574115f));
     assert(equal(light1.z, 1.6363960638574115f));
@@ -2654,7 +2674,7 @@ int lighting_with_the_light_behind_surface_test() {
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 0.0f, 10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, &p_light, position1, eyev, normalv);
+    tuple light1 = lighting(m, &p_light, position1, eyev, normalv, true);
     assert(equal(light1.x, 0.1f));
     assert(equal(light1.y, 0.1f));
     assert(equal(light1.z, 0.1f));
@@ -3244,6 +3264,98 @@ bool intersects_in_order_test(intersections* intersects) {
     return in_order;
 }
 
+// 110 Lighting with the surface in shadow
+int lighting_with_surface_in_shadow_test() {
+    tuple eyev = create_vector(0.0f, 0.0f, -1.0f);
+    tuple normalv = create_vector(0.0f, 0.0f, -1.0f);
+    tuple light_pos = create_point(0.0f, 0.0f, -10.0f);
+    tuple light_color = create_point(1.0f, 1.0f, 1.0f);
+    point_light light = create_point_light(light_pos, light_color);
+    bool in_shadow = true;
+    material mat = create_material_default();
+    tuple result = lighting(mat, &light, light_pos, eyev, normalv, in_shadow);
+    assert(equal(result.x, 0.1f));
+    assert(equal(result.y, 0.1f));
+    assert(equal(result.z, 0.1f));
+    return 0;
+}
+
+// 111 There is no shadow when nothing is collinear with point and light
+int no_shadow_when_not_collinear_point_light_test() {
+    world w = create_default_world();
+    tuple point = create_point(0.0f, 10.0f, 0.0f);
+    bool shadow = is_shadowed(&w, &point);
+    assert(shadow == false);
+    return 0;
+}
+
+// 112 The shadow when an object is between the point and the light
+int no_shadow_when_object_between_point_and_light_test() {
+    world w = create_default_world();
+    tuple point = create_point(10.0f, -10.0f, 10.0f);
+    bool shadow = is_shadowed(&w, &point);
+    assert(shadow == true);
+    return 0;
+}
+
+// 112 The is no shadow when an object is behind the light
+int no_shadow_when_object_behind_light_test() {
+    world w = create_default_world();
+    tuple point = create_point(-20.0f, 20.0f, -20.0f);
+    bool shadow = is_shadowed(&w, &point);
+    assert(shadow == false);
+    return 0;
+}
+
+// 112 There is no shadow when an object is behind the point
+int no_shadow_when_object_behind_point_test() {
+    world w = create_default_world();
+    tuple point = create_point(-2.0f, 2.0f, -2.0f);
+    bool shadow = is_shadowed(&w, &point);
+    assert(shadow == false);
+    return 0;
+}
+
+// 114 Shade hit is given an intersection in shadow
+int shade_hit_given_intersection_in_shadow_test() {
+    world w = create_default_world();
+    tuple light_pos = create_point(0.0f, 0.0f, -10.0f);
+    tuple light_color = create_point(1.0f, 1.0f, 1.0f);
+    point_light light = create_point_light(light_pos, light_color);
+    w.lights = &light;
+    sphere* sp1 = create_sphere();
+    sphere* sp2 = create_sphere();
+    Mat4x4 trans_matrix;
+    gen_translate_matrix(0.0f, 0.0f, 10.0f, trans_matrix);
+    mat4x4_mul_in_place(sp2->transform, trans_matrix, trans_matrix);
+    Mat4x4_copy(trans_matrix, sp2->transform);
+    sp2->next = NULL;
+    sp1->next = sp2;
+    w.objects = sp1;
+    ray r = create_ray(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 1.0f);
+    intersection i = { 4.0f, sp2 };
+    comps comp = prepare_computations(&i, &r);
+    tuple c = shade_hit(&w, &comp);
+    assert(equal(c.x, 0.1f));
+    assert(equal(c.y, 0.1f));
+    assert(equal(c.z, 0.1f));
+    return 0;
+}
+
+// 115 Hit should offset the point
+int hit_should_offset_point_test() {
+    ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+    sphere* sp1 = create_sphere();
+    Mat4x4 trans_matrix;
+    gen_translate_matrix(0.0f, 0.0f, 10.0f, trans_matrix);
+    Mat4x4_copy(trans_matrix, sp1->transform);
+    intersection i = { 5.0f, sp1 };
+    comps comp = prepare_computations(&i, &r);
+    assert(comp.over_point.z < -EPSILON / 2);
+    assert(comp.point.z > comp.over_point.z);
+    return 0;
+}
+
 #endif
 
 // 72 Hint #4
@@ -3286,7 +3398,7 @@ void render_sphere() {
         tuple point2 = position(ray_to_draw, hit_intersection->t);
         tuple normal = normal_at(hit_intersection->object_id, point2);
         tuple eye = tuple_negate(ray_to_draw.direction_vector);
-        tuple pix_color = lighting(hit_intersection->object_id->material, &p_light, point2, eye, normal);
+        tuple pix_color = lighting(hit_intersection->object_id->material, &p_light, point2, eye, normal, true);
         //assert(pix_color.x <= 255 && pix_color.x >= 0);
         //assert(pix_color.y <= 255 && pix_color.y >= 0);
         //assert(pix_color.z <= 255 && pix_color.z >= 0);
@@ -3776,9 +3888,16 @@ int main() {
   unit_test("Constructing New Camera Test", constructing_camera_test());
   unit_test("Pixel Size For Horizontal Canvas Test", pixel_size_for_horizontal_canvas_test());
   unit_test("Pixel Size For Vertical Canvas Test", pixel_size_for_vertical_canvas_test());
-  unit_test("Construct A Ray Through Center Of Canvas", const_a_ray_through_center_of_canvas());
-  unit_test("Construct A Ray Through Corner Of Canvas", const_a_ray_through_corner_of_canvas());
-  unit_test("Construct A Ray When Camera Is Transformed", const_a_ray_when_camera_is_transformed());
+  unit_test("Construct A Ray Through Center Of Canvas Test", const_a_ray_through_center_of_canvas());
+  unit_test("Construct A Ray Through Corner Of Canvas Test", const_a_ray_through_corner_of_canvas());
+  unit_test("Construct A Ray When Camera Is Transformed Test", const_a_ray_when_camera_is_transformed());
+  unit_test("Lighting With Surface In Shadow Test", lighting_with_surface_in_shadow_test());
+  unit_test("No Shadow When Not Collinear Point Light Test", no_shadow_when_not_collinear_point_light_test());
+  unit_test("No Shadow When Object Between Point And Light Test", no_shadow_when_object_between_point_and_light_test());
+  unit_test("No Shadow When Object Behind Light Test", no_shadow_when_object_behind_light_test());
+  unit_test("No Shadow When Object Behind Point Test", no_shadow_when_object_behind_point_test());
+  unit_test("Shade Hit Given Intersection In Shadow Test", shade_hit_given_intersection_in_shadow_test());
+  unit_test("Hit Should Offset Point Test", hit_should_offset_point_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
 #endif
   //render_sphere();
