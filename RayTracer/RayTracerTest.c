@@ -25,8 +25,8 @@ Copyright 2021 Steven Ray Schronk
 
 #define EPSILON 0.000001
 
-#define VERTICAL_SIZE   50
-#define HORIZONTAL_SIZE 100
+#define VERTICAL_SIZE   600
+#define HORIZONTAL_SIZE 1200
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -3339,6 +3339,8 @@ int shade_hit_given_intersection_in_shadow_test() {
     assert(equal(c.x, 0.1f));
     assert(equal(c.y, 0.1f));
     assert(equal(c.z, 0.1f));
+    free(sp1);
+    free(sp2);
     return 0;
 }
 
@@ -3353,6 +3355,7 @@ int hit_should_offset_point_test() {
     comps comp = prepare_computations(&i, &r);
     assert(comp.over_point.z < -EPSILON / 2);
     assert(comp.point.z > comp.over_point.z);
+    free(sp1);
     return 0;
 }
 
@@ -3476,8 +3479,6 @@ void render_complete_world() {
     assert(equal(final_transform_left[1][3], 0.0f));
     assert(equal(final_transform_left[2][3], 5.0f));
     assert(equal(final_transform_left[3][3], 1.0f));
-    
-    print_mat(final_transform_left);
 
     mat4x4_mul_in_place(final_transform_left, rotate_y_left, final_transform_left);
 
