@@ -18,6 +18,7 @@ Copyright 2021 Steven Ray Schronk
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <vld.h>  // C:\Program Files (x86)\Visual Leak Detector
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -92,7 +93,7 @@ intersections create_intersections() {
     return intersects;
 }
 
-void clear_intersections(intersections *intersection_list) {
+void clear_intersections(intersections* intersection_list) {
     assert(intersection_list != NULL);
     intersection_list->count = 0;
     for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
@@ -114,7 +115,7 @@ void sort_intersects(intersections* intersects) {
     qsort(intersects, intersects->count, sizeof(intersection), intersect_compare);
 }
 
-intersection* hit(intersections *intersection_list) {
+intersection* hit(intersections* intersection_list) {
   assert(intersection_list != NULL);
   if (0 == intersection_list->count) return NULL;
   intersection* intersect1 = NULL;
@@ -294,20 +295,6 @@ bool mat4x4_equal(double m1[][4], double m2[][4]) {
   return true;
 }
 
-/*
-void mat4x4_mul(const Mat4x4 a, const Mat4x4 b, Mat4x4 m) {
-  for (int row = 0; row < 4; ++row) {
-    for (int col = 0; col < 4; ++col) {
-      m[row][col] =
-        a[row][0] * b[0][col] +
-        a[row][1] * b[1][col] +
-        a[row][2] * b[2][col] +
-        a[row][3] * b[3][col];
-    }
-  }
-}
-*/
-
 void mat4x4_mul_in_place(const Mat4x4 a, const Mat4x4 b, Mat4x4 m) {
     Mat4x4 orig;
     for (int row = 0; row < 4; ++row) {
@@ -322,7 +309,7 @@ void mat4x4_mul_in_place(const Mat4x4 a, const Mat4x4 b, Mat4x4 m) {
     Mat4x4_copy(orig, m);
 }
 
-void mat4x4_mul_tuple(const Mat4x4 a, const tuple b, tuple *c) {
+void mat4x4_mul_tuple(const Mat4x4 a, const tuple b, tuple* c) {
     c->x = b.x * a[0][0] + b.y * a[0][1] + b.z * a[0][2] + b.w * a[0][3];
     c->y = b.x * a[1][0] + b.y * a[1][1] + b.z * a[1][2] + b.w * a[1][3];
     c->z = b.x * a[2][0] + b.y * a[2][1] + b.z * a[2][2] + b.w * a[2][3];
@@ -597,7 +584,7 @@ void intersect_world(world* w, ray* r, intersections* intersects) {
     return;
 }
 
-void set_transform(sphere *sp, Mat4x4 m) {
+void set_transform(sphere* sp, Mat4x4 m) {
     Mat4x4_copy(m, sp->transform);
 }
 
@@ -669,8 +656,14 @@ world create_default_world() {
     sphere* s2 = create_sphere();
     gen_scale_matrix(0.5f, 0.5f, 0.5f, s2->transform);
     w.objects->next = s2;
- 
     return w;
+}
+
+void free_default_world(world* w) {
+    assert(w);
+    free(w->objects->next);
+    free(w->objects);
+    free(w->lights);
 }
 
 camera* create_camera(double hsize, double vsize, double field_of_view) {
@@ -816,7 +809,7 @@ bool is_shadowed(world* world, tuple* point) {
     return false;
 }
 
-tuple shade_hit(world* w, comps *comp) {
+tuple shade_hit(world* w, comps* comp) {
     assert(w->lights);
     assert(w->objects);
     bool shadowed = is_shadowed(w, &comp->over_point);
@@ -912,6 +905,7 @@ ray ray_for_pixel(camera* camera, double px, double py) {
 }
 
 void render(camera* c, world* w) {
+//#pragma omp parallel shared(c,w)
     for (int y = 0; y < VERTICAL_SIZE; ++y) {
         for (int x = 0; x < HORIZONTAL_SIZE; ++x) {
             ray r = ray_for_pixel(c, x, y);
@@ -2807,6 +2801,7 @@ int default_world_test() {
     assert(equal(sp->transform[1][1], 0.5f));
     assert(equal(sp->transform[2][2], 0.5f));
     assert(equal(sp->transform[3][3], 1.0f));
+    free_default_world(&w);
     return 0;
 }
 
@@ -2821,6 +2816,7 @@ int intersect_world_with_ray_test() {
     assert(equal(inter.itersection[1].t, 4.5f));
     assert(equal(inter.itersection[2].t, 5.5f));
     assert(equal(inter.itersection[3].t, 6.0f));
+    free_default_world(&w);
     return 0;
 }
 
@@ -2969,6 +2965,7 @@ int shading_an_intersection_test() {
     assert(equal(color.x, 0.38066119994542108f));
     assert(equal(color.y, 0.47582649284140904f));
     assert(equal(color.z, 0.28549590704943306f));
+    free_default_world(&w);
     return 0;
 }
 
@@ -3049,6 +3046,7 @@ int shading_intersection_from_inside() {
     assert(equal(color.x, 0.90498445224856761f));
     assert(equal(color.y, 0.90498445224856761f));
     assert(equal(color.z, 0.90498445224856761f));
+    free_default_world(&w);
     return 0;
 }
 
@@ -3060,6 +3058,7 @@ int color_when_ray_misses_test() {
     assert(equal(color.x, 0.0f));
     assert(equal(color.y, 0.0f));
     assert(equal(color.z, 0.0f));
+    free_default_world(&w);
     return 0;
 }
 
@@ -3071,6 +3070,7 @@ int color_when_ray_hits_test() {
     assert(equal(color.x, 0.38066119994542108f));
     assert(equal(color.y, 0.47582649284140904f));
     assert(equal(color.z, 0.28549590704943306f));
+    free_default_world(&w);
     return 0;
 }
 
@@ -3084,6 +3084,7 @@ int color_with_intersect_behind_ray_test() {
     assert(equal(w.objects->next->material.color.x, color.x));
     assert(equal(w.objects->next->material.color.y, color.y));
     assert(equal(w.objects->next->material.color.z, color.z));
+    free_default_world(&w);
     return 0;
 }
 
@@ -3243,6 +3244,7 @@ int render_a_world_with_camera_test() {
     assert(equal(canvas[5][5].x, 0.38066119994542108f));
     assert(equal(canvas[5][5].y, 0.47582649284140904f));
     assert(equal(canvas[5][5].z, 0.28549590704943306));
+    free_default_world(&w);
     free(c);
     return 0;
 }
@@ -3286,6 +3288,7 @@ int no_shadow_when_not_collinear_point_light_test() {
     tuple point = create_point(0.0f, 10.0f, 0.0f);
     bool shadow = is_shadowed(&w, &point);
     assert(shadow == false);
+    free_default_world(&w);
     return 0;
 }
 
@@ -3295,6 +3298,7 @@ int no_shadow_when_object_between_point_and_light_test() {
     tuple point = create_point(10.0f, -10.0f, 10.0f);
     bool shadow = is_shadowed(&w, &point);
     assert(shadow == true);
+    free_default_world(&w);
     return 0;
 }
 
@@ -3304,6 +3308,7 @@ int no_shadow_when_object_behind_light_test() {
     tuple point = create_point(-20.0f, 20.0f, -20.0f);
     bool shadow = is_shadowed(&w, &point);
     assert(shadow == false);
+    free_default_world(&w);
     return 0;
 }
 
@@ -3313,6 +3318,7 @@ int no_shadow_when_object_behind_point_test() {
     tuple point = create_point(-2.0f, 2.0f, -2.0f);
     bool shadow = is_shadowed(&w, &point);
     assert(shadow == false);
+    free_default_world(&w);
     return 0;
 }
 
@@ -3322,6 +3328,7 @@ int shade_hit_given_intersection_in_shadow_test() {
     tuple light_pos = create_point(0.0f, 0.0f, -10.0f);
     tuple light_color = create_point(1.0f, 1.0f, 1.0f);
     point_light light = create_point_light(light_pos, light_color);
+    free(w.lights);
     w.lights = &light;
     sphere* sp1 = create_sphere();
     sphere* sp2 = create_sphere();
@@ -3775,6 +3782,7 @@ void render_complete_world() {
 
     render(c, &w);
 
+    free(c);
     free(floor);
     free(left_wall);
     free(right_wall);
@@ -3797,7 +3805,7 @@ int main() {
   unit_test("Tuple Multiplication Scalar Test", tuple_mult_scalar_test());
   unit_test("Tuple Multiplication Scalar Fraction Test", tuple_mult_scalar_fraction_test());
   unit_test("Tuple Division Scalar Test", tuple_div_scalar_test());
-  unit_test("Tuple Magnigude Vector Test", tuple_mag_vec_test());
+  unit_test("Tuple Magnitude Vector Test", tuple_mag_vec_test());
   unit_test("Normal Vector Test", norm_vec_test());
   unit_test("Dot Product Test", dot_prod_test());
   unit_test("Cross Product Test", cross_prod_test());
