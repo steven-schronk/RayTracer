@@ -616,7 +616,7 @@ tuple normal_at(sphere* sphere, tuple world_point) {
     return tuple_norm(world_normal);
 }
 
-tuple reflect(tuple in, tuple normal) {
+tuple tuple_reflect(tuple in, tuple normal) {
     tuple normTwo = tuple_mult_scalar(normal, 2.0f);
     double dotNNormal = tuple_dot(in, normal);
     return tuple_sub(in, tuple_mult_scalar(normTwo, dotNNormal));
@@ -727,7 +727,7 @@ tuple lighting(material material, point_light* light, tuple point, tuple eyev, t
     else {
         diffuse = tuple_mult_scalar( tuple_mult_scalar(effective_color, material.diffuse), light_dot_normal);
 
-        tuple reflectv = reflect( tuple_negate(lightv), normalv);
+        tuple reflectv = tuple_reflect( tuple_negate(lightv), normalv);
         double reflect_dot_eye = tuple_dot(reflectv, eyev);
 
         if (reflect_dot_eye <= 0) {
@@ -2531,7 +2531,7 @@ int compute_normal_on_transformed_sphere_test(){
 int reflect_vector_approach_at_45_deg_test() {
     tuple v = create_vector(1.0f, -1.0f, 0.0f);
     tuple n = create_vector(0.0f, 1.0f, 0.0f);
-    tuple r = reflect(v, n);
+    tuple r = tuple_reflect(v, n);
     assert(equal(r.x, 1.0f));
     assert(equal(r.y, 1.0f));
     assert(equal(r.z, 0.0f));
@@ -2542,7 +2542,7 @@ int reflect_vector_approach_at_45_deg_test() {
 int reflect_vector_off_slanted_surf_test() {
     tuple v = create_vector(0.0f, -1.0f, 0.0f);
     tuple n = create_vector(sqrt(2)/2, sqrt(2)/2, 0.0f);
-    tuple r = reflect(v, n);
+    tuple r = tuple_reflect(v, n);
     assert(equal(r.x, 1.0f));
     assert(equal(r.y, 0.0f));
     assert(equal(r.z, 0.0f));
