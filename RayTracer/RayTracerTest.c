@@ -51,9 +51,9 @@ typedef struct { double t; sphere* object; tuple point; tuple eyev; tuple normal
 
 typedef struct { double hsize; double vsize; double field_of_view; double pixel_size; double half_width; double half_height; Mat4x4 view_transform; } camera;
 
-#define INTERSECTIONS_SIZE 10
+#define INTERSECTIONS_SIZE 100
 
-typedef struct { intersection itersection[10]; int count; } intersections;
+typedef struct { intersection itersection[INTERSECTIONS_SIZE]; int count; } intersections;
 
 material create_material(tuple color, double ambient, double diffuse, double specular, double shininess) {
     material m;
@@ -131,8 +131,13 @@ intersection* hit(intersections* intersection_list) {
   return intersect1;
 }
 
-void add_intersection_to_list(intersections* intersection_list, double t, sphere *sp ) {
+bool add_intersection_to_list(intersections* intersection_list, double t, sphere *sp ) {
   assert(intersection_list != NULL && "Call to add insertion to list cannot contain null intersection list");
+  if (intersection_list->count == INTERSECTIONS_SIZE)
+  {
+      assert("Intersection list too small.\nIncreate INTERSECTIONS_SIZE to fix.");
+      return false;
+  }
   int i = 0;
   intersection* temp_int = &intersection_list->itersection[0];
   while (i < INTERSECTIONS_SIZE-1 && temp_int->t && temp_int->t != DBL_MIN) {
@@ -143,6 +148,7 @@ void add_intersection_to_list(intersections* intersection_list, double t, sphere
   intersection_list->count++;
   intersection_list->itersection[i].object_id = sp;
   intersection_list->itersection[i].t = t;
+  return true;
 }
 
 tuple canvas[HORIZONTAL_SIZE][VERTICAL_SIZE];
@@ -420,13 +426,13 @@ double mat4x4_det(Mat4x4 m, int size) {
   return detVal;
 }
 
-bool invertable_matrix(Mat4x4 m) {
+bool mat4x4_invertable(Mat4x4 m) {
   if(equal(mat4x4_det(m, 4),0)) { return false; }
   return true;
 }
 
 bool mat4x4_inverse(Mat4x4 a, Mat4x4 b) {
-  bool invert = invertable_matrix(a);
+  bool invert = mat4x4_invertable(a);
   if (!invert) { return false; }
   for (int i = 0; i < 4; ++i) {
     for (int j = 0; j < 4; ++j) {
@@ -437,7 +443,7 @@ bool mat4x4_inverse(Mat4x4 a, Mat4x4 b) {
   return true;
 }
 
-void Mat4x4_set_ident(Mat4x4 m) {
+void mat4x4_set_ident(Mat4x4 m) {
   m[0][0] = 1.0f; m[0][1] = 0.0f; m[0][2] = 0.0f; m[0][3] = 0.0f;
   m[1][0] = 0.0f; m[1][1] = 1.0f; m[1][2] = 0.0f; m[1][3] = 0.0f;
   m[2][0] = 0.0f; m[2][1] = 0.0f; m[2][2] = 1.0f; m[2][3] = 0.0f;
@@ -520,7 +526,7 @@ sphere* create_sphere() {
         s->location.y = 0.0f;
         s->location.z = 0.0f;
         s->location.w = 0.0f;
-        Mat4x4_set_ident(s->transform);
+        mat4x4_set_ident(s->transform);
         s->material = create_material_default();
         s->next = NULL;
     }
@@ -544,7 +550,7 @@ void intersect(sphere* sp, ray* r, intersections* intersects) {
     assert(sp != NULL);
     assert(r != NULL);
     Mat4x4 invScaleMat;
-    Mat4x4_set_ident(invScaleMat);
+    mat4x4_set_ident(invScaleMat);
     mat4x4_inverse(sp->transform, invScaleMat);
     ray r2 = transform(r, invScaleMat);
 
@@ -690,7 +696,7 @@ camera* create_camera(double hsize, double vsize, double field_of_view) {
 
     camera* c = (camera*)malloc(sizeof(camera));
     if (!c) { return NULL; }
-    Mat4x4_set_ident(c->view_transform); // render method sets this later
+    mat4x4_set_ident(c->view_transform); // render method sets this later
     c->hsize = hsize;
     c->vsize = vsize;
     c->half_height = half_height;
@@ -891,7 +897,7 @@ ray ray_for_pixel(camera* camera, double px, double py) {
     tuple origin = create_point(0.0f, 0.0f, 0.0f);
     tuple temp = create_point(0.0f, 0.0f, 0.0f);
     Mat4x4 inverse2;
-    Mat4x4_set_ident(inverse2);
+    mat4x4_set_ident(inverse2);
     mat4x4_inverse(camera->view_transform, inverse2);
     mat4x4_mul_tuple(inverse2, temp, &origin);
 
@@ -1590,12 +1596,12 @@ int mat4x4_det_test() {
 int invertable_matrix_test() {
   Mat4x4 a = { { 6.0f, 4.0f, 4.0f, 4.0f },{ 5.0f, 5.0f, 7.0f, 6.0f },\
     { 4.0f, -9.0f, 3.0f, -7.0f},{ 9.0f, 1.0f, 7.0f, -6.0f } };
-  bool inv = invertable_matrix(a);
+  bool inv = mat4x4_invertable(a);
   assert(inv == true);
 
   Mat4x4 b = { { -4.0f, 2.0f, -2.0f, -3.0f },{ 9.0f, 6.0f, 2.0f, 6.0f },\
     { 0.0f, -5.0f, 1.0f, -5.0f},{ 0.0f, 0.0f, 0.0f, 0.0f } };
-  inv = invertable_matrix(b);
+  inv = mat4x4_invertable(b);
   assert(inv == false);
   return 0;
 }
@@ -2243,6 +2249,21 @@ int clear_intersections_test() {
     return 0;
 }
 
+int too_many_intersections_test() {
+    sphere* sp = create_sphere();
+    intersections inter = create_intersections();
+    // fill up all intersections
+    bool insert_status = false;
+    for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
+        insert_status = add_intersection_to_list(&inter, 9.0f, sp);
+        assert(insert_status == true);
+    }
+    // then add one more
+    insert_status = add_intersection_to_list(&inter, 9.0f, sp);
+    assert(insert_status == false);
+    return 0;
+}
+
 // 64  NOTE: All hit tests have been put together
 int hit_tests(){
     intersections intersects = create_intersections();
@@ -2335,7 +2356,7 @@ int scaling_ray_test() {
 int sphere_default_transformation_test() {
     sphere* sp = create_sphere();
     Mat4x4 identMat;
-    Mat4x4_set_ident(identMat);
+    mat4x4_set_ident(identMat);
     assert(mat4x4_equal(sp->transform, identMat) == true);
     free(sp);
     return 0;
@@ -2356,7 +2377,7 @@ int set_transform_test() {
     sphere* sp = create_sphere();
    
     Mat4x4 identMat;
-    Mat4x4_set_ident(identMat);
+    mat4x4_set_ident(identMat);
     // does sphere have identity as transform?
     assert(mat4x4_equal(sp->transform, identMat));
 
@@ -2410,7 +2431,7 @@ int intersecting_translated_sphere_test() {
     set_transform(sp, transMat);
 
     Mat4x4 invScaleMat;
-    Mat4x4_set_ident(invScaleMat);
+    mat4x4_set_ident(invScaleMat);
     mat4x4_inverse(sp->transform, invScaleMat);
     ray r2 = transform(&r1, invScaleMat);
     intersections inter = create_intersections();
@@ -2789,7 +2810,7 @@ int default_world_test() {
     assert(equal(w.objects->location.y, 0.0f));
     assert(equal(w.objects->location.z, 0.0f));
     Mat4x4 ident;
-    Mat4x4_set_ident(ident);
+    mat4x4_set_ident(ident);
     
     // w contains s1
     sphere* sp = w.objects;
@@ -2910,7 +2931,7 @@ int shading_an_intersection_test() {
     assert(equal(inter.t, 4.0f));
 
     Mat4x4 ident;
-    Mat4x4_set_ident(ident);
+    mat4x4_set_ident(ident);
 
     // w contains s1
     sphere* sp = w.objects;
@@ -2991,7 +3012,7 @@ int shading_intersection_from_inside() {
     assert(equal(inter.t, 0.5f));
 
     Mat4x4 ident;
-    Mat4x4_set_ident(ident);
+    mat4x4_set_ident(ident);
 
     // w contains s1
     sphere* sp = w.objects;
@@ -3096,7 +3117,7 @@ int transformation_for_default_orientation_test() {
     Mat4x4 view;
     view_transform(from, to, up, view);
     Mat4x4 ident;
-    Mat4x4_set_ident(ident);
+    mat4x4_set_ident(ident);
     assert(mat4x4_equal(view, ident) == true);
     return 0;
 }
@@ -3163,7 +3184,7 @@ int constructing_camera_test() {
     assert(equal(c->vsize, 120.0f));
     assert(equal(c->field_of_view, M_PI / 2.0f));
     Mat4x4 view;
-    Mat4x4_set_ident(view);
+    mat4x4_set_ident(view);
     assert(mat4x4_equal(c->view_transform, view));
     free(c);
     return 0;
@@ -3464,7 +3485,7 @@ void render_complete_world() {
     Mat4x4 scale_left;
     gen_scale_matrix(10.0f, 0.01f, 10.0f, scale_left);
     Mat4x4 final_transform_left;
-    Mat4x4_set_ident(final_transform_left);
+    mat4x4_set_ident(final_transform_left);
     mat4x4_mul_in_place(translate_left, final_transform_left, final_transform_left);
     
     assert(equal(final_transform_left[0][0], 1.0f));
@@ -3601,7 +3622,7 @@ void render_complete_world() {
 
     // 3. wall on right is identical to left, rotated opposite direction in y
     sphere* right_wall = create_sphere();
-    Mat4x4_set_ident(final_transform_left);
+    mat4x4_set_ident(final_transform_left);
     mat4x4_mul_in_place(final_transform_left, translate_left, final_transform_left);
     Mat4x4 rotate_y_right;
     gen_rotate_matrix_Y(M_PI / 4.0f, rotate_y_right);
@@ -3671,7 +3692,7 @@ void render_complete_world() {
     Mat4x4 scale_right_sphere;
     gen_scale_matrix(0.5f, 0.5f, 0.5f, scale_right_sphere);
     Mat4x4 final_transform_right_sphere;
-    Mat4x4_set_ident(final_transform_right_sphere);
+    mat4x4_set_ident(final_transform_right_sphere);
 
     mat4x4_mul_in_place(final_transform_right_sphere, translate_right_sphere, final_transform_right_sphere);
     mat4x4_mul_in_place(final_transform_right_sphere, scale_right_sphere, final_transform_right_sphere);
@@ -3710,7 +3731,7 @@ void render_complete_world() {
     Mat4x4 scale_small_sphere;
     gen_scale_matrix(0.33f, 0.33f, 0.33f, scale_small_sphere);
     Mat4x4 final_transform_small_sphere;
-    Mat4x4_set_ident(final_transform_small_sphere);
+    mat4x4_set_ident(final_transform_small_sphere);
     mat4x4_mul_in_place(final_transform_small_sphere, translate_small_sphere, final_transform_small_sphere);
     mat4x4_mul_in_place(final_transform_small_sphere, scale_small_sphere, final_transform_small_sphere);
     Mat4x4_copy(final_transform_small_sphere, small_sphere->transform);
@@ -3855,6 +3876,7 @@ int main() {
   unit_test("Aggregating Intersections Test", aggregating_intersections_test());
   unit_test("Intersect Sets Object On Intersection Test", intersect_sets_object_on_intersection_test());
   unit_test("Clear Intersections Test", clear_intersections_test());
+  unit_test("Too Many Intersections Test", too_many_intersections_test());
   unit_test("Hit Test", hit_tests());
   unit_test("Change Sphere Transform Test", change_sphere_transform_test());
   unit_test("Intersect Scaled Sphere With Ray Test", intersect_scaled_sphere_test());
