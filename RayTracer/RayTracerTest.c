@@ -240,13 +240,13 @@ double tuple_mag_vec(tuple t) {
   return mag;
 }
 
-tuple norm_vec(tuple t) {
+tuple tuple_norm(tuple t) {
   double mag = tuple_mag_vec(t);
   tuple ret = { t.x / mag, t.y / mag, t.z / mag, t.w / mag};
   return ret;
 }
 
-double dot(tuple t1, tuple t2) {
+double tuple_dot(tuple t1, tuple t2) {
   double prod1 = t1.x * t2.x;
   double prod2 = t1.y * t2.y;
   double prod3 = t1.z * t2.z;
@@ -255,7 +255,7 @@ double dot(tuple t1, tuple t2) {
   return dot;
 }
 
-tuple cross(tuple a, tuple b) {
+tuple tuple_cross(tuple a, tuple b) {
   double x = a.y * b.z - a.z * b.y;
   double y = a.z * b.x - a.x * b.z;
   double z = a.x * b.y - a.y * b.x;
@@ -268,7 +268,7 @@ tuple hadamard_product(tuple c1, tuple c2) {
   return color;
 }
 
-void Mat4x4_copy(Mat4x4 m1, Mat4x4 m2) {
+void mat4x4_copy(Mat4x4 m1, Mat4x4 m2) {
     for (int i = 0; i < 4; ++i) {
         for (int j = 0; j < 4; ++j) {
             m2[i][j] = m1[i][j];
@@ -312,7 +312,7 @@ void mat4x4_mul_in_place(const Mat4x4 a, const Mat4x4 b, Mat4x4 m) {
                 a[row][3] * b[3][col];
         }
     }
-    Mat4x4_copy(orig, m);
+    mat4x4_copy(orig, m);
 }
 
 void mat4x4_mul_tuple(const Mat4x4 a, const tuple b, tuple* c) {
@@ -333,11 +333,11 @@ void mat4x4_transpose(Mat4x4 a) {
   }
 }
 
-void print_tuple(tuple t) {
+void tuple_print(tuple t) {
   printf("{ %.8f, %.8f, %.8f, %.8f }\n", t.x, t.y, t.z, t.w);
 }
 
-void print_mat(Mat4x4 mat) {
+void mat4x4_print(Mat4x4 mat) {
   printf(" [ ");
   for (int i = 0; i < 4; ++i) {
     
@@ -556,9 +556,9 @@ void intersect(sphere* sp, ray* r, intersections* intersects) {
 
     tuple origin = create_point(0.0f, 0.0f, 0.0f);
     tuple sphere_to_ray = tuple_sub(r2.origin_point, origin);
-    double a = dot(r2.direction_vector, r2.direction_vector);
-    double b = 2 * dot(r2.direction_vector, sphere_to_ray);
-    double c = dot(sphere_to_ray, sphere_to_ray) - 1.0f;
+    double a = tuple_dot(r2.direction_vector, r2.direction_vector);
+    double b = 2 * tuple_dot(r2.direction_vector, sphere_to_ray);
+    double c = tuple_dot(sphere_to_ray, sphere_to_ray) - 1.0f;
     double discriminant = b * b - 4 * a * c;
     if (discriminant < 0) { return; }
     double t1 = (-b - sqrt(discriminant)) / (2 * a);
@@ -591,7 +591,7 @@ void intersect_world(world* w, ray* r, intersections* intersects) {
 }
 
 void set_transform(sphere* sp, Mat4x4 m) {
-    Mat4x4_copy(m, sp->transform);
+    mat4x4_copy(m, sp->transform);
 }
 
 tuple normal_at(sphere* sphere, tuple world_point) {
@@ -613,12 +613,12 @@ tuple normal_at(sphere* sphere, tuple world_point) {
     world_normal.w = 0.0f;
 
     // Line 4
-    return norm_vec(world_normal);
+    return tuple_norm(world_normal);
 }
 
 tuple reflect(tuple in, tuple normal) {
     tuple normTwo = tuple_mult_scalar(normal, 2.0f);
-    double dotNNormal = dot(in, normal);
+    double dotNNormal = tuple_dot(in, normal);
     return tuple_sub(in, tuple_mult_scalar(normTwo, dotNNormal));
 }
 
@@ -714,11 +714,11 @@ tuple lighting(material material, point_light* light, tuple point, tuple eyev, t
 
     tuple color_black = create_vector(0.0f, 0.0f, 0.0f);
     tuple light_sub_point = tuple_sub(light->position, point);
-    tuple lightv = norm_vec(light_sub_point);
+    tuple lightv = tuple_norm(light_sub_point);
 
     ambient = tuple_mult_scalar(effective_color, material.ambient);
 
-    double light_dot_normal = dot(lightv, normalv);
+    double light_dot_normal = tuple_dot(lightv, normalv);
 
     if (light_dot_normal < 0) {
         diffuse = color_black;
@@ -728,7 +728,7 @@ tuple lighting(material material, point_light* light, tuple point, tuple eyev, t
         diffuse = tuple_mult_scalar( tuple_mult_scalar(effective_color, material.diffuse), light_dot_normal);
 
         tuple reflectv = reflect( tuple_negate(lightv), normalv);
-        double reflect_dot_eye = dot(reflectv, eyev);
+        double reflect_dot_eye = tuple_dot(reflectv, eyev);
 
         if (reflect_dot_eye <= 0) {
             specular = color_black;
@@ -790,7 +790,7 @@ comps prepare_computations(intersection* inter, ray* r) {
     comp.point = position(*r, comp.t);
     comp.eyev = tuple_negate(r->direction_vector);
     comp.normalv = normal_at(comp.object, comp.point);
-    if (dot(comp.normalv, comp.eyev) < 0.0f) {
+    if (tuple_dot(comp.normalv, comp.eyev) < 0.0f) {
         comp.inside = true;
         comp.normalv = tuple_negate(comp.normalv);
     }
@@ -804,7 +804,7 @@ comps prepare_computations(intersection* inter, ray* r) {
 bool is_shadowed(world* world, tuple* point) {
     tuple v = tuple_sub(world->lights->position, *point);
     double distance = tuple_mag_vec(v);
-    tuple direction = norm_vec(v);
+    tuple direction = tuple_norm(v);
     ray r = { *point, direction };
     intersections inter = create_intersections();
     intersect_world(world, &r, &inter);
@@ -838,10 +838,10 @@ tuple color_at(world* w, ray* r) {
 }
 
 void view_transform(tuple from, tuple to, tuple up, Mat4x4 m) {
-    tuple forward = norm_vec(tuple_sub(to, from));
-    tuple upn = norm_vec(up);
-    tuple left = cross(forward, upn);
-    tuple true_up = cross(left, forward);
+    tuple forward = tuple_norm(tuple_sub(to, from));
+    tuple upn = tuple_norm(up);
+    tuple left = tuple_cross(forward, upn);
+    tuple true_up = tuple_cross(left, forward);
     Mat4x4 orientation;
 
     orientation[0][0] = left.x;
@@ -902,7 +902,7 @@ ray ray_for_pixel(camera* camera, double px, double py) {
     mat4x4_mul_tuple(inverse2, temp, &origin);
 
     //direction
-    tuple direction = norm_vec(tuple_sub(pixel, origin));
+    tuple direction = tuple_norm(tuple_sub(pixel, origin));
     
     ray r = create_ray(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     r.direction_vector = direction;
@@ -1123,15 +1123,15 @@ int tuple_mag_vec_test() {
 }
 
 // 10 Normalizing vector(4,0,0) gives (1,0,0)
-int norm_vec_test() {
+int vec_norm_test() {
   tuple vec1 = create_vector(4.0f, 0.0f, 0.0f);
-  tuple norm = norm_vec(vec1);
+  tuple norm = tuple_norm(vec1);
   assert(equal(norm.x, 1.0f));
   assert(equal(norm.y, 0.0f));
   assert(equal(norm.z, 0.0f));
 
   tuple vec2 = create_vector(1.0f, 2.0f, 3.0f);
-  norm = norm_vec(vec2);
+  norm = tuple_norm(vec2);
   double ans1 = 1 / sqrt(14);
   double ans2 = 2 / sqrt(14);
   double ans3 = 3 / sqrt(14);
@@ -1140,7 +1140,7 @@ int norm_vec_test() {
   assert(equal(norm.z, ans3));
 
   tuple vec3 = create_vector(1.0f, 2.0f, 3.0f);
-  norm = norm_vec(vec3);
+  norm = tuple_norm(vec3);
   double mag = tuple_mag_vec(norm);
   assert(equal(mag, 1.0f));
   return 0;
@@ -1150,7 +1150,7 @@ int norm_vec_test() {
 int dot_prod_test() {
   tuple vec1 = create_vector(1.0f, 2.0f, 3.0f);
   tuple vec2 = create_vector(2.0f, 3.0f, 4.0f);
-  double dotProd = dot(vec1, vec2);
+  double dotProd = tuple_dot(vec1, vec2);
   assert(equal(dotProd, 20.0f));
   return 0;
 }
@@ -1159,12 +1159,12 @@ int dot_prod_test() {
 int cross_prod_test() {
   tuple vec1 = create_vector(1.0f, 2.0f, 3.0f);
   tuple vec2 = create_vector(2.0f, 3.0f, 4.0f);
-  tuple cross1 = cross(vec1, vec2);
+  tuple cross1 = tuple_cross(vec1, vec2);
   assert(equal(cross1.x, -1.0f));
   assert(equal(cross1.y,  2.0f));
   assert(equal(cross1.z, -1.0f));
   assert(equal(cross1.w,  0.0f));
-  tuple cross2 = cross(vec2, vec1);
+  tuple cross2 = tuple_cross(vec2, vec1);
   assert(equal(cross2.x,  1.0f));
   assert(equal(cross2.y, -2.0f));
   assert(equal(cross2.z,  1.0f));
@@ -1716,7 +1716,7 @@ int vector_translation_has_no_effect_test() {
 }
 
 // 46 Scaling matrix applied to a point
-int point_scale_Mat4x4_test() {
+int point_scale_mat4x4_test() {
   tuple p1 = create_point(-4.0f, 6.0f, 8.0f);
   tuple p2 = create_point(0.0f, 0.0f, 0.0f);
   Mat4x4 scaleMat;
@@ -1730,7 +1730,7 @@ int point_scale_Mat4x4_test() {
 }
 
 // 46 Scaling matrix applied to a vector
-int vec_scale_Mat4x4_test() {
+int vec_scale_mat4x4_test() {
   tuple p1 = create_vector(-4.0f, 6.0f, 8.0f);
   tuple p2 = create_vector(0.0f, 0.0f, 0.0f);
   Mat4x4 scaleMat;
@@ -1986,12 +1986,12 @@ int tuple_copy_test() {
   return 0;
 }
 
-int Mat4x4_copy_test() {
+int mat4x4_copy_test() {
   Mat4x4 a = { { 1.0f, 2.0f, 3.0f, 4.0f },{ 5.0f, 6.0f, 7.0f, 8.0f },\
     { 9.0f, 10.0f, 11.0f, 12.0f},{ 13.0f, 14.0f, 15.0f, 16.0f } };
   Mat4x4 b = { { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f },\
     { 0.0f, 0.0f, 0.0f, 0.0f },{ 0.0f, 0.0f, 0.0f, 0.0f } };
-  Mat4x4_copy(a, b);
+  mat4x4_copy(a, b);
   assert(equal(a[0][0], 1.0f));
   assert(equal(a[1][0], 5.0f));
   assert(equal(a[2][0], 9.0f));
@@ -2485,7 +2485,7 @@ int normal_is_normal_test() {
     double nonaxial = sqrt(3) / 3.0f;
     tuple location1 = create_point(nonaxial, nonaxial, nonaxial);
     tuple n = normal_at(sp, location1);
-    tuple nn = norm_vec(n);
+    tuple nn = tuple_norm(n);
     assert(equal(n.x, nn.x));
     assert(equal(n.y, nn.y));
     assert(equal(n.z, nn.z));
@@ -3356,7 +3356,7 @@ int shade_hit_given_intersection_in_shadow_test() {
     Mat4x4 trans_matrix;
     gen_translate_matrix(0.0f, 0.0f, 10.0f, trans_matrix);
     mat4x4_mul_in_place(sp2->transform, trans_matrix, trans_matrix);
-    Mat4x4_copy(trans_matrix, sp2->transform);
+    mat4x4_copy(trans_matrix, sp2->transform);
     sp2->next = NULL;
     sp1->next = sp2;
     w.objects = sp1;
@@ -3378,7 +3378,7 @@ int hit_should_offset_point_test() {
     sphere* sp1 = create_sphere();
     Mat4x4 trans_matrix;
     gen_translate_matrix(0.0f, 0.0f, 10.0f, trans_matrix);
-    Mat4x4_copy(trans_matrix, sp1->transform);
+    mat4x4_copy(trans_matrix, sp1->transform);
     intersection i = { 5.0f, sp1 };
     comps comp = prepare_computations(&i, &r);
     assert(comp.over_point.z < -EPSILON / 2);
@@ -3419,9 +3419,9 @@ void render_sphere() {
       double world_x = -half + pixel_size * x;
       tuple position1 = create_point(world_x, world_y, wall_z);
       tuple posRayOrigin = tuple_sub(position1, ray_origin);
-      tuple normRayOrigin = norm_vec(posRayOrigin);
+      tuple normRayOrigin = tuple_norm(posRayOrigin);
       ray ray_to_draw = create_ray(ray_origin.x, ray_origin.y, ray_origin.z, normRayOrigin.x, normRayOrigin.y, normRayOrigin.z );
-      ray_to_draw.direction_vector = norm_vec(ray_to_draw.direction_vector);
+      ray_to_draw.direction_vector = tuple_norm(ray_to_draw.direction_vector);
       intersections inter = create_intersections();
       intersect(sphere1, &ray_to_draw, &inter);
       intersection* hit_intersection = hit(&inter);
@@ -3574,7 +3574,7 @@ void render_complete_world() {
     assert(equal(final_transform_left[2][3], 5.0f));
     assert(equal(final_transform_left[3][3], 1.0f));
 
-    Mat4x4_copy(final_transform_left, left_wall->transform);
+    mat4x4_copy(final_transform_left, left_wall->transform);
 
     assert(mat4x4_equal(final_transform_left, left_wall->transform));
 
@@ -3629,7 +3629,7 @@ void render_complete_world() {
     mat4x4_mul_in_place(final_transform_left, rotate_y_right, final_transform_left);
     mat4x4_mul_in_place(final_transform_left, rotate_x_left, final_transform_left);
     mat4x4_mul_in_place(final_transform_left, scale_left, final_transform_left);
-    Mat4x4_copy(final_transform_left, right_wall->transform);
+    mat4x4_copy(final_transform_left, right_wall->transform);
     left_wall->material = floor_material;
 
     assert(equal(right_wall->transform[0][0], 7.071067812000001f));
@@ -3657,7 +3657,7 @@ void render_complete_world() {
     Mat4x4 middle_transform;
     gen_translate_matrix(-0.5, 1.0, 0.5, middle_transform);
 
-    Mat4x4_copy(middle_transform, middle_sphere->transform);
+    mat4x4_copy(middle_transform, middle_sphere->transform);
 
     assert(equal(middle_sphere->transform[0][0], 1.0f));
     assert(equal(middle_sphere->transform[1][0], 0.0f));
@@ -3696,7 +3696,7 @@ void render_complete_world() {
 
     mat4x4_mul_in_place(final_transform_right_sphere, translate_right_sphere, final_transform_right_sphere);
     mat4x4_mul_in_place(final_transform_right_sphere, scale_right_sphere, final_transform_right_sphere);
-    Mat4x4_copy(final_transform_right_sphere, right_sphere->transform);
+    mat4x4_copy(final_transform_right_sphere, right_sphere->transform);
 
     assert(equal(right_sphere->transform[0][0], 0.5f));
     assert(equal(right_sphere->transform[1][0], 0.0f));
@@ -3734,7 +3734,7 @@ void render_complete_world() {
     mat4x4_set_ident(final_transform_small_sphere);
     mat4x4_mul_in_place(final_transform_small_sphere, translate_small_sphere, final_transform_small_sphere);
     mat4x4_mul_in_place(final_transform_small_sphere, scale_small_sphere, final_transform_small_sphere);
-    Mat4x4_copy(final_transform_small_sphere, small_sphere->transform);
+    mat4x4_copy(final_transform_small_sphere, small_sphere->transform);
 
     material small_sphere_material = create_material_default();
     small_sphere_material.color = create_point(1.0f, 0.8f, 0.1);
@@ -3827,7 +3827,7 @@ int main() {
   unit_test("Tuple Multiplication Scalar Fraction Test", tuple_mult_scalar_fraction_test());
   unit_test("Tuple Division Scalar Test", tuple_div_scalar_test());
   unit_test("Tuple Magnitude Vector Test", tuple_mag_vec_test());
-  unit_test("Normal Vector Test", norm_vec_test());
+  unit_test("Normal Vector Test", vec_norm_test());
   unit_test("Dot Product Test", dot_prod_test());
   unit_test("Cross Product Test", cross_prod_test());
   unit_test("Hadamard Product Test", hadamard_product_test());
@@ -3852,8 +3852,8 @@ int main() {
   unit_test("Multiply By Translation Matrix Test", point_trans_test());
   unit_test("Multiply By Inverse Of Translation Matrix Test", point_mult_inverse_translation_test());
   unit_test("Vector Translation Has No Effect Test", vector_translation_has_no_effect_test());
-  unit_test("Scaling Matrix Applied To A Point Test", point_scale_Mat4x4_test());
-  unit_test("Scaling Matrix Applied To A Vector Test", vec_scale_Mat4x4_test());
+  unit_test("Scaling Matrix Applied To A Point Test", point_scale_mat4x4_test());
+  unit_test("Scaling Matrix Applied To A Vector Test", vec_scale_mat4x4_test());
   unit_test("Multiply Inverse Of Scaling Matrix Test", mult_inverse_scale_matrix_test());
   unit_test("Reflection Scaling Negative Value Test", reflection_scaling_neg_value_test());
   unit_test("Generate Rotation Matrix X Test", gen_rotation_matrix_X_test());
