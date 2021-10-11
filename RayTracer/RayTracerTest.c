@@ -27,8 +27,8 @@ Copyright 2021 Steven Ray Schronk
 
 #define EPSILON 0.000001
 
-#define VERTICAL_SIZE   60
-#define HORIZONTAL_SIZE 120
+#define VERTICAL_SIZE   600
+#define HORIZONTAL_SIZE 1200
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -422,12 +422,12 @@ double mat4x4_cofactor(Mat4x4 a, int row, int col) {
 }
 
 double mat4x4_det(Mat4x4 m, int size) {
-  double detVal = 0.0f;
+  double det_val = 0.0f;
   for (int column = 0; column < size; ++column) {
-    double mat3Cof = mat4x4_cofactor(m, 0, column);
-    detVal = detVal + m[0][column] * mat3Cof;
+    double mat3_cof = mat4x4_cofactor(m, 0, column);
+    det_val = det_val + m[0][column] * mat3_cof;
   }
-  return detVal;
+  return det_val;
 }
 
 bool mat4x4_invertable(Mat4x4 m) {
@@ -559,10 +559,10 @@ void intersect(shape* sp, ray* r, intersections* intersects) {
     assert(r != NULL);
     assert(intersects != NULL);
 
-    Mat4x4 invScaleMat;
-    mat4x4_set_ident(invScaleMat);
-    mat4x4_inverse(sp->transform, invScaleMat);
-    ray r2 = transform(r, invScaleMat);
+    Mat4x4 inv_scale_mat;
+    mat4x4_set_ident(inv_scale_mat);
+    mat4x4_inverse(sp->transform, inv_scale_mat);
+    ray r2 = transform(r, inv_scale_mat);
 
     switch (sp->type) {
     case PLANE:
@@ -3878,7 +3878,7 @@ void render_complete_world_with_plane() {
     // 6. Smallest sphere is scaled by a tird, before being translated
     shape* small_sphere = create_shape(SHAPE);
     Mat4x4 translate_small_sphere;
-    gen_translate_matrix(-1.5f, 0.33f, -0.75f, translate_small_sphere);
+    gen_translate_matrix(-1.5f, 1.5f, -0.75f, translate_small_sphere);
     Mat4x4 scale_small_sphere;
     gen_scale_matrix(0.33f, 0.33f, 0.33f, scale_small_sphere);
     Mat4x4 final_transform_small_sphere;
@@ -4094,6 +4094,7 @@ int intersect_ray_plane_below_test() {
 
 int main() {
 #if defined _DEBUG
+  clock_t start_unit_tests = clock();
   unit_test("Create Point Test", create_point_test());
   unit_test("Create Vector Test", create_vector_test());
   unit_test("Tuple With 0 Is A Point Test", tuple_with_W_0_is_point_test());
@@ -4219,14 +4220,18 @@ int main() {
   unit_test("Intersect Ray Plane Above Test", intersect_ray_plane_above_test());
   unit_test("Intersect Ray Plane Below Test", intersect_ray_plane_below_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
+
+  clock_t end_unit_tests = clock();
+  float seconds_unit_test = (float)(end_unit_tests - start_unit_tests) / CLOCKS_PER_SEC;
+  printf("Unit Tests Took %f Seconds\n", seconds_unit_test);
 #endif
   //render_sphere();
   //render_complete_world();
-  clock_t start = clock();
+  clock_t start_render = clock();
   render_complete_world_with_plane();
-  clock_t end = clock();
-  float seconds = (float)(end - start) / CLOCKS_PER_SEC;
-  printf("Render Took %f Seconds\n", seconds);
+  clock_t end_render = clock();
+  float seconds_render = (float)(end_render - start_render) / CLOCKS_PER_SEC;
+  printf("Render Took %f Seconds\n", seconds_render);
   write_canvas_to_file();
   return 0;
 }
