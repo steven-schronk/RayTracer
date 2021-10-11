@@ -18,7 +18,7 @@ Copyright 2021 Steven Ray Schronk
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <vld.h>  // C:\Program Files (x86)\Visual Leak Detector
+// #include <vld.h>  // C:\Program Files (x86)\Visual Leak Detector
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -39,15 +39,18 @@ typedef struct { tuple color; double ambient; double diffuse; double specular; d
 
 typedef struct { tuple position; tuple intensity; struct point_light* next; } point_light;
 
-typedef struct _sphere { tuple location; double t; Mat4x4 transform; material material; struct _sphere* next; } sphere;
+enum shape_type { SHAPE, PLANE };
+
+typedef struct _shape { tuple location; double t; Mat4x4 transform; material material; struct _shape* next; enum shape_type type;
+} shape;
 
 typedef struct { tuple origin_point; tuple direction_vector; } ray;
 
-typedef struct { double t; sphere *object_id; } intersection;
+typedef struct { double t; shape* object_id; } intersection;
 
-typedef struct { struct _sphere* objects; point_light* lights; } world;
+typedef struct { struct _shape* objects; point_light* lights; } world;
 
-typedef struct { double t; sphere* object; tuple point; tuple eyev; tuple normalv; bool inside; tuple over_point; } comps;
+typedef struct { double t; shape* object; tuple point; tuple eyev; tuple normalv; bool inside; tuple over_point; } comps;
 
 typedef struct { double hsize; double vsize; double field_of_view; double pixel_size; double half_width; double half_height; Mat4x4 view_transform; } camera;
 
@@ -131,7 +134,7 @@ intersection* hit(intersections* intersection_list) {
   return intersect1;
 }
 
-bool add_intersection_to_list(intersections* intersection_list, double t, sphere *sp ) {
+bool add_intersection(intersections* intersection_list, double t, shape* sp ) {
   assert(intersection_list != NULL && "Call to add insertion to list cannot contain null intersection list");
   if (intersection_list->count == INTERSECTIONS_SIZE)
   {
@@ -193,7 +196,7 @@ bool tuple_is_point(tuple t) { return t.w == 1.0 ? true : false; }
 
 bool tuple_is_vector(tuple t) { return t.w == 0.0 ? true : false; }
 
-void tuple_copy(tuple *t1, tuple *t2) {
+void tuple_copy(tuple* t1, tuple* t2) {
   t2->x = t1->x;
   t2->y = t1->y;
   t2->z = t1->z;
@@ -240,7 +243,7 @@ double tuple_mag_vec(tuple t) {
   return mag;
 }
 
-tuple tuple_norm(tuple t) {
+tuple tuple_normalize(tuple t) {
   double mag = tuple_mag_vec(t);
   tuple ret = { t.x / mag, t.y / mag, t.z / mag, t.w / mag};
   return ret;
@@ -518,19 +521,23 @@ void mat4x4_reset_to_zero(Mat4x4 mat) {
     }
 }
 
-sphere* create_sphere() {
-    sphere* s = (sphere*)malloc(sizeof(sphere));
-    if (s) {
-        s->t = 1.0f;
-        s->location.x = 0.0f;
-        s->location.y = 0.0f;
-        s->location.z = 0.0f;
-        s->location.w = 0.0f;
-        mat4x4_set_ident(s->transform);
-        s->material = create_material_default();
-        s->next = NULL;
-    }
+shape* create_shape(enum shape_type type) {
+    shape* s = (shape*)malloc(sizeof(shape));
+    if (!s) { return NULL; }
+    s->t = 1.0f;
+    s->location.x = 0.0f;
+    s->location.y = 0.0f;
+    s->location.z = 0.0f;
+    s->location.w = 0.0f;
+    mat4x4_set_ident(s->transform);
+    s->material = create_material_default();
+    s->next = NULL;
+    s->type = type;
     return s;
+}
+
+void delete_shape(shape* s) {
+    free(s);
 }
 
 tuple position(ray r, double t) {
@@ -546,13 +553,26 @@ ray transform(ray* r, Mat4x4 m) {
     return ray_out;
 }
 
-void intersect(sphere* sp, ray* r, intersections* intersects) {
+void intersect(shape* sp, ray* r, intersections* intersects) {
     assert(sp != NULL);
     assert(r != NULL);
+    assert(intersects != NULL);
+
     Mat4x4 invScaleMat;
     mat4x4_set_ident(invScaleMat);
     mat4x4_inverse(sp->transform, invScaleMat);
     ray r2 = transform(r, invScaleMat);
+
+    switch (sp->type) {
+    case PLANE:
+        if (fabs(r2.direction_vector.y) < EPSILON) {
+            return;
+        } else {
+            double t = (-r2.origin_point.y) / r2.direction_vector.y;
+            add_intersection(intersects, t, sp);
+            return;
+        }
+    }
 
     tuple origin = create_point(0.0f, 0.0f, 0.0f);
     tuple sphere_to_ray = tuple_sub(r2.origin_point, origin);
@@ -564,12 +584,12 @@ void intersect(sphere* sp, ray* r, intersections* intersects) {
     double t1 = (-b - sqrt(discriminant)) / (2 * a);
     double t2 = (-b + sqrt(discriminant)) / (2 * a);
     if (t1 < t2) {
-        add_intersection_to_list(intersects, t1, sp);
-        add_intersection_to_list(intersects, t2, sp);
+        add_intersection(intersects, t1, sp);
+        add_intersection(intersects, t2, sp);
     }
     else {
-        add_intersection_to_list(intersects, t2, sp);
-        add_intersection_to_list(intersects, t1, sp);
+        add_intersection(intersects, t2, sp);
+        add_intersection(intersects, t1, sp);
     }
     return;
 }
@@ -579,7 +599,9 @@ bool intersects_in_order_test(intersections* intersects); // wanted test to be i
 void intersect_world(world* w, ray* r, intersections* intersects) {
     assert(w != NULL);
     assert(r != NULL);
-    sphere* sp = w->objects;
+    assert(intersects != NULL);
+
+    shape* sp = w->objects;
     if (sp == NULL) { return; } // empty world
     do {
         intersect(sp, r, intersects);
@@ -590,30 +612,41 @@ void intersect_world(world* w, ray* r, intersections* intersects) {
     return;
 }
 
-void set_transform(sphere* sp, Mat4x4 m) {
+void set_transform(shape* sp, Mat4x4 m) {
     mat4x4_copy(m, sp->transform);
 }
 
-tuple normal_at(sphere* sphere, tuple world_point) {
-    // Line 1
-    tuple object_point = create_point(0.0f, 0.0f, 0.0f);
-    Mat4x4 inverse_sphere;
-    mat4x4_inverse(sphere->transform, inverse_sphere);
-    mat4x4_mul_tuple(inverse_sphere, world_point, &object_point);
+tuple normal_at(shape* shape, tuple point) {
+    // local_point <- inverse(shape.transform)*point
+    tuple local_point = create_point(0.0f, 0.0f, 0.0f);
+    Mat4x4 inverse_shape_transform;
+    mat4x4_inverse(shape->transform, inverse_shape_transform);
+    mat4x4_mul_tuple(inverse_shape_transform, point, &local_point);
 
-    // Line 2
-    tuple temp_point = create_point(0.0f, 0.0f, 0.0f);
-    tuple objectNormal = tuple_sub(object_point, temp_point);
+    // local_normal <- local_normal_at(shape, local_point)
+    tuple local_normal = { 0.0f, 0.0f, 0.0f, 0.0f };
 
-    // Line 3
+    // local_normal_at function substitute
+    switch (shape->type) {
+    case SHAPE:
+        local_normal = create_vector(local_point.x, local_point.y, local_point.z);
+        break;
+    case PLANE:
+        local_normal = create_vector(0.0f, 1.0f, 0.0f);
+        break;
+    default:
+        assert("Shape Type Is Not Set For Shape.");
+    }
+
+    // world_normal <- trnaspose(inverse(shape.transform)) * local_normal;
     tuple world_normal;
-    // mat4x4Inverse(sphere->transform, inverse_sphere);
-    mat4x4_transpose(inverse_sphere);
-    mat4x4_mul_tuple(inverse_sphere, objectNormal, &world_normal);
+    mat4x4_transpose(inverse_shape_transform);
+    mat4x4_mul_tuple(inverse_shape_transform, local_normal, &world_normal);
+
+    // world_normal.w <- 0
     world_normal.w = 0.0f;
 
-    // Line 4
-    return tuple_norm(world_normal);
+    return tuple_normalize(world_normal);
 }
 
 tuple tuple_reflect(tuple in, tuple normal) {
@@ -649,7 +682,7 @@ world create_default_world() {
     w.lights->position.w = 1.0;
 
     w.lights->next = NULL;
-    sphere* s1 = create_sphere();
+    shape* s1 = create_shape(SHAPE);
     tuple material_color = create_point(0.8f, 1.0f, 0.6f);
     material matl = create_material_default();
     matl.color = material_color;
@@ -659,7 +692,7 @@ world create_default_world() {
     w.objects = s1;
     w.objects->next = NULL;
 
-    sphere* s2 = create_sphere();
+    shape* s2 = create_shape(SHAPE);
     gen_scale_matrix(0.5f, 0.5f, 0.5f, s2->transform);
     w.objects->next = s2;
     return w;
@@ -714,7 +747,7 @@ tuple lighting(material material, point_light* light, tuple point, tuple eyev, t
 
     tuple color_black = create_vector(0.0f, 0.0f, 0.0f);
     tuple light_sub_point = tuple_sub(light->position, point);
-    tuple lightv = tuple_norm(light_sub_point);
+    tuple lightv = tuple_normalize(light_sub_point);
 
     ambient = tuple_mult_scalar(effective_color, material.ambient);
 
@@ -804,7 +837,7 @@ comps prepare_computations(intersection* inter, ray* r) {
 bool is_shadowed(world* world, tuple* point) {
     tuple v = tuple_sub(world->lights->position, *point);
     double distance = tuple_mag_vec(v);
-    tuple direction = tuple_norm(v);
+    tuple direction = tuple_normalize(v);
     ray r = { *point, direction };
     intersections inter = create_intersections();
     intersect_world(world, &r, &inter);
@@ -838,8 +871,8 @@ tuple color_at(world* w, ray* r) {
 }
 
 void view_transform(tuple from, tuple to, tuple up, Mat4x4 m) {
-    tuple forward = tuple_norm(tuple_sub(to, from));
-    tuple upn = tuple_norm(up);
+    tuple forward = tuple_normalize(tuple_sub(to, from));
+    tuple upn = tuple_normalize(up);
     tuple left = tuple_cross(forward, upn);
     tuple true_up = tuple_cross(left, forward);
     Mat4x4 orientation;
@@ -902,7 +935,7 @@ ray ray_for_pixel(camera* camera, double px, double py) {
     mat4x4_mul_tuple(inverse2, temp, &origin);
 
     //direction
-    tuple direction = tuple_norm(tuple_sub(pixel, origin));
+    tuple direction = tuple_normalize(tuple_sub(pixel, origin));
     
     ray r = create_ray(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     r.direction_vector = direction;
@@ -1125,13 +1158,13 @@ int tuple_mag_vec_test() {
 // 10 Normalizing vector(4,0,0) gives (1,0,0)
 int vec_norm_test() {
   tuple vec1 = create_vector(4.0f, 0.0f, 0.0f);
-  tuple norm = tuple_norm(vec1);
+  tuple norm = tuple_normalize(vec1);
   assert(equal(norm.x, 1.0f));
   assert(equal(norm.y, 0.0f));
   assert(equal(norm.z, 0.0f));
 
   tuple vec2 = create_vector(1.0f, 2.0f, 3.0f);
-  norm = tuple_norm(vec2);
+  norm = tuple_normalize(vec2);
   double ans1 = 1 / sqrt(14);
   double ans2 = 2 / sqrt(14);
   double ans3 = 3 / sqrt(14);
@@ -1140,7 +1173,7 @@ int vec_norm_test() {
   assert(equal(norm.z, ans3));
 
   tuple vec3 = create_vector(1.0f, 2.0f, 3.0f);
-  norm = tuple_norm(vec3);
+  norm = tuple_normalize(vec3);
   double mag = tuple_mag_vec(norm);
   assert(equal(mag, 1.0f));
   return 0;
@@ -2051,8 +2084,8 @@ int create_ray_test() {
   return 0;
 }
 
-int create_sphere_test() {
-    sphere* sp = create_sphere();
+int create_shape_test() {
+    shape* sp = create_shape(SHAPE);
 
     assert(sp->next == NULL);
     assert(equal(sp->t, 1.0f));
@@ -2139,7 +2172,7 @@ int position_test() {
 // 59 A ray intersects a sphere at two points
 int ray_intersect_sphere_two_point_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     intersections inter = create_intersections();
     intersect(sp, &r, &inter);
     assert(inter.count == 2);
@@ -2152,7 +2185,7 @@ int ray_intersect_sphere_two_point_test() {
 // 60 A ray intersects a sphere at a tangent
 int ray_intersect_sphere_tangent_test() {
     ray r = create_ray(0.0f, 1.0f, -5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     intersections inter = create_intersections();
     intersect(sp, &r, &inter);
     assert(inter.count == 2);
@@ -2165,7 +2198,7 @@ int ray_intersect_sphere_tangent_test() {
 // 60 A ray misses a sphere
 int ray_misses_sphere_test() {
     ray r = create_ray(0.0f, 2.0f, -5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     intersections inter = create_intersections();
     intersect(sp, &r, &inter);
     assert(inter.count == 0);
@@ -2181,7 +2214,7 @@ int ray_misses_sphere_test() {
 // 61 A ray originates inside a sphere
 int ray_originates_inside_sphere_test() {
     ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     intersections inter = create_intersections();
     intersect(sp, &r, &inter);
     assert(inter.count == 2);
@@ -2194,7 +2227,7 @@ int ray_originates_inside_sphere_test() {
 // 62 A sphere is behind a ray
 int sphere_is_behind_ray_test() {
     ray r = create_ray(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     intersections inter = create_intersections();
     intersect(sp, &r, &inter);
     assert(inter.count == 2);
@@ -2210,9 +2243,9 @@ int sphere_is_behind_ray_test() {
 // 64 Aggegating intersections
 int aggregating_intersections_test() {
     intersections intersects = create_intersections();
-    sphere* sp = create_sphere();
-    add_intersection_to_list(&intersects, 1.0, sp);
-    add_intersection_to_list(&intersects, 2.0, sp);
+    shape* sp = create_shape(SHAPE);
+    add_intersection(&intersects, 1.0, sp);
+    add_intersection(&intersects, 2.0, sp);
     assert(intersects.count == 2);
     assert(equal(intersects.itersection[0].t, 1.0f));
     assert(equal(intersects.itersection[1].t, 2.0f));
@@ -2223,7 +2256,7 @@ int aggregating_intersections_test() {
 // 64 Intersect sets the object on the intersection
 int intersect_sets_object_on_intersection_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     intersections inter = create_intersections();
     intersect(sp, &r, &inter);
     assert(inter.count == 2);
@@ -2237,8 +2270,8 @@ int intersect_sets_object_on_intersection_test() {
 // NOTE: Needed for testing
 int clear_intersections_test() {
     intersections intersects = create_intersections();
-    sphere* sp = create_sphere();
-    add_intersection_to_list(&intersects, 9.0f, sp);
+    shape* sp = create_shape(SHAPE);
+    add_intersection(&intersects, 9.0f, sp);
     clear_intersections(&intersects);
     assert(intersects.count == 0);
     for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
@@ -2250,16 +2283,16 @@ int clear_intersections_test() {
 }
 
 int too_many_intersections_test() {
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     intersections inter = create_intersections();
     // fill up all intersections
     bool insert_status = false;
     for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
-        insert_status = add_intersection_to_list(&inter, 9.0f, sp);
+        insert_status = add_intersection(&inter, 9.0f, sp);
         assert(insert_status == true);
     }
     // then add one more
-    insert_status = add_intersection_to_list(&inter, 9.0f, sp);
+    insert_status = add_intersection(&inter, 9.0f, sp);
     assert(insert_status == false);
     return 0;
 }
@@ -2267,11 +2300,11 @@ int too_many_intersections_test() {
 // 64  NOTE: All hit tests have been put together
 int hit_tests(){
     intersections intersects = create_intersections();
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
 
     // 65 The hit when all intersections have positive t
-    add_intersection_to_list(&intersects, 1.0, sp);
-    add_intersection_to_list(&intersects, 2.0, sp);
+    add_intersection(&intersects, 1.0, sp);
+    add_intersection(&intersects, 2.0, sp);
     assert(intersects.count == 2);
     intersection* intersect1 = hit(&intersects);
     assert(intersect1->object_id == sp);
@@ -2280,8 +2313,8 @@ int hit_tests(){
     //65 The hit when some intersections have a negative t
     clear_intersections(&intersects);
     assert(intersects.count == 0);
-    add_intersection_to_list(&intersects, -1.0, sp);
-    add_intersection_to_list(&intersects, 1.0, sp);
+    add_intersection(&intersects, -1.0, sp);
+    add_intersection(&intersects, 1.0, sp);
     assert(intersects.count == 2);
     intersect1 = hit(&intersects);
     assert(intersect1->object_id == sp);
@@ -2290,8 +2323,8 @@ int hit_tests(){
     // 65 The hit when all intersections have negative t
     clear_intersections(&intersects);
     assert(intersects.count == 0);
-    add_intersection_to_list(&intersects, -2.0, sp);
-    add_intersection_to_list(&intersects, -1.0, sp);
+    add_intersection(&intersects, -2.0, sp);
+    add_intersection(&intersects, -1.0, sp);
     assert(intersects.count == 2);
     intersect1 = hit(&intersects);
     assert(intersect1 == NULL);
@@ -2299,10 +2332,10 @@ int hit_tests(){
     // 66 The hit is always the lowest nonnegative intersection
     clear_intersections(&intersects);
     assert(intersects.count == 0);
-    add_intersection_to_list(&intersects, 5.0, sp);
-    add_intersection_to_list(&intersects, 7.0, sp);
-    add_intersection_to_list(&intersects, -3.0, sp);
-    add_intersection_to_list(&intersects, 2.0, sp);
+    add_intersection(&intersects, 5.0, sp);
+    add_intersection(&intersects, 7.0, sp);
+    add_intersection(&intersects, -3.0, sp);
+    add_intersection(&intersects, 2.0, sp);
     assert(intersects.count == 4);
     intersect1 = hit(&intersects);
     assert(intersect1->object_id == sp);
@@ -2354,7 +2387,7 @@ int scaling_ray_test() {
 
 // 69 Sphere default transformation
 int sphere_default_transformation_test() {
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     Mat4x4 identMat;
     mat4x4_set_ident(identMat);
     assert(mat4x4_equal(sp->transform, identMat) == true);
@@ -2364,7 +2397,7 @@ int sphere_default_transformation_test() {
 
 // 69 Changing a sphere's transformation
 int change_sphere_transform_test() {
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     Mat4x4 transMat;
     gen_translate_matrix(2.0f, 3.0f, 4.0f, transMat);
     set_transform(sp, transMat);
@@ -2374,7 +2407,7 @@ int change_sphere_transform_test() {
 }
 
 int set_transform_test() {
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
    
     Mat4x4 identMat;
     mat4x4_set_ident(identMat);
@@ -2402,7 +2435,7 @@ int set_transform_test() {
 // 69 Intersecting a scaled sphere with a ray
 int intersect_scaled_sphere_test() {
     ray r1 = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     Mat4x4 scaleMat;
     gen_scale_matrix(2.0f, 2.0f, 2.0f, scaleMat);
     set_transform(sp, scaleMat);
@@ -2425,7 +2458,7 @@ int intersect_scaled_sphere_test() {
 // 70 Intersecting a translated sphere with a ray
 int intersecting_translated_sphere_test() {
     ray r1 = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     Mat4x4 transMat;
     gen_translate_matrix(5.0f, 0.0f, 0.0f, transMat);
     set_transform(sp, transMat);
@@ -2442,7 +2475,7 @@ int intersecting_translated_sphere_test() {
 }
 
 int normals_test() {
-    sphere* sphere1 = create_sphere();
+    shape* sphere1 = create_shape(SHAPE);
     // 78 The normal on a sphere at a point on the X axis.
     tuple location1 = create_point(1.0f, 0.0f, 0.0f);
     tuple n = normal_at(sphere1, location1);
@@ -2481,11 +2514,11 @@ int normals_test() {
 
 // 78 The normal is a normalized vector.
 int normal_is_normal_test() {
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     double nonaxial = sqrt(3) / 3.0f;
     tuple location1 = create_point(nonaxial, nonaxial, nonaxial);
     tuple n = normal_at(sp, location1);
-    tuple nn = tuple_norm(n);
+    tuple nn = tuple_normalize(n);
     assert(equal(n.x, nn.x));
     assert(equal(n.y, nn.y));
     assert(equal(n.z, nn.z));
@@ -2497,7 +2530,7 @@ int normal_is_normal_test() {
 // 80 Computing the normal on a translated sphere
 int compute_normal_on_sphere_test() {
     tuple vec1 = create_vector(0.0f, sqrt(2) / 2, -sqrt(2) / 2);
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     gen_translate_matrix(0.0f, 1.0f, 0.0f, sp->transform);
     tuple n = normal_at(sp, vec1);
     assert(equal(n.x, 0.0f));
@@ -2510,7 +2543,7 @@ int compute_normal_on_sphere_test() {
  
 // 80 Computing the normal on a transformed sphere
 int compute_normal_on_transformed_sphere_test(){
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     Mat4x4 scaleMat;
     gen_scale_matrix(1.0f, 0.5f, 1.0f, scaleMat);
     Mat4x4 rotMat;
@@ -2600,7 +2633,7 @@ int default_material_test() {
 
 // 85 Sphere has a default material
 int sphere_has_default_material_test() {
-    sphere* sp = create_sphere();
+    shape* sp = create_shape(SHAPE);
     material m1 = create_material_default();
 
     assert(equal(m1.color.x, sp->material.color.x));
@@ -2696,12 +2729,10 @@ int lighting_with_the_light_behind_surface_test() {
     return 0;
 }
 
-
-
 int intersect_compare_test() {
-    sphere* sp1 = create_sphere();
-    sphere* sp2 = create_sphere();
-    sphere* sp3 = create_sphere();
+    shape* sp1 = create_shape(SHAPE);
+    shape* sp2 = create_shape(SHAPE);
+    shape* sp3 = create_shape(SHAPE);
     intersection i1 = { 0.0f, sp1 };
     intersection i2 = { 1.0f, sp2 };
     intersection i3 = { -1.0f, sp3 };
@@ -2720,17 +2751,15 @@ int intersect_compare_test() {
     return 0;
 }
 
-
-
 int sort_intersects_test() {
     intersections intersects = create_intersections();
-    sphere* sp1 = create_sphere();
-    sphere* sp2 = create_sphere();
-    sphere* sp3 = create_sphere();
-    sphere* sp4 = create_sphere();
+    shape* sp1 = create_shape(SHAPE);
+    shape* sp2 = create_shape(SHAPE);
+    shape* sp3 = create_shape(SHAPE);
+    shape* sp4 = create_shape(SHAPE);
 
-    add_intersection_to_list(&intersects, 1.0, sp1);
-    add_intersection_to_list(&intersects, 2.0, sp2);
+    add_intersection(&intersects, 1.0, sp1);
+    add_intersection(&intersects, 2.0, sp2);
 
     sort_intersects(&intersects);
 
@@ -2740,10 +2769,10 @@ int sort_intersects_test() {
 
     clear_intersections(&intersects);
 
-    add_intersection_to_list(&intersects, 4.0, sp1);
-    add_intersection_to_list(&intersects, 3.0, sp2);
-    add_intersection_to_list(&intersects, 2.0, sp3);
-    add_intersection_to_list(&intersects, 1.0, sp4);
+    add_intersection(&intersects, 4.0, sp1);
+    add_intersection(&intersects, 3.0, sp2);
+    add_intersection(&intersects, 2.0, sp3);
+    add_intersection(&intersects, 1.0, sp4);
 
     sort_intersects(&intersects);
 
@@ -2759,11 +2788,11 @@ int sort_intersects_test() {
 
     clear_intersections(&intersects);
 
-    add_intersection_to_list(&intersects, -6.0, sp1);
-    add_intersection_to_list(&intersects, 1.0, sp2);
-    add_intersection_to_list(&intersects, 1.0, sp2);
-    add_intersection_to_list(&intersects, 57.0, sp3);
-    add_intersection_to_list(&intersects, -90.0, sp4);
+    add_intersection(&intersects, -6.0, sp1);
+    add_intersection(&intersects, 1.0, sp2);
+    add_intersection(&intersects, 1.0, sp2);
+    add_intersection(&intersects, 57.0, sp3);
+    add_intersection(&intersects, -90.0, sp4);
 
     sort_intersects(&intersects);
 
@@ -2813,7 +2842,7 @@ int default_world_test() {
     mat4x4_set_ident(ident);
     
     // w contains s1
-    sphere* sp = w.objects;
+    shape* sp = w.objects;
     assert(mat4x4_equal(sp->transform, ident));
 
     // w contains s2
@@ -2844,7 +2873,7 @@ int intersect_world_with_ray_test() {
 // 93 Precomputing the state of an intersection
 int prepare_computations_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* sp1 = create_sphere();
+    shape* sp1 = create_shape(SHAPE);
     intersection inter = { 4.0f, sp1 };
     comps comp = prepare_computations(&inter, &r);
     assert(equal(comp.t, inter.t));
@@ -2867,7 +2896,7 @@ int prepare_computations_test() {
 // 94 The hit when an intersection occurs on the outside
 int hit_when_intersect_on_outside_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* sp1 = create_sphere();
+    shape* sp1 = create_shape(SHAPE);
     intersection inter = { 4.0f, sp1 };
     comps comp = prepare_computations(&inter, &r);
     assert(comp.inside == false);
@@ -2878,7 +2907,7 @@ int hit_when_intersect_on_outside_test() {
 // 95 The hit when an intersection occurs on the inside
 int hit_when_intersect_occurs_on_inside_test() {
     ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-    sphere* sp1 = create_sphere();
+    shape* sp1 = create_shape(SHAPE);
     intersection inter = { 1.0f, sp1 };
     comps comp = prepare_computations(&inter, &r);
 
@@ -2934,7 +2963,7 @@ int shading_an_intersection_test() {
     mat4x4_set_ident(ident);
 
     // w contains s1
-    sphere* sp = w.objects;
+    shape* sp = w.objects;
     assert(mat4x4_equal(sp->transform, ident));
 
     // w contains s2
@@ -3015,7 +3044,7 @@ int shading_intersection_from_inside() {
     mat4x4_set_ident(ident);
 
     // w contains s1
-    sphere* sp = w.objects;
+    shape* sp = w.objects;
     assert(mat4x4_equal(sp->transform, ident));
 
     // w contains s2
@@ -3351,8 +3380,8 @@ int shade_hit_given_intersection_in_shadow_test() {
     point_light light = create_point_light(light_pos, light_color);
     free(w.lights);
     w.lights = &light;
-    sphere* sp1 = create_sphere();
-    sphere* sp2 = create_sphere();
+    shape* sp1 = create_shape(SHAPE);
+    shape* sp2 = create_shape(SHAPE);
     Mat4x4 trans_matrix;
     gen_translate_matrix(0.0f, 0.0f, 10.0f, trans_matrix);
     mat4x4_mul_in_place(sp2->transform, trans_matrix, trans_matrix);
@@ -3375,7 +3404,7 @@ int shade_hit_given_intersection_in_shadow_test() {
 // 115 Hit should offset the point
 int hit_should_offset_point_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
-    sphere* sp1 = create_sphere();
+    shape* sp1 = create_shape(SHAPE);
     Mat4x4 trans_matrix;
     gen_translate_matrix(0.0f, 0.0f, 10.0f, trans_matrix);
     mat4x4_copy(trans_matrix, sp1->transform);
@@ -3391,7 +3420,6 @@ int hit_should_offset_point_test() {
 
 // 72 Hint #4
 void render_sphere() {
-  
   tuple ray_origin = create_point(0.0f, 0.0f, -5.0f);
 
   double wall_z = 10.0f;
@@ -3401,7 +3429,7 @@ void render_sphere() {
 
   material m = create_material_default();
   m.color.x = 1.0f; m.color.y = 0.2f; m.color.z = 1.0f;
-  sphere* sphere1 = create_sphere();
+  shape* sphere1 = create_shape(SHAPE);
   sphere1->material = m;
   sphere1->material.ambient = 0.15f;
   sphere1->material.color.x = 0.254901;
@@ -3419,9 +3447,9 @@ void render_sphere() {
       double world_x = -half + pixel_size * x;
       tuple position1 = create_point(world_x, world_y, wall_z);
       tuple posRayOrigin = tuple_sub(position1, ray_origin);
-      tuple normRayOrigin = tuple_norm(posRayOrigin);
+      tuple normRayOrigin = tuple_normalize(posRayOrigin);
       ray ray_to_draw = create_ray(ray_origin.x, ray_origin.y, ray_origin.z, normRayOrigin.x, normRayOrigin.y, normRayOrigin.z );
-      ray_to_draw.direction_vector = tuple_norm(ray_to_draw.direction_vector);
+      ray_to_draw.direction_vector = tuple_normalize(ray_to_draw.direction_vector);
       intersections inter = create_intersections();
       intersect(sphere1, &ray_to_draw, &inter);
       intersection* hit_intersection = hit(&inter);
@@ -3444,7 +3472,7 @@ void render_complete_world() {
     world w = create_default_world();
 
     // 1. floor extremely flattened sphere with matte texture
-    sphere* floor = create_sphere();
+    shape* floor = create_shape(SHAPE);
     Mat4x4 floor_transform;
     gen_scale_matrix(10.0f, 0.01f, 10.0f, floor_transform);
     mat4x4_mul_in_place(floor_transform, floor->transform, floor->transform);
@@ -3474,7 +3502,7 @@ void render_complete_world() {
     assert(equal(floor->material.diffuse, 0.9f));
 
     // 2. wall on left has same scale and color but also rotated and translated into place
-    sphere* left_wall = create_sphere();
+    shape* left_wall = create_shape(SHAPE);
     Mat4x4 translate_left;
     
     gen_translate_matrix(0.0f, 0.0f, 5.0f, translate_left);
@@ -3621,7 +3649,7 @@ void render_complete_world() {
     assert(equal(scale_left[2][2], 10.0f));
 
     // 3. wall on right is identical to left, rotated opposite direction in y
-    sphere* right_wall = create_sphere();
+    shape* right_wall = create_shape(SHAPE);
     mat4x4_set_ident(final_transform_left);
     mat4x4_mul_in_place(final_transform_left, translate_left, final_transform_left);
     Mat4x4 rotate_y_right;
@@ -3653,7 +3681,7 @@ void render_complete_world() {
     assert(equal(right_wall->transform[3][3], 1.0f));
 
     // 4. Large sphere in middle is a unit sphere, translated upward slightly and colored green
-    sphere* middle_sphere = create_sphere();
+    shape* middle_sphere = create_shape(SHAPE);
     Mat4x4 middle_transform;
     gen_translate_matrix(-0.5, 1.0, 0.5, middle_transform);
 
@@ -3686,7 +3714,7 @@ void render_complete_world() {
     middle_sphere->material = middle_material;
 
     // 5. Smaller green sphere on the right is scaled in half
-    sphere* right_sphere = create_sphere();
+    shape* right_sphere = create_shape(SHAPE);
     Mat4x4 translate_right_sphere;
     gen_translate_matrix(1.5f, 0.5f, -0.5f, translate_right_sphere);
     Mat4x4 scale_right_sphere;
@@ -3725,7 +3753,7 @@ void render_complete_world() {
     right_sphere->material = right_sphere_material;
 
     // 6. Smallest sphere is scaled by a tird, before being translated
-    sphere* small_sphere = create_sphere();
+    shape* small_sphere = create_shape(SHAPE);
     Mat4x4 translate_small_sphere;
     gen_translate_matrix(-1.5f, 0.33f, -0.75f, translate_small_sphere);
     Mat4x4 scale_small_sphere;
@@ -3761,7 +3789,7 @@ void render_complete_world() {
 
     // Ensure the values here have not changed after stringing together the objects
 
-    sphere* test_object = w.objects; // floor
+    shape* test_object = w.objects; // floor
 
     assert(equal(test_object->transform[0][0], 10.0f));
     assert(equal(test_object->transform[1][1], 0.01f));
@@ -3810,6 +3838,262 @@ void render_complete_world() {
     free(middle_sphere);
     free(right_sphere);
     free(small_sphere);
+}
+
+// 125 Render complete world with plane
+void render_complete_world_with_plane() {
+    world w = create_default_world();
+    shape* floor = create_shape(PLANE);
+    material floor_material = create_material_default();
+    floor_material.color = create_point(0.9f, 0.9f, 0.9f);
+    floor_material.specular = 0.0f;
+    floor->material = floor_material;
+
+    shape* middle_sphere = create_shape(SHAPE);
+    Mat4x4 middle_transform;
+    gen_translate_matrix(-0.5, 1.0, 0.5, middle_transform);
+
+    mat4x4_copy(middle_transform, middle_sphere->transform);
+
+    material middle_material = create_material_default();
+    middle_material.color = create_point(0.1f, 1.0f, 0.5);
+    middle_material.diffuse = 0.7f;
+    middle_material.specular = 0.3f;
+    middle_sphere->material = middle_material;
+
+    shape* right_sphere = create_shape(SHAPE);
+    Mat4x4 translate_right_sphere;
+    gen_translate_matrix(1.5f, 0.5f, -0.5f, translate_right_sphere);
+    Mat4x4 scale_right_sphere;
+    gen_scale_matrix(0.5f, 0.5f, 0.5f, scale_right_sphere);
+    Mat4x4 final_transform_right_sphere;
+    mat4x4_set_ident(final_transform_right_sphere);
+
+    mat4x4_mul_in_place(final_transform_right_sphere, translate_right_sphere, final_transform_right_sphere);
+    mat4x4_mul_in_place(final_transform_right_sphere, scale_right_sphere, final_transform_right_sphere);
+    mat4x4_copy(final_transform_right_sphere, right_sphere->transform);
+
+    material right_sphere_material = create_material_default();
+    right_sphere_material.color = create_point(0.5f, 1.0f, 0.1);
+    right_sphere_material.diffuse = 0.7f;
+    right_sphere_material.specular = 0.3f;
+    right_sphere->material = right_sphere_material;
+
+    // 6. Smallest sphere is scaled by a tird, before being translated
+    shape* small_sphere = create_shape(SHAPE);
+    Mat4x4 translate_small_sphere;
+    gen_translate_matrix(-1.5f, 0.33f, -0.75f, translate_small_sphere);
+    Mat4x4 scale_small_sphere;
+    gen_scale_matrix(0.33f, 0.33f, 0.33f, scale_small_sphere);
+    Mat4x4 final_transform_small_sphere;
+    mat4x4_set_ident(final_transform_small_sphere);
+    mat4x4_mul_in_place(final_transform_small_sphere, translate_small_sphere, final_transform_small_sphere);
+    mat4x4_mul_in_place(final_transform_small_sphere, scale_small_sphere, final_transform_small_sphere);
+    mat4x4_copy(final_transform_small_sphere, small_sphere->transform);
+
+    material small_sphere_material = create_material_default();
+    small_sphere_material.color = create_point(1.0f, 0.8f, 0.1);
+    small_sphere_material.diffuse = 0.7f;
+    small_sphere_material.specular = 0.3f;
+    small_sphere->material = small_sphere_material;
+
+    // putting geometry together
+    small_sphere->next = NULL;
+    right_sphere->next = small_sphere;
+    middle_sphere->next = right_sphere;
+    floor->next = middle_sphere;
+    w.objects = floor;
+
+    // lighting
+    tuple light_position = create_point(-10.0f, 10.0f, -10.0f);
+    tuple light_intensity = create_point(1.0f, 1.0f, 1.0f);
+    *w.lights = create_point_light(light_position, light_intensity);
+
+    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, M_PI / 3.0f);
+    tuple from = create_point(0.0f, 1.5f, -5.0f);
+    tuple to = create_point(0.0f, 1.0f, 0.0f);
+    tuple up = create_vector(0.0f, 1.0f, 0.0f);
+    view_transform(from, to, up, c->view_transform);
+
+    render(c, &w);
+
+    free(c);
+    free(floor);
+    free(middle_sphere);
+    free(right_sphere);
+    free(small_sphere);
+}
+
+// 119 The default transformation
+int default_transformation_of_shape() {
+    shape* s = create_shape(SHAPE);
+    Mat4x4 ident;
+    mat4x4_set_ident(ident);
+    assert(mat4x4_equal(ident, s->transform));
+    free(s);
+    return 0;
+}
+
+// 119 Assigning a transform
+int assign_transformation_of_shape() {
+    shape* s = create_shape(SHAPE);
+    Mat4x4 trans;
+    gen_translate_matrix(2.0f, 3.0f, 4.0f, trans);
+    set_transform(s, trans);
+    assert(mat4x4_equal(trans, s->transform));
+    free(s);
+    return 0;
+}
+
+// 119 The default material
+int default_material_of_shape() {
+    shape* sp = create_shape(SHAPE);
+
+    material m1 = create_material_default();
+
+    assert(equal(m1.color.x, 1.0f));
+    assert(equal(m1.color.y, 1.0f));
+    assert(equal(m1.color.z, 1.0f));
+    assert(equal(m1.color.w, 0.0f));
+
+    assert(equal(m1.ambient, 0.1f));
+    assert(equal(m1.diffuse, 0.9f));
+    assert(equal(m1.specular, 0.9f));
+    assert(equal(m1.shininess, 200.0f));
+
+    assert(equal(m1.color.x, sp->material.color.x));
+    assert(equal(m1.color.y, sp->material.color.y));
+    assert(equal(m1.color.z, sp->material.color.z));
+    assert(equal(m1.color.w, sp->material.color.w));
+
+    assert(equal(m1.ambient,   sp->material.ambient));
+    assert(equal(m1.diffuse,   sp->material.diffuse));
+    assert(equal(m1.specular,  sp->material.specular));
+    assert(equal(m1.shininess, sp->material.shininess));
+
+    free(sp);
+    return 0;
+}
+
+// 119 Assigning a material
+int assigning_material_to_a_shape() {
+    shape* sp = create_shape(SHAPE);
+
+    material m1 = create_material_default();
+    m1.color.x = 9.0f; m1.color.y = 8.0f; m1.color.z = 7.0f;
+    m1.ambient = 2.5f; m1.diffuse = 3.6f; m1.specular = 4.6f; m1.shininess = 5.3f;
+
+    sp->material = m1;
+
+    assert(equal(sp->material.color.x, 9.0f));
+    assert(equal(sp->material.color.y, 8.0f));
+    assert(equal(sp->material.color.z, 7.0f));
+    assert(equal(sp->material.color.w, 0.0f));
+
+    assert(equal(sp->material.ambient, 2.5f));
+    assert(equal(sp->material.diffuse, 3.6f));
+    assert(equal(sp->material.specular, 4.6f));
+    assert(equal(sp->material.shininess, 5.3f));
+
+    assert(equal(m1.color.x, sp->material.color.x));
+    assert(equal(m1.color.y, sp->material.color.y));
+    assert(equal(m1.color.z, sp->material.color.z));
+    assert(equal(m1.color.w, sp->material.color.w));
+
+    assert(equal(m1.ambient,   sp->material.ambient));
+    assert(equal(m1.diffuse,   sp->material.diffuse));
+    assert(equal(m1.specular,  sp->material.specular));
+    assert(equal(m1.shininess, sp->material.shininess));
+
+    free(sp);
+    return 0;
+}
+
+// 120 Intersecting a scaled sphere with a ray
+// see intersect_scaled_sphere_test()
+
+// 120 Intersecting a translated shape with a ray
+// see intersecting_translated_sphere_test()
+
+// 121 Computing the normal on a translated shape
+// see compute_normal_on_sphere_test()
+
+// 121 Computing the normal on a transformed shape
+// see compute_normal_on_transformed_sphere_test()
+
+// 122 The normal of a plane is constant everywhere
+int normal_of_plane_is_const_everywhere_test() {
+    shape* pl = create_shape(PLANE);
+    tuple point = create_point(0.0f, 0.0f, 0.0f);
+    tuple n1 = normal_at(pl, point);
+    assert(equal(n1.x, 0.0f));
+    assert(equal(n1.y, 1.0f));
+    assert(equal(n1.z, 0.0f));
+    
+    point.x = 10.0f;
+    point.z = -10.0f;
+    tuple n2 = normal_at(pl, point);
+    assert(equal(n2.x, 0.0f));
+    assert(equal(n2.y, 1.0f));
+    assert(equal(n2.z, 0.0f));
+
+    point.x = -5.0f;
+    point.z = 150;
+    tuple n3 = normal_at(pl, point);
+    assert(equal(n3.x, 0.0f));
+    assert(equal(n3.y, 1.0f));
+    assert(equal(n3.z, 0.0f));
+
+    delete_shape(pl);
+    return 0;
+}
+
+// 123 Intersect with a ray parallel to the plane
+int intersect_ray_parallel_to_plane_test() {
+    shape* pl = create_shape(PLANE);
+    ray r = create_ray(0.0, 10.0, 0.0, 0.0, 0.0, 1.0);
+    intersections inter = create_intersections();
+    intersect(pl, &r, &inter);
+    assert(inter.count == 0);
+    free(pl);
+    return 0;
+}
+
+// 123 Intersect with coplanar ray
+int intersect_coplanar_ray_test() {
+    shape* pl = create_shape(PLANE);
+    ray r = create_ray(0.0, 00.0, 0.0, 0.0, 0.0, 1.0);
+    intersections inter = create_intersections();
+    intersect(pl, &r, &inter);
+    assert(inter.count == 0);
+    free(pl);
+    return 0;
+}
+
+// 123 A ray intersecting a plane from above
+int intersect_ray_plane_above_test() {
+    shape* pl = create_shape(PLANE);
+    ray r = create_ray(0.0, 1.0, 0.0, 0.0, -1.0, 0.0);
+    intersections inter = create_intersections();
+    intersect(pl, &r, &inter);
+    assert(inter.count == 1);
+    assert(equal(inter.itersection[0].t, 1.0f));
+    assert(inter.itersection[0].object_id == pl);
+    free(pl);
+    return 0;
+}
+
+// 123 A ray intersecting a plane from below
+int intersect_ray_plane_below_test() {
+    shape* pl = create_shape(PLANE);
+    ray r = create_ray(0.0, -1.0, 0.0, 0.0, 1.0, 0.0);
+    intersections inter = create_intersections();
+    intersect(pl, &r, &inter);
+    assert(inter.count == 1);
+    assert(equal(inter.itersection[0].t, 1.0f));
+    assert(inter.itersection[0].object_id == pl);
+    free(pl);
+    return 0;
 }
 
 int main() {
@@ -3865,7 +4149,7 @@ int main() {
   //unitTest("Draw Clock Test", drawClockTest());
   unit_test("Tuple Copy Test", tuple_copy_test());
   unit_test("Create Ray Test", create_ray_test());
-  unit_test("Create Sphere Test", create_sphere_test());
+  unit_test("Create Sphere Test", create_shape_test());
   unit_test("Create Intersections Test", create_intersections_test());
   unit_test("Position Test", position_test());
   unit_test("Ray Intersect Sphere At Two Points Test", ray_intersect_sphere_two_point_test());
@@ -3929,10 +4213,20 @@ int main() {
   unit_test("No Shadow When Object Behind Point Test", no_shadow_when_object_behind_point_test());
   unit_test("Shade Hit Given Intersection In Shadow Test", shade_hit_given_intersection_in_shadow_test());
   unit_test("Hit Should Offset Point Test", hit_should_offset_point_test());
+  unit_test("Default Transformation Of Shape Test", default_transformation_of_shape());
+  unit_test("Assign Transformation Of Shape Test", assign_transformation_of_shape());
+  unit_test("Default Material Of A Shape Test", default_material_of_shape());
+  unit_test("Assigning Material To A Shape Test", assigning_material_to_a_shape());
+  unit_test("Normal Of Plane Is Const Everywhere Test", normal_of_plane_is_const_everywhere_test());
+  unit_test("Intersect Ray Parallel To Plane Test", intersect_ray_parallel_to_plane_test());
+  unit_test("Intersect Coplanar Ray Test", intersect_coplanar_ray_test());
+  unit_test("Intersect Ray Plane Above Test", intersect_ray_plane_above_test());
+  unit_test("Intersect Ray Plane Below Test", intersect_ray_plane_below_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
 #endif
   //render_sphere();
-  render_complete_world();
+  //render_complete_world();
+  render_complete_world_with_plane();
   write_canvas_to_file();
   return 0;
 }
