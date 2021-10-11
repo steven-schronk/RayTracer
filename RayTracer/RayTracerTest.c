@@ -18,6 +18,7 @@ Copyright 2021 Steven Ray Schronk
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 // #include <vld.h>  // C:\Program Files (x86)\Visual Leak Detector
 
 #ifndef M_PI
@@ -26,8 +27,8 @@ Copyright 2021 Steven Ray Schronk
 
 #define EPSILON 0.000001
 
-#define VERTICAL_SIZE   600
-#define HORIZONTAL_SIZE 1200
+#define VERTICAL_SIZE   60
+#define HORIZONTAL_SIZE 120
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -650,9 +651,9 @@ tuple normal_at(shape* shape, tuple point) {
 }
 
 tuple tuple_reflect(tuple in, tuple normal) {
-    tuple normTwo = tuple_mult_scalar(normal, 2.0f);
-    double dotNNormal = tuple_dot(in, normal);
-    return tuple_sub(in, tuple_mult_scalar(normTwo, dotNNormal));
+    tuple norm_two = tuple_mult_scalar(normal, 2.0f);
+    double dot_n_normal = tuple_dot(in, normal);
+    return tuple_sub(in, tuple_mult_scalar(norm_two, dot_n_normal));
 }
 
 world create_world() {
@@ -711,17 +712,9 @@ camera* create_camera(double hsize, double vsize, double field_of_view) {
     double half_width = 0.0f;
     double aspect = hsize / vsize;
     if (aspect >= 1) {
-        // the text
-        //half_view = half_width;
-        //half_height = half_view / aspect;
-        // the example
         half_width = half_view;
         half_height = half_view / aspect;
     } else {
-        // the text
-        //half_view = half_height;
-        //half_width = half_view * aspect;
-        // the example
         half_width = half_view * aspect;
         half_height = half_view;
     }
@@ -1183,8 +1176,8 @@ int vec_norm_test() {
 int dot_prod_test() {
   tuple vec1 = create_vector(1.0f, 2.0f, 3.0f);
   tuple vec2 = create_vector(2.0f, 3.0f, 4.0f);
-  double dotProd = tuple_dot(vec1, vec2);
-  assert(equal(dotProd, 20.0f));
+  double dot_prod = tuple_dot(vec1, vec2);
+  assert(equal(dot_prod, 20.0f));
   return 0;
 }
 
@@ -1272,7 +1265,7 @@ int color_convert_test() {
 }
 
 int mat_equal_test() {
-  double oldValue;
+  double old_value;
   Mat2x2 mat2x2a = { { 0.0f, 1.0f }, { 2.0f, 3.0f } };
   Mat2x2 mat2x2b = { { 0.0f, 1.0f }, { 2.0f, 3.0f } };
 
@@ -1283,11 +1276,11 @@ int mat_equal_test() {
   // verify that method catches it
   for (int i = 0; i < 2; ++i) {
     for (int j = 0; j < 2; ++j) {
-      oldValue = mat2x2a[i][j];
+      old_value = mat2x2a[i][j];
       mat2x2a[i][j] = 9.0f;
       test1 = mat2x2_equal(mat2x2a, mat2x2b);
       assert(false == test1);
-      mat2x2a[i][j] = oldValue;
+      mat2x2a[i][j] = old_value;
     }
   }
 
@@ -1300,11 +1293,11 @@ int mat_equal_test() {
   // verify that method catches it
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 3; ++j) {
-      oldValue = mat3x3a[i][j];
+      old_value = mat3x3a[i][j];
       mat3x3a[i][j] = 9.0f;
       test2 = mat3x3_equal(mat3x3a, mat3x3b);
       assert(false == test2);
-      mat3x3a[i][j] = oldValue;
+      mat3x3a[i][j] = old_value;
     }
   }
 
@@ -1319,11 +1312,11 @@ int mat_equal_test() {
   // verify that method catches it
   for (int i = 0; i < 4; ++i) {
     for (int j = 0; j < 4; ++j) {
-      oldValue = mat4x4a[i][j];
+      old_value = mat4x4a[i][j];
       mat4x4a[i][j] = 12.0f;
       test3 = mat4x4_equal(mat4x4a, mat4x4b);
       assert(false == test3);
-      mat4x4a[i][j] = oldValue;
+      mat4x4a[i][j] = old_value;
     }
   }
   return 0;
@@ -1721,12 +1714,12 @@ int point_trans_test() {
 // 45 Multiply by the inverse of a traslation matrix
 int point_mult_inverse_translation_test() {
   Mat4x4 trans;
-  Mat4x4 transInverse;
+  Mat4x4 trans_inverse;
   gen_translate_matrix(5.0f, -3.0f, 2.0f, trans);
-  mat4x4_inverse(trans, transInverse);
+  mat4x4_inverse(trans, trans_inverse);
   tuple p1 = create_point(-3.0f, 4.0f, 5.0f);
   tuple p2 = create_point(0.0f, 0.0f, 0.0f);
-  mat4x4_mul_tuple(transInverse, p1, &p2);
+  mat4x4_mul_tuple(trans_inverse, p1, &p2);
   assert(equal(p2.x, -8.0f));
   assert(equal(p2.y,  7.0f));
   assert(equal(p2.z,  3.0f));
@@ -1752,9 +1745,9 @@ int vector_translation_has_no_effect_test() {
 int point_scale_mat4x4_test() {
   tuple p1 = create_point(-4.0f, 6.0f, 8.0f);
   tuple p2 = create_point(0.0f, 0.0f, 0.0f);
-  Mat4x4 scaleMat;
-  gen_scale_matrix(2.0f, 3.0f, 4.0f, scaleMat);
-  mat4x4_mul_tuple(scaleMat, p1, &p2);
+  Mat4x4 scale_mat;
+  gen_scale_matrix(2.0f, 3.0f, 4.0f, scale_mat);
+  mat4x4_mul_tuple(scale_mat, p1, &p2);
   assert(equal(p2.x, -8.0f));
   assert(equal(p2.y, 18.0f));
   assert(equal(p2.z, 32.0f));
@@ -1766,9 +1759,9 @@ int point_scale_mat4x4_test() {
 int vec_scale_mat4x4_test() {
   tuple p1 = create_vector(-4.0f, 6.0f, 8.0f);
   tuple p2 = create_vector(0.0f, 0.0f, 0.0f);
-  Mat4x4 scaleMat;
-  gen_scale_matrix(2.0f, 3.0f, 4.0f, scaleMat);
-  mat4x4_mul_tuple(scaleMat, p1, &p2);
+  Mat4x4 scale_mat;
+  gen_scale_matrix(2.0f, 3.0f, 4.0f, scale_mat);
+  mat4x4_mul_tuple(scale_mat, p1, &p2);
   assert(equal(p2.x, -8.0f));
   assert(equal(p2.y, 18.0f));
   assert(equal(p2.z, 32.0f));
@@ -1778,13 +1771,13 @@ int vec_scale_mat4x4_test() {
 
 // 46 Multiply inverse of scaling matrix
 int mult_inverse_scale_matrix_test() {
-  Mat4x4 scaleMat;
-  Mat4x4 scaleMatInv;
+  Mat4x4 scale_mat;
+  Mat4x4 scale_mat_inv;
   tuple p1 = create_vector(-4.0f, 6.0f, 8.0f);
   tuple p2 = create_vector(0.0f, 0.0f, 0.0f);
-  gen_scale_matrix(2.0f, 3.0f, 4.0f, scaleMat);
-  mat4x4_inverse(scaleMat, scaleMatInv);
-  mat4x4_mul_tuple(scaleMatInv, p1, &p2);
+  gen_scale_matrix(2.0f, 3.0f, 4.0f, scale_mat);
+  mat4x4_inverse(scale_mat, scale_mat_inv);
+  mat4x4_mul_tuple(scale_mat_inv, p1, &p2);
   assert(equal(p2.x, -2.0f));
   assert(equal(p2.y,  2.0f));
   assert(equal(p2.z,  2.0f));
@@ -1794,11 +1787,11 @@ int mult_inverse_scale_matrix_test() {
 
 // 47 Reflection is scaling by a negative value
 int reflection_scaling_neg_value_test() {
-    Mat4x4 scaleMat;
-    gen_scale_matrix(-1.0f, 1.0f, 1.0f, scaleMat);
+    Mat4x4 scale_mat;
+    gen_scale_matrix(-1.0f, 1.0f, 1.0f, scale_mat);
     tuple p1 = create_point(2.0f, 3.0f, 4.0f);
     tuple p2 = create_point(0.0f, 0.0f, 0.0f);
-    mat4x4_mul_tuple(scaleMat, p1, &p2);
+    mat4x4_mul_tuple(scale_mat, p1, &p2);
     assert(equal(p2.x, -2.0f));
     assert(equal(p2.y, 3.0f));
     assert(equal(p2.z, 4.0f));
@@ -1807,18 +1800,18 @@ int reflection_scaling_neg_value_test() {
 
 // 48 Rotating a point around the x axis
 int gen_rotation_matrix_X_test() {
-  Mat4x4 rotMat;
+  Mat4x4 rot_mat;
   tuple p1 = create_point(0.0f, 1.0f, 0.0f);
   tuple p2 = create_point(7.0f, 8.0f, 9.0f);
-  gen_rotate_matrix_X(M_PI / 4, rotMat);
-  mat4x4_mul_tuple(rotMat, p1, &p2);
+  gen_rotate_matrix_X(M_PI / 4, rot_mat);
+  mat4x4_mul_tuple(rot_mat, p1, &p2);
   assert(equal(p2.x, 0.0f));
   assert(equal(p2.y, sqrt(2.0f)/2.0f));
   assert(equal(p2.z, sqrt(2.0f) / 2.0f));
   assert(equal(p2.w, 1.0f));
 
-  gen_rotate_matrix_X(M_PI / 2, rotMat);
-  mat4x4_mul_tuple(rotMat, p1, &p2);
+  gen_rotate_matrix_X(M_PI / 2, rot_mat);
+  mat4x4_mul_tuple(rot_mat, p1, &p2);
   assert(equal(p2.x, 0.0f));
   assert(equal(p2.y, 0.0f));
   assert(equal(p2.z, 1.0f));
@@ -1828,13 +1821,13 @@ int gen_rotation_matrix_X_test() {
 
 // 49 Inverse of an x rotation rotates the opposite direction
 int gen_rotation_matrix_reverse_test() {
-  Mat4x4 rotMat;
-  Mat4x4 rotMatInv;
+  Mat4x4 rot_mat;
+  Mat4x4 rot_mat_inv;
   tuple p1 = create_point(0.0f, 1.0f, 0.0f);
   tuple p2 = create_point(7.0f, 8.0f, 9.0f);
-  gen_rotate_matrix_X(M_PI / 4, rotMat);
-  mat4x4_inverse(rotMat, rotMatInv);
-  mat4x4_mul_tuple(rotMatInv, p1, &p2);
+  gen_rotate_matrix_X(M_PI / 4, rot_mat);
+  mat4x4_inverse(rot_mat, rot_mat_inv);
+  mat4x4_mul_tuple(rot_mat_inv, p1, &p2);
   assert(equal(p2.x, 0.0f));
   assert(equal(p2.y, sqrt(2.0f) / 2.0f));
   assert(equal(p2.z, -sqrt(2.0f) / 2.0f));
@@ -1844,18 +1837,18 @@ int gen_rotation_matrix_reverse_test() {
 
 // 50 Rotating a point around the y axis
 int gen_rotation_matrix_Y_test() {
-  Mat4x4 rotMat;
+  Mat4x4 rot_mat;
   tuple p1 = create_point(0.0f, 0.0f, 1.0f);
   tuple p2 = create_point(7.0f, 8.0f, 9.0f);
-  gen_rotate_matrix_Y(M_PI / 4, rotMat);
-  mat4x4_mul_tuple(rotMat, p1, &p2);
+  gen_rotate_matrix_Y(M_PI / 4, rot_mat);
+  mat4x4_mul_tuple(rot_mat, p1, &p2);
   assert(equal(p2.x, sqrt(2.0f) / 2.0f));
   assert(equal(p2.y,  0.0f));
   assert(equal(p2.z, sqrt(2.0f) / 2.0f));
   assert(equal(p2.w,  1.0f));
 
-  gen_rotate_matrix_Y(M_PI / 2, rotMat);
-  mat4x4_mul_tuple(rotMat, p1, &p2);
+  gen_rotate_matrix_Y(M_PI / 2, rot_mat);
+  mat4x4_mul_tuple(rot_mat, p1, &p2);
   assert(equal(p2.x, 1.0f));
   assert(equal(p2.y, 0.0f));
   assert(equal(p2.z, 0.0f));
@@ -1865,18 +1858,18 @@ int gen_rotation_matrix_Y_test() {
 
 // 50 Rotating a point around the y axis
 int gen_rotation_matrix_Z_test() {
-  Mat4x4 rotMat;
+  Mat4x4 rot_mat;
   tuple p1 = create_point(0.0f, 1.0f, 0.0f);
   tuple p2 = create_point(7.0f, 8.0f, 9.0f);
-  gen_rotate_matrix_Z(M_PI / 4, rotMat);
-  mat4x4_mul_tuple(rotMat, p1, &p2);
+  gen_rotate_matrix_Z(M_PI / 4, rot_mat);
+  mat4x4_mul_tuple(rot_mat, p1, &p2);
   assert(equal(p2.x, -sqrt(2.0f) / 2.0f));
   assert(equal(p2.y, sqrt(2.0f) / 2.0f));
   assert(equal(p2.z, 0.0f));
   assert(equal(p2.w, 1.0f));
 
-  gen_rotate_matrix_Z(M_PI / 2, rotMat);
-  mat4x4_mul_tuple(rotMat, p1, &p2);
+  gen_rotate_matrix_Z(M_PI / 2, rot_mat);
+  mat4x4_mul_tuple(rot_mat, p1, &p2);
   assert(equal(p2.x, -1.0f));
   assert(equal(p2.y, 0.0f));
   assert(equal(p2.z, 0.0f));
@@ -1886,56 +1879,56 @@ int gen_rotation_matrix_Z_test() {
 
 // 52 Shearing transformation moves x in proportion to y
 int gen_shear_matrix_test() {
-  Mat4x4 shearMat;
-  gen_shear_matrix(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, shearMat);
+  Mat4x4 shear_mat;
+  gen_shear_matrix(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, shear_mat);
   tuple p1 = create_point(2.0f, 3.0f, 4.0f);
   tuple p2 = create_point(7.0f, 8.0f, 9.0f);
-  mat4x4_mul_tuple(shearMat, p1, &p2);
+  mat4x4_mul_tuple(shear_mat, p1, &p2);
   assert(equal(p2.x, 5.0f));
   assert(equal(p2.y, 3.0f));
   assert(equal(p2.z, 4.0f));
   assert(equal(p2.w, 1.0f));
 
   // moves x in proportion to y
-  gen_shear_matrix(0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, shearMat);
+  gen_shear_matrix(0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, shear_mat);
   p2.x = 2.0f; p2.y = 3.0f; p2.z = 4.0f;
-  mat4x4_mul_tuple(shearMat, p1, &p2);
+  mat4x4_mul_tuple(shear_mat, p1, &p2);
   assert(equal(p2.x, 6.0f));
   assert(equal(p2.y, 3.0f));
   assert(equal(p2.z, 4.0f));
   assert(equal(p2.w, 1.0f));
 
   // moves y in proportion to x
-  gen_shear_matrix(0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, shearMat);
+  gen_shear_matrix(0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, shear_mat);
   p2.x = 2.0f; p2.y = 3.0f; p2.z = 4.0f;
-  mat4x4_mul_tuple(shearMat, p1, &p2);
+  mat4x4_mul_tuple(shear_mat, p1, &p2);
   assert(equal(p2.x, 2.0f));
   assert(equal(p2.y, 5.0f));
   assert(equal(p2.z, 4.0f));
   assert(equal(p2.w, 1.0f));
 
   // moves y in proportion to z
-  gen_shear_matrix(0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, shearMat);
+  gen_shear_matrix(0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, shear_mat);
   p2.x = 2.0f; p2.y = 3.0f; p2.z = 4.0f;
-  mat4x4_mul_tuple(shearMat, p1, &p2);
+  mat4x4_mul_tuple(shear_mat, p1, &p2);
   assert(equal(p2.x, 2.0f));
   assert(equal(p2.y, 7.0f));
   assert(equal(p2.z, 4.0f));
   assert(equal(p2.w, 1.0f));
 
   // moves x in proportion to x
-  gen_shear_matrix(0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, shearMat);
+  gen_shear_matrix(0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, shear_mat);
   p2.x = 2.0f; p2.y = 3.0f; p2.z = 4.0f;
-  mat4x4_mul_tuple(shearMat, p1, &p2);
+  mat4x4_mul_tuple(shear_mat, p1, &p2);
   assert(equal(p2.x, 2.0f));
   assert(equal(p2.y, 3.0f));
   assert(equal(p2.z, 6.0f));
   assert(equal(p2.w, 1.0f));
 
   // moves x in proportion to x
-  gen_shear_matrix(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, shearMat);
+  gen_shear_matrix(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, shear_mat);
   p2.x = 2.0f; p2.y = 3.0f; p2.z = 4.0f;
-  mat4x4_mul_tuple(shearMat, p1, &p2);
+  mat4x4_mul_tuple(shear_mat, p1, &p2);
   assert(equal(p2.x, 2.0f));
   assert(equal(p2.y, 3.0f));
   assert(equal(p2.z, 7.0f));
@@ -1945,35 +1938,35 @@ int gen_shear_matrix_test() {
 
 // 54 Individual transormations are applied in sequence
 int transform_applied_in_sequence_test() {
-  Mat4x4 rotMat;
-  Mat4x4 scaleMat;
-  Mat4x4 shearMat;
-  gen_rotate_matrix_X(M_PI / 2, rotMat);
-  gen_scale_matrix(5.0f, 5.0f, 5.0f, scaleMat);
-  gen_translate_matrix(10.0f, 5.0f, 7.0f, shearMat);
+  Mat4x4 rot_mat;
+  Mat4x4 scale_mat;
+  Mat4x4 shear_mat;
+  gen_rotate_matrix_X(M_PI / 2, rot_mat);
+  gen_scale_matrix(5.0f, 5.0f, 5.0f, scale_mat);
+  gen_translate_matrix(10.0f, 5.0f, 7.0f, shear_mat);
   tuple p1 = create_point(1.0f, 0.0f, 1.0f);
   tuple p2 = create_point(1.0f, -1.0f, 0.0f);
   tuple p3 = create_point(5.0f, -5.0f, 0.0f);
   tuple p4 = create_point(15.0f, 0.0f, 7.0f);
-  mat4x4_mul_tuple(rotMat, p1, &p2);
+  mat4x4_mul_tuple(rot_mat, p1, &p2);
   assert(equal(p2.x, 1.0f));
   assert(equal(p2.y, -1.0f));
   assert(equal(p2.z, 0.0f));
   assert(equal(p2.w, 1.0f));
-  mat4x4_mul_tuple(scaleMat, p2, &p3);
+  mat4x4_mul_tuple(scale_mat, p2, &p3);
   assert(equal(p3.x, 5.0f));
   assert(equal(p3.y, -5.0f));
   assert(equal(p3.z, 0.0f));
   assert(equal(p3.w, 1.0f));
-  mat4x4_mul_tuple(shearMat, p3, &p4);
+  mat4x4_mul_tuple(shear_mat, p3, &p4);
   assert(equal(p4.x, 15.0f));
   assert(equal(p4.y, 0.0f));
   assert(equal(p4.z, 7.0f));
   assert(equal(p4.w, 1.0f));
   p1.x = 1.0f; p1.y = 0.0f; p1.z = 1.0f;
-  mat4x4_mul_in_place(shearMat, scaleMat, scaleMat);
-  mat4x4_mul_in_place(scaleMat, rotMat, rotMat);
-  mat4x4_mul_tuple(rotMat, p1, &p2);
+  mat4x4_mul_in_place(shear_mat, scale_mat, scale_mat);
+  mat4x4_mul_in_place(scale_mat, rot_mat, rot_mat);
+  mat4x4_mul_tuple(rot_mat, p1, &p2);
   assert(equal(p2.x, 15.0f));
   assert(equal(p2.y, 0.0f));
   assert(equal(p2.z, 7.0f));
@@ -2130,7 +2123,6 @@ int create_shape_test() {
 
 int create_intersections_test() {
     intersections intersects  = create_intersections();
-
     assert(intersects.count == 0);
     for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
         assert(equal(intersects.itersection[i].t, 0.0f));
@@ -2347,10 +2339,10 @@ int hit_tests(){
 // 69 Translating a ray
 int translating_ray_test() {
     ray r1 = create_ray(1.0f, 2.0f, 3.0f, 0.0f, 1.0f, 0.0f);
-    Mat4x4 transMat;
-    gen_translate_matrix(3.0f, 4.0f, 5.0f, transMat);
+    Mat4x4 trans_mat;
+    gen_translate_matrix(3.0f, 4.0f, 5.0f, trans_mat);
 
-    ray r2 = transform(&r1, transMat);
+    ray r2 = transform(&r1, trans_mat);
     assert(&r1 != &r2);
     assert(equal(r2.origin_point.x, 4.0f));
     assert(equal(r2.origin_point.y, 6.0f));
@@ -2367,9 +2359,9 @@ int translating_ray_test() {
 // 69 Scaling a ray
 int scaling_ray_test() {
     ray r1 = create_ray(1.0f, 2.0f, 3.0f, 0.0f, 1.0f, 0.0f);
-    Mat4x4 scaleMat;
-    gen_scale_matrix(2.0f, 3.0f, 4.0f, scaleMat);
-    ray r2 = transform(&r1, scaleMat);
+    Mat4x4 scale_mat;
+    gen_scale_matrix(2.0f, 3.0f, 4.0f, scale_mat);
+    ray r2 = transform(&r1, scale_mat);
 
     assert(&r1 != &r2);
 
@@ -2388,9 +2380,9 @@ int scaling_ray_test() {
 // 69 Sphere default transformation
 int sphere_default_transformation_test() {
     shape* sp = create_shape(SHAPE);
-    Mat4x4 identMat;
-    mat4x4_set_ident(identMat);
-    assert(mat4x4_equal(sp->transform, identMat) == true);
+    Mat4x4 ident_mat;
+    mat4x4_set_ident(ident_mat);
+    assert(mat4x4_equal(sp->transform, ident_mat) == true);
     free(sp);
     return 0;
 }
@@ -2398,10 +2390,10 @@ int sphere_default_transformation_test() {
 // 69 Changing a sphere's transformation
 int change_sphere_transform_test() {
     shape* sp = create_shape(SHAPE);
-    Mat4x4 transMat;
-    gen_translate_matrix(2.0f, 3.0f, 4.0f, transMat);
-    set_transform(sp, transMat);
-    assert(mat4x4_equal(sp->transform, transMat) == true);
+    Mat4x4 trans_mat;
+    gen_translate_matrix(2.0f, 3.0f, 4.0f, trans_mat);
+    set_transform(sp, trans_mat);
+    assert(mat4x4_equal(sp->transform, trans_mat) == true);
     free(sp);
     return 0;
 }
@@ -2409,25 +2401,25 @@ int change_sphere_transform_test() {
 int set_transform_test() {
     shape* sp = create_shape(SHAPE);
    
-    Mat4x4 identMat;
-    mat4x4_set_ident(identMat);
+    Mat4x4 ident_mat;
+    mat4x4_set_ident(ident_mat);
     // does sphere have identity as transform?
-    assert(mat4x4_equal(sp->transform, identMat));
+    assert(mat4x4_equal(sp->transform, ident_mat));
 
-    Mat4x4 transMat;
-    gen_translate_matrix(2.0f, 3.0f, 4.0f, transMat);
+    Mat4x4 trans_mat;
+    gen_translate_matrix(2.0f, 3.0f, 4.0f, trans_mat);
 
     // is correct translate matrix?
-    assert(equal(transMat[0][3], 2.0f));
-    assert(equal(transMat[1][3], 3.0f));
-    assert(equal(transMat[2][3], 4.0f));
-    assert(equal(transMat[3][3], 1.0f));
+    assert(equal(trans_mat[0][3], 2.0f));
+    assert(equal(trans_mat[1][3], 3.0f));
+    assert(equal(trans_mat[2][3], 4.0f));
+    assert(equal(trans_mat[3][3], 1.0f));
 
-    set_transform(sp, transMat);
+    set_transform(sp, trans_mat);
     // has it been copied correctly?
-    assert(mat4x4_equal(sp->transform, transMat));
+    assert(mat4x4_equal(sp->transform, trans_mat));
     // two seperate matrixes
-    assert(&sp->transform != &identMat);
+    assert(&sp->transform != &ident_mat);
     free(sp);
     return 0;
 }
@@ -2436,11 +2428,11 @@ int set_transform_test() {
 int intersect_scaled_sphere_test() {
     ray r1 = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     shape* sp = create_shape(SHAPE);
-    Mat4x4 scaleMat;
-    gen_scale_matrix(2.0f, 2.0f, 2.0f, scaleMat);
-    set_transform(sp, scaleMat);
-    assert(mat4x4_equal(sp->transform, scaleMat) == true);
-    assert(&sp->transform != &scaleMat);
+    Mat4x4 scale_mat;
+    gen_scale_matrix(2.0f, 2.0f, 2.0f, scale_mat);
+    set_transform(sp, scale_mat);
+    assert(mat4x4_equal(sp->transform, scale_mat) == true);
+    assert(&sp->transform != &scale_mat);
 
     intersections inter = create_intersections();
     intersect(sp, &r1, &inter);
@@ -2459,14 +2451,14 @@ int intersect_scaled_sphere_test() {
 int intersecting_translated_sphere_test() {
     ray r1 = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     shape* sp = create_shape(SHAPE);
-    Mat4x4 transMat;
-    gen_translate_matrix(5.0f, 0.0f, 0.0f, transMat);
-    set_transform(sp, transMat);
+    Mat4x4 trans_mat;
+    gen_translate_matrix(5.0f, 0.0f, 0.0f, trans_mat);
+    set_transform(sp, trans_mat);
 
-    Mat4x4 invScaleMat;
-    mat4x4_set_ident(invScaleMat);
-    mat4x4_inverse(sp->transform, invScaleMat);
-    ray r2 = transform(&r1, invScaleMat);
+    Mat4x4 inv_scale_mat;
+    mat4x4_set_ident(inv_scale_mat);
+    mat4x4_inverse(sp->transform, inv_scale_mat);
+    ray r2 = transform(&r1, inv_scale_mat);
     intersections inter = create_intersections();
     intersect(sp, &r2, &inter);
     assert(inter.count == 0);
@@ -2544,13 +2536,13 @@ int compute_normal_on_sphere_test() {
 // 80 Computing the normal on a transformed sphere
 int compute_normal_on_transformed_sphere_test(){
     shape* sp = create_shape(SHAPE);
-    Mat4x4 scaleMat;
-    gen_scale_matrix(1.0f, 0.5f, 1.0f, scaleMat);
-    Mat4x4 rotMat;
-    gen_rotate_matrix_Z(M_PI / 5.0f, rotMat);
-    Mat4x4 translateMat;
-    mat4x4_mul_in_place(scaleMat, rotMat, translateMat);
-    set_transform(sp, translateMat);
+    Mat4x4 scale_mat;
+    gen_scale_matrix(1.0f, 0.5f, 1.0f, scale_mat);
+    Mat4x4 rot_mat;
+    gen_rotate_matrix_Z(M_PI / 5.0f, rot_mat);
+    Mat4x4 translate_mat;
+    mat4x4_mul_in_place(scale_mat, rot_mat, translate_mat);
+    set_transform(sp, translate_mat);
     tuple point = create_point(0.0f, sqrt(2) / 2.0f, -sqrt(2) / 2);
     tuple norm_at = normal_at(sp, point);
     assert(equal(norm_at.x, 0.0f));
@@ -3844,6 +3836,10 @@ void render_complete_world() {
 void render_complete_world_with_plane() {
     world w = create_default_world();
     shape* floor = create_shape(PLANE);
+    Mat4x4 rot_mat;
+    gen_rotate_matrix_X(-0.175f, rot_mat);
+    mat4x4_copy(rot_mat, floor->transform);
+
     material floor_material = create_material_default();
     floor_material.color = create_point(0.9f, 0.9f, 0.9f);
     floor_material.specular = 0.0f;
@@ -4226,7 +4222,11 @@ int main() {
 #endif
   //render_sphere();
   //render_complete_world();
+  clock_t start = clock();
   render_complete_world_with_plane();
+  clock_t end = clock();
+  float seconds = (float)(end - start) / CLOCKS_PER_SEC;
+  printf("Render Took %f Seconds\n", seconds);
   write_canvas_to_file();
   return 0;
 }
