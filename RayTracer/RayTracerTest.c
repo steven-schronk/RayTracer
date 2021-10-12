@@ -4144,6 +4144,7 @@ int main() {
   unit_test("Generate Sheer Matrix Test", gen_shear_matrix_test());
   unit_test("Transformations Applied In Sequence Test", transform_applied_in_sequence_test());
   //unitTest("Draw Clock Test", drawClockTest());
+  unit_test("4x4 Matrix Copy Test", mat4x4_copy_test());
   unit_test("Tuple Copy Test", tuple_copy_test());
   unit_test("Create Ray Test", create_ray_test());
   unit_test("Create Sphere Test", create_shape_test());
