@@ -4225,13 +4225,18 @@ int main() {
   float seconds_unit_test = (float)(end_unit_tests - start_unit_tests) / CLOCKS_PER_SEC;
   printf("Unit Tests Took %f Seconds\n", seconds_unit_test);
 #endif
+  clock_t start_render = clock();
+
+  printf("Starting Render Process\n");
   //render_sphere();
   //render_complete_world();
-  clock_t start_render = clock();
   render_complete_world_with_plane();
+
   clock_t end_render = clock();
   float seconds_render = (float)(end_render - start_render) / CLOCKS_PER_SEC;
   printf("Render Took %f Seconds\n", seconds_render);
+
+  printf("Writing Canvas To File\n");
   write_canvas_to_file();
   return 0;
 }
