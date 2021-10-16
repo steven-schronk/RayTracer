@@ -36,9 +36,9 @@ typedef double Mat4x4[4][4];
 
 typedef struct { double x, y, z, w; } tuple;
 
-typedef struct { tuple from; tuple to; } pattern;
+typedef struct { tuple from; tuple to; Mat4x4 transform; } pattern;
 
-typedef struct { tuple color; double ambient; double diffuse; double specular; double shininess; pattern pattern; } material;
+typedef struct { tuple color; double ambient; double diffuse; double specular; double shininess; bool has_pattern; pattern pattern; } material;
 
 typedef struct { tuple position; tuple intensity; struct point_light* next; } point_light;
 
@@ -523,6 +523,8 @@ material create_material_default() {
     m.shininess = 200.0f;
     m.pattern.to = create_point(1.0f, 1.0f, 1.0f);
     m.pattern.from = create_point(0.0f, 0.0f, 0.0f);
+    mat4x4_set_ident(m.pattern.transform);
+    m.has_pattern = false;
     return m;
 }
 
@@ -619,6 +621,10 @@ void intersect_world(world* w, ray* r, intersections* intersects) {
 
 void set_transform(shape* sp, Mat4x4 m) {
     mat4x4_copy(m, sp->transform);
+}
+
+void set_pattern_transform(pattern* p, Mat4x4 m) {
+    mat4x4_copy(m, p->transform);
 }
 
 tuple normal_at(shape* shape, tuple point) {
@@ -740,6 +746,7 @@ pattern stripe_pattern(tuple from, tuple to) {
     pattern pat;
     pat.from = from;
     pat.to = to;
+    mat4x4_set_ident(pat.transform);
     return pat;
 }
 
@@ -757,12 +764,31 @@ tuple stripe_at(pattern pat, tuple* point) {
     return color;
 }
 
-tuple lighting(material mat, point_light* light, tuple point, tuple eyev, tuple normalv, bool in_shadow) {
-    if (&mat.pattern.from.x != NULL) {
-        return stripe_at(mat.pattern, &point);
+tuple stripe_at_object(pattern pat, shape* sp, tuple* world_point){
+    tuple object_point = create_point(0.0f, 0.0f, 0.0f);
+    tuple pattern_point = create_point(0.0f, 0.0f, 0.0f);
+    Mat4x4 inverse_object_transform;
+    mat4x4_inverse(sp->transform, inverse_object_transform);
+    mat4x4_mul_tuple(inverse_object_transform, *world_point, &object_point);
+
+    Mat4x4 inverse_pattern_transform;
+    mat4x4_inverse(pat.transform, inverse_pattern_transform);
+    mat4x4_mul_tuple(inverse_pattern_transform, object_point, &pattern_point);
+
+    return stripe_at(pat, &pattern_point);
+}
+
+tuple lighting(material mat, shape* sh, point_light* light, tuple point, tuple eyev, tuple normalv, bool in_shadow) {
+
+    tuple color_at_point;
+    if (mat.has_pattern == true) {
+        color_at_point = stripe_at_object(mat.pattern, sh, &point);
+    }
+    else {
+        color_at_point = mat.color;
     }
 
-    tuple effective_color = tuple_mult_tuple(mat.color, light->intensity);
+    tuple effective_color = tuple_mult_tuple(color_at_point, light->intensity);
     tuple diffuse;
     tuple specular;
     tuple ambient;
@@ -874,7 +900,7 @@ tuple shade_hit(world* w, comps* comp) {
     assert(w->lights);
     assert(w->objects);
     bool shadowed = is_shadowed(w, &comp->over_point);
-    return lighting(comp->object->material, w->lights, comp->point, comp->eyev, comp->normalv, shadowed);
+    return lighting(comp->object->material,w->objects, w->lights, comp->point, comp->eyev, comp->normalv, shadowed);
 }
 
 tuple color_at(world* w, ray* r) {
@@ -2672,6 +2698,7 @@ int sphere_has_default_material_test() {
 
 // 86 Lighting with the eye between the light and the surface
 int lighting_with_eye_between_light_and_surface_test() {
+    shape* sh = create_shape(SHAPE);
     material m = create_material_default();
     tuple position1 = create_vector(0.0f, 0.0f, 0.0f);
     tuple eyev = create_vector(0.0f, 0.0f, -1.0f);
@@ -2679,15 +2706,16 @@ int lighting_with_eye_between_light_and_surface_test() {
     tuple p_light_color = create_point(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_vector(0.0f, 0.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, p_light_color);
-    tuple light1 = lighting(m, &p_light, position1, eyev, normalv, false);
-    //assert(equal(light1.x, 1.9f));
-    //assert(equal(light1.y, 1.9f));
-    //assert(equal(light1.z, 1.9f));
+    tuple light1 = lighting(m, sh, &p_light, position1, eyev, normalv, false);
+    assert(equal(light1.x, 1.9f));
+    assert(equal(light1.y, 1.9f));
+    assert(equal(light1.z, 1.9f));
     return 0;
 }
 
 // 86 Lighting with the eye between light and surface, eye offset 45 deg
 int lighting_with_eye_between_light_and_surface_eye_offset_test() {
+    shape* sh = create_shape(SHAPE);
     material m = create_material_default();
     tuple position1 = create_point(0.0f, 0.0f, 0.0f);
     tuple eyev = create_vector(0.0f, sqrt(2)/2, -sqrt(2)/2);
@@ -2695,15 +2723,16 @@ int lighting_with_eye_between_light_and_surface_eye_offset_test() {
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 0.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, &p_light, position1, eyev, normalv, false);
-    //assert(equal(light1.x, 1.0f));
-    //assert(equal(light1.y, 1.0f));
-    //assert(equal(light1.z, 1.0f));
+    tuple light1 = lighting(m, sh, &p_light, position1, eyev, normalv, false);
+    assert(equal(light1.x, 1.0f));
+    assert(equal(light1.y, 1.0f));
+    assert(equal(light1.z, 1.0f));
     return 0;
 }
 
 // 87 Lighting with the eye opposite surface, light offset 45 deg
 int lighting_with_eye_opposite_surface_test() {
+    shape* sh = create_shape(SHAPE);
     material m = create_material_default();
     tuple position1 = create_point(0.0f, 0.0f, 0.0f);
     tuple eyev = create_vector(0.0f, 0.0f, -1.0f);
@@ -2711,15 +2740,16 @@ int lighting_with_eye_opposite_surface_test() {
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 10.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, &p_light, position1, eyev, normalv, false);
-    //assert(equal(light1.x, 0.73639608769926945f));
-    //assert(equal(light1.y, 0.73639608769926945f));
-    //assert(equal(light1.z, 0.73639608769926945f));
+    tuple light1 = lighting(m, sh, &p_light, position1, eyev, normalv, false);
+    assert(equal(light1.x, 0.73639608769926945f));
+    assert(equal(light1.y, 0.73639608769926945f));
+    assert(equal(light1.z, 0.73639608769926945f));
     return 0;
 }
 
 // 87 Lighting with the eye in the path of the reflection vector
 int lighting_with_eye_in_path_of_reflect_vector_test() {
+    shape* sh = create_shape(SHAPE);
     material m = create_material_default();
     tuple position1 = create_point(0.0f, 0.0f, 0.0f);
     tuple eyev = create_vector(0.0f, -sqrt(2) / 2, -sqrt(2) / 2);
@@ -2727,15 +2757,16 @@ int lighting_with_eye_in_path_of_reflect_vector_test() {
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 10.0f, -10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, &p_light, position1, eyev, normalv, false);
-    //assert(equal(light1.x, 1.6363960638574115f));
-    //assert(equal(light1.y, 1.6363960638574115f));
-    //assert(equal(light1.z, 1.6363960638574115f));
+    tuple light1 = lighting(m, sh, &p_light, position1, eyev, normalv, false);
+    assert(equal(light1.x, 1.6363960638574115f));
+    assert(equal(light1.y, 1.6363960638574115f));
+    assert(equal(light1.z, 1.6363960638574115f));
     return 0;
 }
 
 // 88 Lighting with the light behind the surface
 int lighting_with_the_light_behind_surface_test() {
+    shape* sh = create_shape(SHAPE);
     material m = create_material_default();
     tuple position1 = create_point(0.0f, 0.0f, 0.0f);
     tuple eyev = create_vector(0.0f, 0.0f, 1.0f);
@@ -2743,10 +2774,10 @@ int lighting_with_the_light_behind_surface_test() {
     tuple intensity = create_vector(1.0f, 1.0f, 1.0f);
     tuple p_light_position = create_point(0.0f, 0.0f, 10.0f);
     point_light p_light = create_point_light(p_light_position, intensity);
-    tuple light1 = lighting(m, &p_light, position1, eyev, normalv, true);
-    //assert(equal(light1.x, 0.1f));
-    //assert(equal(light1.y, 0.1f));
-    //assert(equal(light1.z, 0.1f));
+    tuple light1 = lighting(m, sh, &p_light, position1, eyev, normalv, true);
+    assert(equal(light1.x, 0.1f));
+    assert(equal(light1.y, 0.1f));
+    assert(equal(light1.z, 0.1f));
     return 0;
 }
 
@@ -3033,9 +3064,9 @@ int shading_an_intersection_test() {
 
     // continue normal testing
     tuple color = shade_hit(&w, &comp);
-    //assert(equal(color.x, 0.38066119994542108f));
-    //assert(equal(color.y, 0.47582649284140904f));
-    //assert(equal(color.z, 0.28549590704943306f));
+    assert(equal(color.x, 0.38066119994542108f));
+    assert(equal(color.y, 0.47582649284140904f));
+    assert(equal(color.z, 0.28549590704943306f));
     free_default_world(&w);
     return 0;
 }
@@ -3114,9 +3145,9 @@ int shading_intersection_from_inside() {
 
     // continue normal testing
     tuple color = shade_hit(&w, &comp);
-    //assert(equal(color.x, 0.90498445224856761f));
-    //assert(equal(color.y, 0.90498445224856761f));
-    //assert(equal(color.z, 0.90498445224856761f));
+    assert(equal(color.x, 0.90498445224856761f));
+    assert(equal(color.y, 0.90498445224856761f));
+    assert(equal(color.z, 0.90498445224856761f));
     free_default_world(&w);
     return 0;
 }
@@ -3138,9 +3169,9 @@ int color_when_ray_hits_test() {
     world w = create_default_world();
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     tuple color = color_at(&w, &r);
-    //assert(equal(color.x, 0.38066119994542108f));
-    //assert(equal(color.y, 0.47582649284140904f));
-    //assert(equal(color.z, 0.28549590704943306f));
+    assert(equal(color.x, 0.38066119994542108f));
+    assert(equal(color.y, 0.47582649284140904f));
+    assert(equal(color.z, 0.28549590704943306f));
     free_default_world(&w);
     return 0;
 }
@@ -3152,9 +3183,9 @@ int color_with_intersect_behind_ray_test() {
     w.objects->next->material.ambient = 1.0f;
     ray r = create_ray(0.0f, 0.0f, 0.75f, 0.0f, 0.0f, -1.0f);
     tuple color = color_at(&w, &r);
-    //assert(equal(w.objects->next->material.color.x, color.x));
-    //assert(equal(w.objects->next->material.color.y, color.y));
-    //assert(equal(w.objects->next->material.color.z, color.z));
+    assert(equal(w.objects->next->material.color.x, color.x));
+    assert(equal(w.objects->next->material.color.y, color.y));
+    assert(equal(w.objects->next->material.color.z, color.z));
     free_default_world(&w);
     return 0;
 }
@@ -3339,6 +3370,7 @@ bool intersects_in_order_test(intersections* intersects) {
 
 // 110 Lighting with the surface in shadow
 int lighting_with_surface_in_shadow_test() {
+    shape* sh = create_shape(SHAPE);
     tuple eyev = create_vector(0.0f, 0.0f, -1.0f);
     tuple normalv = create_vector(0.0f, 0.0f, -1.0f);
     tuple light_pos = create_point(0.0f, 0.0f, -10.0f);
@@ -3346,10 +3378,10 @@ int lighting_with_surface_in_shadow_test() {
     point_light light = create_point_light(light_pos, light_color);
     bool in_shadow = true;
     material mat = create_material_default();
-    tuple result = lighting(mat, &light, light_pos, eyev, normalv, in_shadow);
-    //assert(equal(result.x, 0.1f));
-    //assert(equal(result.y, 0.1f));
-    //assert(equal(result.z, 0.1f));
+    tuple result = lighting(mat, sh, &light, light_pos, eyev, normalv, in_shadow);
+    assert(equal(result.x, 0.1f));
+    assert(equal(result.y, 0.1f));
+    assert(equal(result.z, 0.1f));
     return 0;
 }
 
@@ -3414,9 +3446,9 @@ int shade_hit_given_intersection_in_shadow_test() {
     intersection i = { 4.0f, sp2 };
     comps comp = prepare_computations(&i, &r);
     tuple c = shade_hit(&w, &comp);
-    //assert(equal(c.x, 0.1f));
-    //assert(equal(c.y, 0.1f));
-    //assert(equal(c.z, 0.1f));
+    assert(equal(c.x, 0.1f));
+    assert(equal(c.y, 0.1f));
+    assert(equal(c.z, 0.1f));
     free(sp1);
     free(sp2);
     return 0;
@@ -3461,6 +3493,7 @@ void render_sphere() {
   tuple l_color = create_vector(1.0f, 1.0f, 1.0f);
   tuple l_position = create_point(-10.0f, -10.0f, -10.0f);
   point_light p_light = create_point_light(l_position, l_color);
+  shape* sh = create_shape(SHAPE);
 
   for (int y = 0; y < HORIZONTAL_SIZE; ++y) {
     double world_y = half - pixel_size * y;
@@ -3478,10 +3511,10 @@ void render_sphere() {
         tuple point2 = position(ray_to_draw, hit_intersection->t);
         tuple normal = normal_at(hit_intersection->object_id, point2);
         tuple eye = tuple_negate(ray_to_draw.direction_vector);
-        tuple pix_color = lighting(hit_intersection->object_id->material, &p_light, point2, eye, normal, true);
-        //assert(pix_color.x <= 255 && pix_color.x >= 0);
-        //assert(pix_color.y <= 255 && pix_color.y >= 0);
-        //assert(pix_color.z <= 255 && pix_color.z >= 0);
+        tuple pix_color = lighting(hit_intersection->object_id->material, sh, &p_light, point2, eye, normal, true);
+        assert(pix_color.x <= 255 && pix_color.x >= 0);
+        assert(pix_color.y <= 255 && pix_color.y >= 0);
+        assert(pix_color.z <= 255 && pix_color.z >= 0);
         write_pixel(x, y, pix_color);
       }
     }
@@ -3884,6 +3917,18 @@ void render_complete_world_with_plane() {
     middle_material.color = create_point(0.1f, 1.0f, 0.5);
     middle_material.diffuse = 0.7f;
     middle_material.specular = 0.3f;
+
+    tuple light = create_point(1.0f, 1.0f, 1.0f);
+    tuple dark = create_point(0.439f, 0.305f, 0.827f); // purple
+    pattern pat = stripe_pattern(light, dark);
+
+    Mat4x4 scale_pattern;
+    gen_scale_matrix(0.175f, 0.175f, 0.175f, scale_pattern);
+
+    set_pattern_transform(&pat, scale_pattern);
+    middle_material.pattern = pat;
+    middle_material.has_pattern = true;
+
     middle_sphere->material = middle_material;
 
     shape* right_sphere = create_shape(SHAPE);
@@ -3907,7 +3952,7 @@ void render_complete_world_with_plane() {
     // 6. Smallest sphere is scaled by a tird, before being translated
     shape* small_sphere = create_shape(SHAPE);
     Mat4x4 translate_small_sphere;
-    gen_translate_matrix(-1.25f, 1.5f, -1.25f, translate_small_sphere);
+    gen_translate_matrix(-1.5f, 0.33f, -0.75f, translate_small_sphere);
     Mat4x4 scale_small_sphere;
     gen_scale_matrix(0.33f, 0.33f, 0.33f, scale_small_sphere);
     Mat4x4 final_transform_small_sphere;
@@ -3920,6 +3965,20 @@ void render_complete_world_with_plane() {
     small_sphere_material.color = create_point(1.0f, 0.8f, 0.1);
     small_sphere_material.diffuse = 0.7f;
     small_sphere_material.specular = 0.3f;
+    small_sphere_material.shininess = 100.0f;
+
+    tuple small_sphere_light = create_point(0.2f, 0.2f, 0.2f);
+    tuple small_sphere_dark = create_point(0.0f, 0.0f, 0.0f);
+    pattern small_sphere_pat = stripe_pattern(small_sphere_light, small_sphere_dark);
+
+    Mat4x4 small_sphere_scale_pattern;
+    gen_scale_matrix(0.07f, 0.07f, 0.07f, small_sphere_scale_pattern);
+
+    set_pattern_transform(&small_sphere_pat, small_sphere_scale_pattern);
+    small_sphere_material.pattern = small_sphere_pat;
+    small_sphere_material.has_pattern = true;
+
+
     small_sphere->material = small_sphere_material;
 
     // putting geometry together
@@ -4231,11 +4290,13 @@ int stripe_pattern_alternates_in_x_test() {
 
 // 129 Lighting with a pattern applied
 int lighting_with_pattern_applied() {
+    shape* sh = create_shape(SHAPE);
     tuple white = create_point(1.0f, 1.0f, 1.0f);
     tuple black = create_point(0.0f, 0.0f, 0.0f);
     pattern pat = stripe_pattern(white, black);
     material m = create_material_default();
     m.pattern = pat;
+    m.has_pattern = true;
     m.ambient = 1.0f;
     m.diffuse = 0.0f;
     m.specular = 0.0f;
@@ -4243,8 +4304,8 @@ int lighting_with_pattern_applied() {
     tuple eyev = create_vector(0.0f, 0.0f, -1.0f);
     tuple normalv = create_vector(0.0f, 0.0f, -1.0f);
     point_light light = create_point_light(create_point(0.0f, 0.0f, 0.0f), create_point(1.0f, 1.0f, 1.0f));
-    tuple c1 = lighting(m, &light, create_point(0.9, 0.0, 0.0), eyev, normalv, false);
-    tuple c2 = lighting(m, &light, create_point(1.1, 0.0, 0.0), eyev, normalv, false);
+    tuple c1 = lighting(m, sh, &light, create_point(0.9, 0.0, 0.0), eyev, normalv, false);
+    tuple c2 = lighting(m, sh, &light, create_point(1.1, 0.0, 0.0), eyev, normalv, false);
 
     assert(equal(white.x, c1.x));
     assert(equal(white.y, c1.y));
@@ -4254,6 +4315,59 @@ int lighting_with_pattern_applied() {
     assert(equal(black.y, c2.y));
     assert(equal(black.z, c2.z));
 
+    return 0;
+}
+
+// 131 Stripes with an object transformation
+int stripes_with_object_transformation_test() {
+    shape* sp = create_shape(SHAPE);
+    Mat4x4 scale_mat;
+    gen_scale_matrix(2.0f, 2.0f, 2.0f, scale_mat);
+    set_transform(sp, scale_mat);
+    tuple white = create_point(1.0f, 1.0f, 1.0f);
+    tuple black = create_point(0.0f, 0.0f, 0.0f);
+    pattern pat = stripe_pattern(white, black);
+    tuple world_point = create_point(1.5f, 0.0f, 0.0f);
+    tuple c1 = stripe_at_object(pat, sp, &world_point);
+    assert(equal(white.x, c1.x));
+    assert(equal(white.y, c1.y));
+    assert(equal(white.z, c1.z));
+    return 0;
+}
+
+// 131 Stripes with a pattern transformation
+int stripes_with_pattern_transform_test() {
+    shape* sp = create_shape(SHAPE);
+    tuple white = create_point(1.0f, 1.0f, 1.0f);
+    tuple black = create_point(0.0f, 0.0f, 0.0f);
+    pattern pat = stripe_pattern(white, black);
+    Mat4x4 scale_mat;
+    gen_scale_matrix(2.0f, 2.0f, 2.0f, scale_mat);
+    set_pattern_transform(&pat, scale_mat);
+    tuple world_point = create_point(1.5f, 0.0f, 0.0f);
+    tuple c1 = stripe_at_object(pat, sp, &world_point);
+    assert(equal(white.x, c1.x));
+    assert(equal(white.y, c1.y));
+    assert(equal(white.z, c1.z));
+    return 0;
+}
+
+// 131 Stripes with both an object and a pattern transformation
+int stripes_with_both_object_and_pattern_transform_test() {
+    shape* sp = create_shape(SHAPE);
+    Mat4x4 sphere_scale;
+    set_transform(sp, sphere_scale);
+    tuple white = create_point(1.0f, 1.0f, 1.0f);
+    tuple black = create_point(0.0f, 0.0f, 0.0f);
+    pattern pat = stripe_pattern(white, black);
+    Mat4x4 trans_mat;
+    gen_translate_matrix(0.5f, 0.0f, 0.0f, trans_mat);
+    set_pattern_transform(&pat, trans_mat);
+    tuple world_point = create_point(1.5f, 0.0f, 0.0f);
+    tuple c1 = stripe_at_object(pat, sp, &world_point);
+    assert(equal(white.x, c1.x));
+    assert(equal(white.y, c1.y));
+    assert(equal(white.z, c1.z));
     return 0;
 }
 
