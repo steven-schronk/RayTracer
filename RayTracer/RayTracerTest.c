@@ -756,11 +756,26 @@ tuple stripe_at(struct pattern* pat, tuple* point) {
     return color;
 }
 
+tuple gradiant_at(struct pattern* pat, tuple* point) {
+    tuple distance = tuple_sub(pat->to, pat->from);
+    double fraction = point->x - floor(point->x);
+    return tuple_add(pat->from, tuple_mult_scalar(distance, fraction));;
+}
+
 pattern stripe_pattern(tuple from, tuple to) {
     pattern pat;
     pat.from = from;
     pat.to = to;
     pat.pattern_at_fn_ptr = stripe_at;
+    mat4x4_set_ident(pat.transform);
+    return pat;
+}
+
+pattern gradiant_pattern(tuple from, tuple to) {
+    pattern pat;
+    pat.from = from;
+    pat.to = to;
+    pat.pattern_at_fn_ptr = gradiant_at;
     mat4x4_set_ident(pat.transform);
     return pat;
 }
@@ -4372,6 +4387,34 @@ int stripes_with_both_object_and_pattern_transform_test() {
     return 0;
 }
 
+// 135 A gradient linearly interpolates between colors
+int gradiant_linearly_interpolates_between_colors_test() {
+    tuple white = create_point(1.0f, 1.0f, 1.0f);
+    tuple black = create_point(0.0f, 0.0f, 0.0f);
+    pattern pat = gradiant_pattern(white, black);
+    tuple point1 = create_point(0.0f, 0.0f, 0.0f);
+    tuple color1 = gradiant_at(&pat, &point1);
+    assert(equal(white.x, color1.x));
+    assert(equal(white.y, color1.y));
+    assert(equal(white.z, color1.z));
+    tuple point2 = create_point(0.25f, 0.0f, 0.0f);
+    tuple color2 = gradiant_at(&pat, &point2);
+    assert(equal(color2.x, 0.75f));
+    assert(equal(color2.y, 0.75f));
+    assert(equal(color2.z, 0.75f));
+    tuple point3 = create_point(0.5f, 0.0f, 0.0f);
+    tuple color3 = gradiant_at(&pat, &point3);
+    assert(equal(color3.x, 0.5f));
+    assert(equal(color3.y, 0.5f));
+    assert(equal(color3.z, 0.5f));
+    tuple point4 = create_point(0.75f, 0.0f, 0.0f);
+    tuple color4 = gradiant_at(&pat, &point4);
+    assert(equal(color4.x, 0.25f));
+    assert(equal(color4.y, 0.25f));
+    assert(equal(color4.z, 0.25f));
+    return 0;
+}
+
 int main() {
 #if defined _DEBUG
   clock_t start_unit_tests = clock();
@@ -4505,6 +4548,7 @@ int main() {
   unit_test("Stripe Pattern Is Const In Z Test",stripe_pattern_is_const_in_z_test());
   unit_test("Stripe Pattern Alternates In X Test", stripe_pattern_alternates_in_x_test());
   unit_test("Lighting With Pattern Applied Test", lighting_with_pattern_applied());
+  unit_test("Gradiant Linearly Interpolates Between Colors Test", gradiant_linearly_interpolates_between_colors_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
 
   clock_t end_unit_tests = clock();
