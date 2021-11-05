@@ -27,8 +27,8 @@ Copyright 2021 Steven Ray Schronk
 
 #define EPSILON 0.000001
 
-#define VERTICAL_SIZE   600
-#define HORIZONTAL_SIZE 1200
+#define VERTICAL_SIZE   60
+#define HORIZONTAL_SIZE 120
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -36,7 +36,7 @@ typedef double Mat4x4[4][4];
 
 typedef struct { double x, y, z, w; } tuple;
 
-typedef struct { tuple from; tuple to; Mat4x4 transform; } pattern;
+typedef struct pattern { tuple from; tuple to; Mat4x4 transform; tuple(*pattern_at_fn_ptr)(struct pattern* pat, tuple* point); } pattern;
 
 typedef struct { tuple color; double ambient; double diffuse; double specular; double shininess; bool has_pattern; pattern pattern; } material;
 
@@ -742,26 +742,27 @@ camera* create_camera(double hsize, double vsize, double field_of_view) {
     return c;
 }
 
+tuple stripe_at(struct pattern* pat, tuple* point) {
+    tuple color = create_point(0.0f, 0.0f, 0.0f);
+    if ((int)floor(point->x) % 2 == 0) {
+        color.x = pat->from.x;
+        color.y = pat->from.y;
+        color.z = pat->from.z;
+    } else {
+        color.x = pat->to.x;
+        color.y = pat->to.y;
+        color.z = pat->to.z;
+    }
+    return color;
+}
+
 pattern stripe_pattern(tuple from, tuple to) {
     pattern pat;
     pat.from = from;
     pat.to = to;
+    pat.pattern_at_fn_ptr = stripe_at;
     mat4x4_set_ident(pat.transform);
     return pat;
-}
-
-tuple stripe_at(pattern pat, tuple* point) {
-    tuple color = create_point(0.0f, 0.0f, 0.0f);
-    if ((int)floor(point->x) % 2 == 0) {
-        color.x = pat.from.x;
-        color.y = pat.from.y;
-        color.z = pat.from.z;
-    } else {
-        color.x = pat.to.x;
-        color.y = pat.to.y;
-        color.z = pat.to.z;
-    }
-    return color;
 }
 
 tuple stripe_at_object(pattern pat, shape* sp, tuple* world_point){
@@ -775,7 +776,7 @@ tuple stripe_at_object(pattern pat, shape* sp, tuple* world_point){
     mat4x4_inverse(pat.transform, inverse_pattern_transform);
     mat4x4_mul_tuple(inverse_pattern_transform, object_point, &pattern_point);
 
-    return stripe_at(pat, &pattern_point);
+    return stripe_at(&pat, &pattern_point);
 }
 
 tuple lighting(material mat, shape* sh, point_light* light, tuple point, tuple eyev, tuple normalv, bool in_shadow) {
@@ -4201,19 +4202,19 @@ int stripe_pattern_is_const_in_y_test() {
     tuple black = create_point(0.0f, 0.0f, 0.0f);
     pattern pat = stripe_pattern(white, black);
     tuple point = create_point(0.0f, 0.0f, 0.0f);
-    tuple  color_at = stripe_at(pat, &point);
+    tuple  color_at = stripe_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
 
     point.y = 1.0f;
-    color_at = stripe_at(pat, &point);
+    color_at = stripe_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
 
     point.y = 2.0f;
-    color_at = stripe_at(pat, &point);
+    color_at = stripe_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
@@ -4226,19 +4227,19 @@ int stripe_pattern_is_const_in_z_test() {
     tuple black = create_point(0.0f, 0.0f, 0.0f);
     pattern pat = stripe_pattern(white, black);
     tuple point = create_point(0.0f, 0.0f, 0.0f);
-    tuple  color_at = stripe_at(pat, &point);
+    tuple  color_at = stripe_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
 
     point.z = 1.0f;
-    color_at = stripe_at(pat, &point);
+    color_at = stripe_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
 
     point.z = 2.0f;
-    color_at = stripe_at(pat, &point);
+    color_at = stripe_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
@@ -4251,37 +4252,37 @@ int stripe_pattern_alternates_in_x_test() {
     tuple black = create_point(0.0f, 0.0f, 0.0f);
     pattern pat = stripe_pattern(white, black);
     tuple point = create_point(0.0f, 0.0f, 0.0f);
-    tuple  color_at = stripe_at(pat, &point);
+    tuple  color_at = stripe_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
 
     point.x = 0.9f;
-    color_at = stripe_at(pat, &point);
+    color_at = stripe_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
 
     point.x = 1.0f;
-    color_at = stripe_at(pat, &point);
+    color_at = stripe_at(&pat, &point);
     assert(equal(black.x, color_at.x));
     assert(equal(black.y, color_at.y));
     assert(equal(black.z, color_at.z));
 
     point.x = -0.1f;
-    color_at = stripe_at(pat, &point);
+    color_at = stripe_at(&pat, &point);
     assert(equal(black.x, color_at.x));
     assert(equal(black.y, color_at.y));
     assert(equal(black.z, color_at.z));
 
     point.x = -1.0f;
-    color_at = stripe_at(pat, &point);
+    color_at = stripe_at(&pat, &point);
     assert(equal(black.x, color_at.x));
     assert(equal(black.y, color_at.y));
     assert(equal(black.z, color_at.z));
 
     point.x = -1.1f;
-    color_at = stripe_at(pat, &point);
+    color_at = stripe_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
