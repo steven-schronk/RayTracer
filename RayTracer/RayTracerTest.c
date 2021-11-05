@@ -36,7 +36,9 @@ typedef double Mat4x4[4][4];
 
 typedef struct { double x, y, z, w; } tuple;
 
-typedef struct pattern { tuple from; tuple to; Mat4x4 transform; tuple(*pattern_at_fn_ptr)(struct pattern* pat, tuple* point); } pattern;
+enum pattern_type { STRIPE, GRADIANT, RING, CHECKER };
+
+typedef struct pattern { tuple from; tuple to; Mat4x4 transform; tuple(*pattern_at_fn_ptr)(struct pattern* pat, tuple* point); enum pattern_type type; } pattern;
 
 typedef struct { tuple color; double ambient; double diffuse; double specular; double shininess; bool has_pattern; pattern pattern; } material;
 
@@ -44,8 +46,7 @@ typedef struct { tuple position; tuple intensity; struct point_light* next; } po
 
 enum shape_type { SHAPE, PLANE };
 
-typedef struct _shape { tuple location; double t; Mat4x4 transform; material material; struct _shape* next; enum shape_type type;
-} shape;
+typedef struct _shape { tuple location; double t; Mat4x4 transform; material material; struct _shape* next; enum shape_type type; } shape;
 
 typedef struct { tuple origin_point; tuple direction_vector; } ray;
 
@@ -742,31 +743,37 @@ camera* create_camera(double hsize, double vsize, double field_of_view) {
     return c;
 }
 
-tuple stripe_at(struct pattern* pat, tuple* point) {
-    tuple color = create_point(0.0f, 0.0f, 0.0f);
-    if ((int)floor(point->x) % 2 == 0) {
-        color.x = pat->from.x;
-        color.y = pat->from.y;
-        color.z = pat->from.z;
-    } else {
-        color.x = pat->to.x;
-        color.y = pat->to.y;
-        color.z = pat->to.z;
+tuple pattern_at(struct pattern* pat, tuple* point) {
+    switch (pat->type) {
+    case STRIPE:
+        tuple color = create_point(0.0f, 0.0f, 0.0f);
+        if ((int)floor(point->x) % 2 == 0) {
+            color.x = pat->from.x;
+            color.y = pat->from.y;
+            color.z = pat->from.z;
+        }
+        else {
+            color.x = pat->to.x;
+            color.y = pat->to.y;
+            color.z = pat->to.z;
+        }
+        return color;
+    case GRADIANT:
+        tuple distance = tuple_sub(pat->to, pat->from);
+        double fraction = point->x - floor(point->x);
+        return tuple_add(pat->from, tuple_mult_scalar(distance, fraction));
+    default:
+        assert(false && "Pattern must have a pattern_type");
     }
-    return color;
-}
-
-tuple gradiant_at(struct pattern* pat, tuple* point) {
-    tuple distance = tuple_sub(pat->to, pat->from);
-    double fraction = point->x - floor(point->x);
-    return tuple_add(pat->from, tuple_mult_scalar(distance, fraction));;
+    return create_point(0.0f, 0.0f, 0.0f);
 }
 
 pattern stripe_pattern(tuple from, tuple to) {
     pattern pat;
     pat.from = from;
     pat.to = to;
-    pat.pattern_at_fn_ptr = stripe_at;
+    pat.pattern_at_fn_ptr = pattern_at;
+    pat.type = STRIPE;
     mat4x4_set_ident(pat.transform);
     return pat;
 }
@@ -775,7 +782,8 @@ pattern gradiant_pattern(tuple from, tuple to) {
     pattern pat;
     pat.from = from;
     pat.to = to;
-    pat.pattern_at_fn_ptr = gradiant_at;
+    pat.pattern_at_fn_ptr = pattern_at;
+    pat.type = GRADIANT;
     mat4x4_set_ident(pat.transform);
     return pat;
 }
@@ -791,7 +799,7 @@ tuple stripe_at_object(pattern pat, shape* sp, tuple* world_point){
     mat4x4_inverse(pat.transform, inverse_pattern_transform);
     mat4x4_mul_tuple(inverse_pattern_transform, object_point, &pattern_point);
 
-    return stripe_at(&pat, &pattern_point);
+    return pattern_at(&pat, &pattern_point);
 }
 
 tuple lighting(material mat, shape* sh, point_light* light, tuple point, tuple eyev, tuple normalv, bool in_shadow) {
@@ -3963,6 +3971,10 @@ void render_complete_world_with_plane() {
     right_sphere_material.color = create_point(0.5f, 1.0f, 0.1);
     right_sphere_material.diffuse = 0.7f;
     right_sphere_material.specular = 0.3f;
+    right_sphere_material.has_pattern = true;
+    tuple white = create_point(1.0f, 1.0f, 1.0f);
+    tuple black = create_point(0.0f, 0.0f, 0.0f);
+    right_sphere_material.pattern = gradiant_pattern(white, black);
     right_sphere->material = right_sphere_material;
 
     // 6. Smallest sphere is scaled by a tird, before being translated
@@ -4217,19 +4229,19 @@ int stripe_pattern_is_const_in_y_test() {
     tuple black = create_point(0.0f, 0.0f, 0.0f);
     pattern pat = stripe_pattern(white, black);
     tuple point = create_point(0.0f, 0.0f, 0.0f);
-    tuple  color_at = stripe_at(&pat, &point);
+    tuple  color_at = pattern_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
 
     point.y = 1.0f;
-    color_at = stripe_at(&pat, &point);
+    color_at = pattern_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
 
     point.y = 2.0f;
-    color_at = stripe_at(&pat, &point);
+    color_at = pattern_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
@@ -4242,19 +4254,19 @@ int stripe_pattern_is_const_in_z_test() {
     tuple black = create_point(0.0f, 0.0f, 0.0f);
     pattern pat = stripe_pattern(white, black);
     tuple point = create_point(0.0f, 0.0f, 0.0f);
-    tuple  color_at = stripe_at(&pat, &point);
+    tuple  color_at = pattern_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
 
     point.z = 1.0f;
-    color_at = stripe_at(&pat, &point);
+    color_at = pattern_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
 
     point.z = 2.0f;
-    color_at = stripe_at(&pat, &point);
+    color_at = pattern_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
@@ -4267,37 +4279,37 @@ int stripe_pattern_alternates_in_x_test() {
     tuple black = create_point(0.0f, 0.0f, 0.0f);
     pattern pat = stripe_pattern(white, black);
     tuple point = create_point(0.0f, 0.0f, 0.0f);
-    tuple  color_at = stripe_at(&pat, &point);
+    tuple  color_at = pattern_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
 
     point.x = 0.9f;
-    color_at = stripe_at(&pat, &point);
+    color_at = pattern_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
 
     point.x = 1.0f;
-    color_at = stripe_at(&pat, &point);
+    color_at = pattern_at(&pat, &point);
     assert(equal(black.x, color_at.x));
     assert(equal(black.y, color_at.y));
     assert(equal(black.z, color_at.z));
 
     point.x = -0.1f;
-    color_at = stripe_at(&pat, &point);
+    color_at = pattern_at(&pat, &point);
     assert(equal(black.x, color_at.x));
     assert(equal(black.y, color_at.y));
     assert(equal(black.z, color_at.z));
 
     point.x = -1.0f;
-    color_at = stripe_at(&pat, &point);
+    color_at = pattern_at(&pat, &point);
     assert(equal(black.x, color_at.x));
     assert(equal(black.y, color_at.y));
     assert(equal(black.z, color_at.z));
 
     point.x = -1.1f;
-    color_at = stripe_at(&pat, &point);
+    color_at = pattern_at(&pat, &point);
     assert(equal(white.x, color_at.x));
     assert(equal(white.y, color_at.y));
     assert(equal(white.z, color_at.z));
@@ -4393,22 +4405,22 @@ int gradiant_linearly_interpolates_between_colors_test() {
     tuple black = create_point(0.0f, 0.0f, 0.0f);
     pattern pat = gradiant_pattern(white, black);
     tuple point1 = create_point(0.0f, 0.0f, 0.0f);
-    tuple color1 = gradiant_at(&pat, &point1);
+    tuple color1 = pattern_at(&pat, &point1);
     assert(equal(white.x, color1.x));
     assert(equal(white.y, color1.y));
     assert(equal(white.z, color1.z));
     tuple point2 = create_point(0.25f, 0.0f, 0.0f);
-    tuple color2 = gradiant_at(&pat, &point2);
+    tuple color2 = pattern_at(&pat, &point2);
     assert(equal(color2.x, 0.75f));
     assert(equal(color2.y, 0.75f));
     assert(equal(color2.z, 0.75f));
     tuple point3 = create_point(0.5f, 0.0f, 0.0f);
-    tuple color3 = gradiant_at(&pat, &point3);
+    tuple color3 = pattern_at(&pat, &point3);
     assert(equal(color3.x, 0.5f));
     assert(equal(color3.y, 0.5f));
     assert(equal(color3.z, 0.5f));
     tuple point4 = create_point(0.75f, 0.0f, 0.0f);
-    tuple color4 = gradiant_at(&pat, &point4);
+    tuple color4 = pattern_at(&pat, &point4);
     assert(equal(color4.x, 0.25f));
     assert(equal(color4.y, 0.25f));
     assert(equal(color4.z, 0.25f));
