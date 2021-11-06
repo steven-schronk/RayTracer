@@ -744,9 +744,10 @@ camera* create_camera(double hsize, double vsize, double field_of_view) {
 }
 
 tuple pattern_at(struct pattern* pat, tuple* point) {
+    tuple color = create_point(0.0f, 0.0f, 0.0f);
+    tuple distance;
     switch (pat->type) {
     case STRIPE:
-        tuple color = create_point(0.0f, 0.0f, 0.0f);
         if ((int)floor(point->x) % 2 == 0) {
             color.x = pat->from.x;
             color.y = pat->from.y;
@@ -759,15 +760,22 @@ tuple pattern_at(struct pattern* pat, tuple* point) {
         }
         return color;
     case GRADIANT:
-        tuple distance = tuple_sub(pat->to, pat->from);
+        distance = tuple_sub(pat->to, pat->from);
         double fraction = point->x - floor(point->x);
         return tuple_add(pat->from, tuple_mult_scalar(distance, fraction));
+    case RING:
+        int ring_location = (int)floor(sqrt(point->x * point->x + point->z * point->z)) % 2 == 0;
+        if (ring_location) {
+            return pat->from;
+        }
+        return pat->to;
     default:
         assert(false && "Pattern must have a pattern_type");
     }
     return create_point(0.0f, 0.0f, 0.0f);
 }
 
+// TODO: Merge these three functions together
 pattern stripe_pattern(tuple from, tuple to) {
     pattern pat;
     pat.from = from;
@@ -784,6 +792,16 @@ pattern gradiant_pattern(tuple from, tuple to) {
     pat.to = to;
     pat.pattern_at_fn_ptr = pattern_at;
     pat.type = GRADIANT;
+    mat4x4_set_ident(pat.transform);
+    return pat;
+}
+
+pattern ring_pattern(tuple from, tuple to) {
+    pattern pat;
+    pat.from = from;
+    pat.to = to;
+    pat.pattern_at_fn_ptr = pattern_at;
+    pat.type = RING;
     mat4x4_set_ident(pat.transform);
     return pat;
 }
@@ -3929,6 +3947,8 @@ void render_complete_world_with_plane() {
     material floor_material = create_material_default();
     floor_material.color = create_point(0.9f, 0.9f, 0.9f);
     floor_material.specular = 0.0f;
+    floor_material.pattern = ring_pattern(create_point(0.8f, 1.0f, 0.8), create_point(1.0f, 1.0f, 1.0));
+    floor_material.has_pattern = true;
     floor->material = floor_material;
 
     shape* middle_sphere = create_shape(SHAPE);
@@ -4427,6 +4447,35 @@ int gradiant_linearly_interpolates_between_colors_test() {
     return 0;
 }
 
+// 136 A ring should extend in both x and z
+int ring_pattern_should_extend_in_x_and_y_test() {
+    tuple white = create_point(1.0f, 1.0f, 1.0f);
+    tuple black = create_point(0.0f, 0.0f, 0.0f);
+    pattern pat = ring_pattern(white, black);
+
+    tuple point1 = create_point(0.0f, 0.0f, 0.0f);
+    tuple color1 = pattern_at(&pat, &point1);
+    assert(equal(white.x, color1.x));
+    assert(equal(white.y, color1.y));
+    assert(equal(white.z, color1.z));
+    tuple point2 = create_point(1.0f, 0.0f, 0.0f);
+    tuple color2 = pattern_at(&pat, &point2);
+    assert(equal(black.x, color2.x));
+    assert(equal(black.y, color2.y));
+    assert(equal(black.z, color2.z));
+    tuple point3 = create_point(0.0f, 0.0f, 1.0f);
+    tuple color3 = pattern_at(&pat, &point3);
+    assert(equal(black.x, color3.x));
+    assert(equal(black.y, color3.y));
+    assert(equal(black.z, color3.z));
+    tuple point4 = create_point(0.708f, 0.0f, 0.708f);
+    tuple color4 = pattern_at(&pat, &point4);
+    assert(equal(black.x, color4.x));
+    assert(equal(black.y, color4.y));
+    assert(equal(black.z, color4.z));
+    return 0;
+}
+
 int main() {
 #if defined _DEBUG
   clock_t start_unit_tests = clock();
@@ -4561,6 +4610,7 @@ int main() {
   unit_test("Stripe Pattern Alternates In X Test", stripe_pattern_alternates_in_x_test());
   unit_test("Lighting With Pattern Applied Test", lighting_with_pattern_applied());
   unit_test("Gradiant Linearly Interpolates Between Colors Test", gradiant_linearly_interpolates_between_colors_test());
+  unit_test("Ring Pattern Should Extend In X And Y Test", ring_pattern_should_extend_in_x_and_y_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
 
   clock_t end_unit_tests = clock();
