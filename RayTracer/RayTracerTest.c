@@ -769,6 +769,11 @@ tuple pattern_at(struct pattern* pat, tuple* point) {
             return pat->from;
         }
         return pat->to;
+    case CHECKER:
+        if ((int)(floor(point->x) + floor(point->y) + floor(point->z)) % 2 == 0) {
+            return pat->from;
+        }
+        return pat->to;
     default:
         assert(false && "Pattern must have a pattern_type");
     }
@@ -802,6 +807,16 @@ pattern ring_pattern(tuple from, tuple to) {
     pat.to = to;
     pat.pattern_at_fn_ptr = pattern_at;
     pat.type = RING;
+    mat4x4_set_ident(pat.transform);
+    return pat;
+}
+
+pattern checkers_pattern(tuple from, tuple to) {
+    pattern pat;
+    pat.from = from;
+    pat.to = to;
+    pat.pattern_at_fn_ptr = pattern_at;
+    pat.type = CHECKER;
     mat4x4_set_ident(pat.transform);
     return pat;
 }
@@ -3947,7 +3962,7 @@ void render_complete_world_with_plane() {
     material floor_material = create_material_default();
     floor_material.color = create_point(0.9f, 0.9f, 0.9f);
     floor_material.specular = 0.0f;
-    floor_material.pattern = ring_pattern(create_point(0.8f, 1.0f, 0.8), create_point(1.0f, 1.0f, 1.0));
+    floor_material.pattern = ring_pattern(create_point(0.8f, 1.0f, 0.8f), create_point(1.0f, 1.0f, 1.0f));
     floor_material.has_pattern = true;
     floor->material = floor_material;
 
@@ -4476,6 +4491,75 @@ int ring_pattern_should_extend_in_x_and_y_test() {
     return 0;
 }
 
+// 137 Checkers should repeat in X
+int checkers_pattern_should_repeat_in_x_test() {
+    tuple white = create_point(1.0f, 1.0f, 1.0f);
+    tuple black = create_point(0.0f, 0.0f, 0.0f);
+    pattern pat = checkers_pattern(white, black);
+    tuple point1 = create_point(0.0f, 0.0f, 0.0f);
+    tuple color1 = pattern_at(&pat, &point1);
+    assert(equal(white.x, color1.x));
+    assert(equal(white.y, color1.y));
+    assert(equal(white.z, color1.z));
+    tuple point2 = create_point(0.99f, 0.0f, 0.0f);
+    tuple color2 = pattern_at(&pat, &point2);
+    assert(equal(white.x, color2.x));
+    assert(equal(white.y, color2.y));
+    assert(equal(white.z, color2.z));
+    tuple point3 = create_point(1.01f, 0.0f, 0.0f);
+    tuple color3 = pattern_at(&pat, &point3);
+    assert(equal(black.x, color3.x));
+    assert(equal(black.y, color3.y));
+    assert(equal(black.z, color3.z));
+    return 0;
+}
+
+// 137 Checkers should repeat in Y
+int checkers_pattern_should_repeat_in_y_test() {
+    tuple white = create_point(1.0f, 1.0f, 1.0f);
+    tuple black = create_point(0.0f, 0.0f, 0.0f);
+    pattern pat = checkers_pattern(white, black);
+    tuple point1 = create_point(0.0f, 0.0f, 0.0f);
+    tuple color1 = pattern_at(&pat, &point1);
+    assert(equal(white.x, color1.x));
+    assert(equal(white.y, color1.y));
+    assert(equal(white.z, color1.z));
+    tuple point2 = create_point(0.0f, 0.99f, 0.0f);
+    tuple color2 = pattern_at(&pat, &point2);
+    assert(equal(white.x, color2.x));
+    assert(equal(white.y, color2.y));
+    assert(equal(white.z, color2.z));
+    tuple point3 = create_point(0.01f, 1.01f, 0.0f);
+    tuple color3 = pattern_at(&pat, &point3);
+    assert(equal(black.x, color3.x));
+    assert(equal(black.y, color3.y));
+    assert(equal(black.z, color3.z));
+    return 0;
+}
+
+// 137 Checkers should repeat in Z
+int checkers_pattern_should_repeat_in_z_test() {
+    tuple white = create_point(1.0f, 1.0f, 1.0f);
+    tuple black = create_point(0.0f, 0.0f, 0.0f);
+    pattern pat = checkers_pattern(white, black);
+    tuple point1 = create_point(0.0f, 0.0f, 0.0f);
+    tuple color1 = pattern_at(&pat, &point1);
+    assert(equal(white.x, color1.x));
+    assert(equal(white.y, color1.y));
+    assert(equal(white.z, color1.z));
+    tuple point2 = create_point(0.0f, 0.0f, 0.99f);
+    tuple color2 = pattern_at(&pat, &point2);
+    assert(equal(white.x, color2.x));
+    assert(equal(white.y, color2.y));
+    assert(equal(white.z, color2.z));
+    tuple point3 = create_point(0.01f, 0.0f, 1.01f);
+    tuple color3 = pattern_at(&pat, &point3);
+    assert(equal(black.x, color3.x));
+    assert(equal(black.y, color3.y));
+    assert(equal(black.z, color3.z));
+    return 0;
+}
+
 int main() {
 #if defined _DEBUG
   clock_t start_unit_tests = clock();
@@ -4611,6 +4695,9 @@ int main() {
   unit_test("Lighting With Pattern Applied Test", lighting_with_pattern_applied());
   unit_test("Gradiant Linearly Interpolates Between Colors Test", gradiant_linearly_interpolates_between_colors_test());
   unit_test("Ring Pattern Should Extend In X And Y Test", ring_pattern_should_extend_in_x_and_y_test());
+  unit_test("Checkers Pattern Should Repeat In X Test", checkers_pattern_should_repeat_in_x_test());
+  unit_test("Checkers Pattern Should Repeat In Y Test", checkers_pattern_should_repeat_in_y_test());
+  unit_test("Checkers Pattern Should Repeat In Z Test", checkers_pattern_should_repeat_in_z_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
 
   clock_t end_unit_tests = clock();
