@@ -27,6 +27,9 @@ Copyright 2021 Steven Ray Schronk
 
 #define EPSILON 0.000001
 
+// remaining number of iterations when calculating reflection
+#define RECURSION_DEPTH 5
+
 #define VERTICAL_SIZE   60
 #define HORIZONTAL_SIZE 120
 
@@ -40,7 +43,7 @@ enum pattern_type { STRIPE, GRADIANT, RING, CHECKER };
 
 typedef struct pattern { tuple from; tuple to; Mat4x4 transform; tuple(*pattern_at_fn_ptr)(struct pattern* pat, tuple* point); enum pattern_type type; } pattern;
 
-typedef struct { tuple color; double ambient; double diffuse; double specular; double shininess; bool has_pattern; pattern pattern; } material;
+typedef struct { tuple color; double ambient; double diffuse; double specular; double shininess; double reflective; bool has_pattern; pattern pattern; } material;
 
 typedef struct { tuple position; tuple intensity; struct point_light* next; } point_light;
 
@@ -54,7 +57,7 @@ typedef struct { double t; shape* object_id; } intersection;
 
 typedef struct { struct _shape* objects; point_light* lights; } world;
 
-typedef struct { double t; shape* object; tuple point; tuple eyev; tuple normalv; bool inside; tuple over_point; } comps;
+typedef struct { double t; shape* object; tuple point; tuple eyev; tuple normalv; bool inside; tuple over_point; tuple reflectv; } comps;
 
 typedef struct { double hsize; double vsize; double field_of_view; double pixel_size; double half_width; double half_height; Mat4x4 view_transform; } camera;
 
@@ -505,13 +508,14 @@ void mat4x4_reset_to_zero(Mat4x4 mat) {
     }
 }
 
-material create_material(tuple color, double ambient, double diffuse, double specular, double shininess) {
+material create_material(tuple color, double ambient, double diffuse, double specular, double shininess, double reflectivity) {
     material m;
     m.color = color;
     m.ambient = ambient;
     m.diffuse = diffuse;
     m.specular = specular;
     m.shininess = shininess;
+    m.reflective = reflectivity;
     return m;
 }
 
@@ -522,6 +526,7 @@ material create_material_default() {
     m.diffuse = 0.9f;
     m.specular = 0.9f;
     m.shininess = 200.0f;
+    m.reflective = 0.0f;
     m.pattern.to = create_point(1.0f, 1.0f, 1.0f);
     m.pattern.from = create_point(0.0f, 0.0f, 0.0f);
     mat4x4_set_ident(m.pattern.transform);
@@ -936,6 +941,7 @@ comps prepare_computations(intersection* inter, ray* r) {
         comp.inside = false;
     }
     comp.over_point = tuple_add(comp.point, tuple_mult_scalar(comp.normalv, EPSILON));
+    comp.reflectv = tuple_reflect(r->direction_vector, comp.normalv);
     return comp;
 }
 
@@ -953,14 +959,9 @@ bool is_shadowed(world* world, tuple* point) {
     return false;
 }
 
-tuple shade_hit(world* w, comps* comp) {
-    assert(w->lights);
-    assert(w->objects);
-    bool shadowed = is_shadowed(w, &comp->over_point);
-    return lighting(comp->object->material,w->objects, w->lights, comp->point, comp->eyev, comp->normalv, shadowed);
-}
+tuple shade_hit(world* w, comps* comp, int remaining);
 
-tuple color_at(world* w, ray* r) {
+tuple color_at(world* w, ray* r, int remaining) {
     assert(w);
     assert(r);
     intersections inter = create_intersections();
@@ -969,10 +970,29 @@ tuple color_at(world* w, ray* r) {
     intersection* hit1 = hit(&inter);
     if (hit1 == NULL) {
         return create_point(0.0f, 0.0f, 0.0f);
-    } else {
-        comps comp = prepare_computations(hit1, r);
-        return shade_hit(w, &comp);
     }
+    else {
+        comps comp = prepare_computations(hit1, r);
+        return shade_hit(w, &comp, remaining);
+    }
+}
+
+tuple reflected_color(world* w, comps* comp, int remaining) {
+    if(remaining <= 0 || comp->object->material.reflective == 0.0) {
+        return create_point(0.0f, 0.0f, 0.0f);
+    }
+    ray reflect_ray = create_ray(comp->over_point.x, comp->over_point.y, comp->over_point.z, comp->reflectv.x, comp->reflectv.y, comp->reflectv.z);
+    tuple color = color_at(w, &reflect_ray, remaining - 1);
+    return tuple_mult_scalar(color, comp->object->material.reflective);
+}
+
+tuple shade_hit(world* w, comps* comp, int remaining) {
+    assert(w->lights);
+    assert(w->objects);
+    bool shadowed = is_shadowed(w, &comp->over_point);
+    tuple surface = lighting(comp->object->material,w->objects, w->lights, comp->point, comp->eyev, comp->normalv, shadowed);
+    tuple reflected = reflected_color(w, comp, remaining);
+    return tuple_add(surface, reflected);
 }
 
 void view_transform(tuple from, tuple to, tuple up, Mat4x4 m) {
@@ -1056,7 +1076,7 @@ void render(camera* c, world* w) {
 
             //printf("[%d][%d] o.x=%4.1f o.y=%4.1f o.z=%4.1f d.x=%4.1f d.y=%4.1f d.z=%4.1f\n", y, x, r.origin_point.x, r.origin_point.y, r.origin_point.z, r.direction_vector.x, r.direction_vector.y, r.direction_vector.z);
 
-            tuple color = color_at(w, &r);
+            tuple color = color_at(w, &r, RECURSION_DEPTH);
             //color.x = r.direction_vector.x;
             //color.y = r.direction_vector.x;
             //color.z = r.direction_vector.x;
@@ -2708,7 +2728,7 @@ int point_light_position_intensity_test() {
 int default_material_test() {
     // typedef struct { tuple color; double ambient; double diffuse; double specualar; double shininess; } material;
     tuple color_white = create_vector(1.0f, 1.0f, 1.0f);
-    material m1 = create_material(color_white, 0.1f, 0.9f, 0.9f, 200.0f);
+    material m1 = create_material(color_white, 0.1f, 0.9f, 0.9f, 200.0f, 0.0f);
 
     assert(equal(m1.color.x, 1.0f));
     assert(equal(m1.color.y, 1.0f));
@@ -2732,6 +2752,8 @@ int default_material_test() {
     assert(equal(m2.specular, 0.9f));
     assert(equal(m2.shininess, 200.0f));
 
+    assert(equal(m2.reflective, 0.0f));
+
     return 0;
 }
 
@@ -2749,6 +2771,9 @@ int sphere_has_default_material_test() {
     assert(equal(m1.diffuse, 0.9f));
     assert(equal(m1.specular, 0.9f));
     assert(equal(m1.shininess, 200.0f));
+
+    assert(equal(m1.reflective, 0.0f));
+    assert(equal(sp->material.reflective, 0.0f));
     free(sp);
     return 0;
 }
@@ -3120,7 +3145,7 @@ int shading_an_intersection_test() {
     assert(equal(w.objects->location.z, 0.0f));
 
     // continue normal testing
-    tuple color = shade_hit(&w, &comp);
+    tuple color = shade_hit(&w, &comp, RECURSION_DEPTH);
     assert(equal(color.x, 0.38066119994542108f));
     assert(equal(color.y, 0.47582649284140904f));
     assert(equal(color.z, 0.28549590704943306f));
@@ -3201,7 +3226,7 @@ int shading_intersection_from_inside() {
     assert(equal(w.objects->location.z, 0.0f));
 
     // continue normal testing
-    tuple color = shade_hit(&w, &comp);
+    tuple color = shade_hit(&w, &comp, RECURSION_DEPTH);
     assert(equal(color.x, 0.90498445224856761f));
     assert(equal(color.y, 0.90498445224856761f));
     assert(equal(color.z, 0.90498445224856761f));
@@ -3213,7 +3238,7 @@ int shading_intersection_from_inside() {
 int color_when_ray_misses_test() {
     world w = create_default_world();
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 1.0f, 0.0f);
-    tuple color = color_at(&w, &r);
+    tuple color = color_at(&w, &r, RECURSION_DEPTH);
     assert(equal(color.x, 0.0f));
     assert(equal(color.y, 0.0f));
     assert(equal(color.z, 0.0f));
@@ -3225,7 +3250,7 @@ int color_when_ray_misses_test() {
 int color_when_ray_hits_test() {
     world w = create_default_world();
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
-    tuple color = color_at(&w, &r);
+    tuple color = color_at(&w, &r, RECURSION_DEPTH);
     assert(equal(color.x, 0.38066119994542108f));
     assert(equal(color.y, 0.47582649284140904f));
     assert(equal(color.z, 0.28549590704943306f));
@@ -3239,7 +3264,7 @@ int color_with_intersect_behind_ray_test() {
     w.objects->material.ambient = 1.0f;
     w.objects->next->material.ambient = 1.0f;
     ray r = create_ray(0.0f, 0.0f, 0.75f, 0.0f, 0.0f, -1.0f);
-    tuple color = color_at(&w, &r);
+    tuple color = color_at(&w, &r, RECURSION_DEPTH);
     assert(equal(w.objects->next->material.color.x, color.x));
     assert(equal(w.objects->next->material.color.y, color.y));
     assert(equal(w.objects->next->material.color.z, color.z));
@@ -3502,7 +3527,7 @@ int shade_hit_given_intersection_in_shadow_test() {
     ray r = create_ray(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 1.0f);
     intersection i = { 4.0f, sp2 };
     comps comp = prepare_computations(&i, &r);
-    tuple c = shade_hit(&w, &comp);
+    tuple c = shade_hit(&w, &comp, RECURSION_DEPTH);
     assert(equal(c.x, 0.1f));
     assert(equal(c.y, 0.1f));
     assert(equal(c.z, 0.1f));
@@ -4264,22 +4289,22 @@ int stripe_pattern_is_const_in_y_test() {
     tuple black = create_point(0.0f, 0.0f, 0.0f);
     pattern pat = stripe_pattern(white, black);
     tuple point = create_point(0.0f, 0.0f, 0.0f);
-    tuple  color_at = pattern_at(&pat, &point);
-    assert(equal(white.x, color_at.x));
-    assert(equal(white.y, color_at.y));
-    assert(equal(white.z, color_at.z));
+    tuple  color = pattern_at(&pat, &point);
+    assert(equal(white.x, color.x));
+    assert(equal(white.y, color.y));
+    assert(equal(white.z, color.z));
 
     point.y = 1.0f;
-    color_at = pattern_at(&pat, &point);
-    assert(equal(white.x, color_at.x));
-    assert(equal(white.y, color_at.y));
-    assert(equal(white.z, color_at.z));
+    color = pattern_at(&pat, &point);
+    assert(equal(white.x, color.x));
+    assert(equal(white.y, color.y));
+    assert(equal(white.z, color.z));
 
     point.y = 2.0f;
-    color_at = pattern_at(&pat, &point);
-    assert(equal(white.x, color_at.x));
-    assert(equal(white.y, color_at.y));
-    assert(equal(white.z, color_at.z));
+    color = pattern_at(&pat, &point);
+    assert(equal(white.x, color.x));
+    assert(equal(white.y, color.y));
+    assert(equal(white.z, color.z));
     return 0;
 }
 
@@ -4289,22 +4314,22 @@ int stripe_pattern_is_const_in_z_test() {
     tuple black = create_point(0.0f, 0.0f, 0.0f);
     pattern pat = stripe_pattern(white, black);
     tuple point = create_point(0.0f, 0.0f, 0.0f);
-    tuple  color_at = pattern_at(&pat, &point);
-    assert(equal(white.x, color_at.x));
-    assert(equal(white.y, color_at.y));
-    assert(equal(white.z, color_at.z));
+    tuple  color = pattern_at(&pat, &point);
+    assert(equal(white.x, color.x));
+    assert(equal(white.y, color.y));
+    assert(equal(white.z, color.z));
 
     point.z = 1.0f;
-    color_at = pattern_at(&pat, &point);
-    assert(equal(white.x, color_at.x));
-    assert(equal(white.y, color_at.y));
-    assert(equal(white.z, color_at.z));
+    color = pattern_at(&pat, &point);
+    assert(equal(white.x, color.x));
+    assert(equal(white.y, color.y));
+    assert(equal(white.z, color.z));
 
     point.z = 2.0f;
-    color_at = pattern_at(&pat, &point);
-    assert(equal(white.x, color_at.x));
-    assert(equal(white.y, color_at.y));
-    assert(equal(white.z, color_at.z));
+    color = pattern_at(&pat, &point);
+    assert(equal(white.x, color.x));
+    assert(equal(white.y, color.y));
+    assert(equal(white.z, color.z));
     return 0;
 }
 
@@ -4314,40 +4339,40 @@ int stripe_pattern_alternates_in_x_test() {
     tuple black = create_point(0.0f, 0.0f, 0.0f);
     pattern pat = stripe_pattern(white, black);
     tuple point = create_point(0.0f, 0.0f, 0.0f);
-    tuple  color_at = pattern_at(&pat, &point);
-    assert(equal(white.x, color_at.x));
-    assert(equal(white.y, color_at.y));
-    assert(equal(white.z, color_at.z));
+    tuple  color = pattern_at(&pat, &point);
+    assert(equal(white.x, color.x));
+    assert(equal(white.y, color.y));
+    assert(equal(white.z, color.z));
 
     point.x = 0.9f;
-    color_at = pattern_at(&pat, &point);
-    assert(equal(white.x, color_at.x));
-    assert(equal(white.y, color_at.y));
-    assert(equal(white.z, color_at.z));
+    color = pattern_at(&pat, &point);
+    assert(equal(white.x, color.x));
+    assert(equal(white.y, color.y));
+    assert(equal(white.z, color.z));
 
     point.x = 1.0f;
-    color_at = pattern_at(&pat, &point);
-    assert(equal(black.x, color_at.x));
-    assert(equal(black.y, color_at.y));
-    assert(equal(black.z, color_at.z));
+    color = pattern_at(&pat, &point);
+    assert(equal(black.x, color.x));
+    assert(equal(black.y, color.y));
+    assert(equal(black.z, color.z));
 
     point.x = -0.1f;
-    color_at = pattern_at(&pat, &point);
-    assert(equal(black.x, color_at.x));
-    assert(equal(black.y, color_at.y));
-    assert(equal(black.z, color_at.z));
+    color = pattern_at(&pat, &point);
+    assert(equal(black.x, color.x));
+    assert(equal(black.y, color.y));
+    assert(equal(black.z, color.z));
 
     point.x = -1.0f;
-    color_at = pattern_at(&pat, &point);
-    assert(equal(black.x, color_at.x));
-    assert(equal(black.y, color_at.y));
-    assert(equal(black.z, color_at.z));
+    color = pattern_at(&pat, &point);
+    assert(equal(black.x, color.x));
+    assert(equal(black.y, color.y));
+    assert(equal(black.z, color.z));
 
     point.x = -1.1f;
-    color_at = pattern_at(&pat, &point);
-    assert(equal(white.x, color_at.x));
-    assert(equal(white.y, color_at.y));
-    assert(equal(white.z, color_at.z));
+    color = pattern_at(&pat, &point);
+    assert(equal(white.x, color.x));
+    assert(equal(white.y, color.y));
+    assert(equal(white.z, color.z));
     return 0;
 }
 
@@ -4560,6 +4585,129 @@ int checkers_pattern_should_repeat_in_z_test() {
     return 0;
 }
 
+// 143 Precomputing the reflection vector
+int precompute_reflection_vector_test() {
+    shape* sp = create_shape(PLANE);
+    ray r = create_ray(0.0, 1.0, -1.0, 0.0f, -sqrt(2)/2, sqrt(2)/2);
+    intersection intersect1 = { sqrt(2.0f), sp };
+    comps comp = prepare_computations(&intersect1, &r);
+    assert(equal(comp.reflectv.x, 0.0f));
+    assert(equal(comp.reflectv.y, sqrt(2) / 2));
+    assert(equal(comp.reflectv.z, sqrt(2) / 2));
+    return 0;
+}
+
+// 144 reflected color for a nonreflective material
+int reflected_color_for_non_reflective_material_test() {
+    world w = create_default_world();
+    ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+    shape* sp = create_shape(SHAPE);
+    material sp_material = create_material_default();
+    sp_material.ambient = 1.0;
+    sp->material = sp_material;
+    w.objects = sp;
+    sp->next = sp;
+    intersection intersect1 = { sqrt(2.0f), sp };
+    comps comp = prepare_computations(&intersect1, &r);
+    tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
+    assert(equal(0.0f, color.x));
+    assert(equal(0.0f, color.y));
+    assert(equal(0.0f, color.z));
+    return 0;
+}
+
+// 144 reflected color for a reflective material
+int reflected_color_for_reflective_material_test() {
+    world w = create_default_world();
+    shape* pl = create_shape(PLANE);
+    Mat4x4 trans_mat;
+    gen_translate_matrix(0.0f, -1.0f, 0.0f, trans_mat);
+    mat4x4_copy(trans_mat, pl->transform);
+    material plane_material = create_material_default();
+    plane_material.reflective = 0.5f;
+    pl->material = plane_material;
+    w.objects->next->next = pl; // Two objects already exist in the default world
+    ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2)/2, sqrt(2)/2);
+    intersection intersect1 = { sqrt(2.0f), pl };
+    comps comp = prepare_computations(&intersect1, &r);
+    tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
+    assert(equal(0.19033077235655871f, color.x));
+    assert(equal(0.23791346190051155f, color.y));
+    assert(equal(0.14274808281260587f, color.z));
+    return 0;
+}
+
+// 145 shade_hit with a reflective material
+int shade_hit_with_reflective_material_test() {
+    world w = create_default_world();
+    shape* pl = create_shape(PLANE);
+    material pl_material = create_material_default();
+    pl_material.reflective = 0.5f;
+    pl->material = pl_material;
+    Mat4x4 trans_mat;
+    gen_translate_matrix(0.0f, -1.0f, 0.0f, trans_mat);
+    mat4x4_copy(trans_mat, pl->transform);
+    w.objects->next->next = pl; // Two objects already exist in the default world
+    ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2)/2, sqrt(2)/2);
+    intersection intersect1 = { sqrt(2.0f), pl };
+    comps comp = prepare_computations(&intersect1, &r);
+    tuple color = shade_hit(&w, &comp, RECURSION_DEPTH);
+    assert(equal(0.87675614729320861f, color.x));
+    assert(equal(0.92433883683716145f, color.y));
+    assert(equal(0.82917345774925577f, color.z));
+    return 0;
+}
+
+// 146 color_at with mutually reflective surfaces
+int color_at_with_mutually_reflective_surfaces_test() {
+    world w = create_default_world();
+    point_light plight = create_point_light(create_point(0.0f, 0.0f, 0.0f), create_point(1.0f, 1.0f, 1.0f));
+    w.lights = &plight;
+    shape* lower = create_shape(PLANE);
+    material lower_material = create_material_default();
+    lower_material.reflective = 1.0f;
+    lower->material = lower_material;
+    Mat4x4 trans_mat1;
+    gen_translate_matrix(0.0f, -1.0f, 0.0f, trans_mat1);
+    mat4x4_copy(trans_mat1, lower->transform);
+    w.objects = lower;
+
+    shape* upper = create_shape(PLANE);
+    material upper_material = create_material_default();
+    upper_material.reflective = 1.0f;
+    upper->material = upper_material;
+    Mat4x4 trans_mat2;
+    gen_translate_matrix(0.0f, 1.0f, 0.0f, trans_mat2);
+    mat4x4_copy(trans_mat2, upper->transform);
+    upper->next = upper;
+
+    ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    color_at(&w, &r, RECURSION_DEPTH);
+    // NOTE: This test should eventually end to pass
+    return 0;
+}
+
+// 147 reflected color at the maximum recursive depth
+int reflected_color_at_max_recursive_depth_test() {
+    world w = create_default_world();
+    shape* pl = create_shape(PLANE);
+    material pl_material = create_material_default();
+    pl_material.reflective = 0.5f;
+    pl->material = pl_material;
+    Mat4x4 trans_mat;
+    gen_translate_matrix(0.0f, -1.0f, 0.0f, trans_mat);
+    mat4x4_copy(trans_mat, pl->transform);
+    w.objects = pl;
+    ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2)/2, sqrt(2)/2);
+    intersection intersect1 = { sqrt(2.0f), pl };
+    comps comp = prepare_computations(&intersect1, &r);
+    tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
+    assert(equal(0.0f, color.x));
+    assert(equal(0.0f, color.y));
+    assert(equal(0.0f, color.z));
+    return 0;
+}
+
 int main() {
 #if defined _DEBUG
   clock_t start_unit_tests = clock();
@@ -4689,15 +4837,24 @@ int main() {
   unit_test("Intersect Ray Plane Above Test", intersect_ray_plane_above_test());
   unit_test("Intersect Ray Plane Below Test", intersect_ray_plane_below_test());
   unit_test("Creating A Stripe Pattern Test", creating_a_stripe_pattern_test());
+  unit_test("Stripes With Both Object And Pattern Transform Test", stripes_with_both_object_and_pattern_transform_test());
   unit_test("Stripe Pattern Is Const In Y Test", stripe_pattern_is_const_in_y_test());
   unit_test("Stripe Pattern Is Const In Z Test",stripe_pattern_is_const_in_z_test());
   unit_test("Stripe Pattern Alternates In X Test", stripe_pattern_alternates_in_x_test());
   unit_test("Lighting With Pattern Applied Test", lighting_with_pattern_applied());
+  unit_test("Stripes With Object Transformation Test", stripes_with_object_transformation_test());
+  unit_test("Stripes With Pattern Transform Test", stripes_with_pattern_transform_test());
   unit_test("Gradiant Linearly Interpolates Between Colors Test", gradiant_linearly_interpolates_between_colors_test());
   unit_test("Ring Pattern Should Extend In X And Y Test", ring_pattern_should_extend_in_x_and_y_test());
   unit_test("Checkers Pattern Should Repeat In X Test", checkers_pattern_should_repeat_in_x_test());
   unit_test("Checkers Pattern Should Repeat In Y Test", checkers_pattern_should_repeat_in_y_test());
   unit_test("Checkers Pattern Should Repeat In Z Test", checkers_pattern_should_repeat_in_z_test());
+  unit_test("Precompute Reflection Vector Test", precompute_reflection_vector_test());
+  unit_test("Reflected Color For Non Reflective Material Test", reflected_color_for_non_reflective_material_test());
+  unit_test("Strike A Non Reflective Surface Test", reflected_color_for_reflective_material_test());
+  unit_test("Shade Hit With Reflective Material Test", shade_hit_with_reflective_material_test());
+  unit_test("Color At With Mutually Reflective Surfaces Test", color_at_with_mutually_reflective_surfaces_test());
+  unit_test("Reflected Color At Max Recursive Depth Test", reflected_color_at_max_recursive_depth_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
 
   clock_t end_unit_tests = clock();
