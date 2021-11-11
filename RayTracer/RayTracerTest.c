@@ -43,11 +43,11 @@ enum pattern_type { STRIPE, GRADIANT, RING, CHECKER };
 
 typedef struct pattern { tuple from; tuple to; Mat4x4 transform; tuple(*pattern_at_fn_ptr)(struct pattern* pat, tuple* point); enum pattern_type type; } pattern;
 
-typedef struct { tuple color; double ambient; double diffuse; double specular; double shininess; double reflective; bool has_pattern; pattern pattern; } material;
+typedef struct { tuple color; double ambient; double diffuse; double specular; double shininess; double reflective; double transparency; double refractive_index; bool has_pattern; pattern pattern; } material;
 
 typedef struct { tuple position; tuple intensity; struct point_light* next; } point_light;
 
-enum shape_type { SHAPE, PLANE };
+enum shape_type { SHAPE, PLANE, SPHERE };
 
 typedef struct _shape { tuple location; double t; Mat4x4 transform; material material; struct _shape* next; enum shape_type type; } shape;
 
@@ -57,13 +57,17 @@ typedef struct { double t; shape* object_id; } intersection;
 
 typedef struct { struct _shape* objects; point_light* lights; } world;
 
-typedef struct { double t; shape* object; tuple point; tuple eyev; tuple normalv; bool inside; tuple over_point; tuple reflectv; } comps;
+typedef struct { double t; shape* object; tuple point; tuple eyev; tuple normalv; bool inside; tuple over_point; tuple reflectv; double n1; double n2; } comps;
 
 typedef struct { double hsize; double vsize; double field_of_view; double pixel_size; double half_width; double half_height; Mat4x4 view_transform; } camera;
 
 #define INTERSECTIONS_SIZE 100
 
 typedef struct { intersection itersection[INTERSECTIONS_SIZE]; int count; } intersections;
+
+#define CONTAINERS_SIZE 100
+
+typedef struct { comps* comp[CONTAINERS_SIZE]; } containers;
 
 point_light create_point_light(tuple position, tuple intensity) {
     point_light pl;
@@ -139,6 +143,81 @@ bool add_intersection(intersections* intersection_list, double t, shape* sp ) {
   intersection_list->itersection[i].object_id = sp;
   intersection_list->itersection[i].t = t;
   return true;
+}
+
+containers containers_create() {
+    containers conts;
+    for (int i = 0; i < CONTAINERS_SIZE; ++i) {
+        conts.comp[i] = NULL;
+    }
+    return conts;
+}
+
+void containers_clear(containers* conts) {
+    assert(conts != NULL);
+    for (int i = 0; i < CONTAINERS_SIZE; ++i) {
+        conts->comp[i] = NULL;
+    }
+}
+
+bool containers_is_empty(containers* conts) {
+    assert(conts != NULL);
+    if (conts->comp[0] == NULL) { return true; }
+    return false;
+}
+
+comps* container_last(containers* conts) {
+    assert(conts != NULL);
+    if (conts->comp[0] == NULL) { return NULL; }
+    int i = 0;
+    comps* last_cont = NULL;
+    while (conts->comp[i] != NULL) {
+        last_cont = conts->comp[i];
+        ++i;
+    }
+    return last_cont;
+}
+
+bool containers_includes(containers* conts, comps* comp) {
+    assert(conts != NULL);
+    assert(comp != NULL);
+    for (int i = 0; i < CONTAINERS_SIZE; ++i) {
+        if (conts->comp[i] == comp) { return true; }
+    }
+    return false;
+}
+
+void container_append(containers* conts, comps* comp) {
+    assert(conts != NULL);
+    assert(comp != NULL);
+    for (int i = 0; i < CONTAINERS_SIZE; i++) {
+        if (conts->comp[i] == NULL) {
+            conts->comp[i] = comp;
+            break;
+        }
+    }
+}
+
+bool container_remove(containers* conts, comps* comp) {
+    assert(conts != NULL);
+    assert(comp != NULL);
+    int i = 0;
+    bool found = false;
+    while (i < CONTAINERS_SIZE && conts->comp[i] != NULL) {
+        if (conts->comp[i] == comp) {
+            found = true;
+            break;
+        }
+        i++;
+    }
+    if (found) {
+        while (i < CONTAINERS_SIZE - 1 && conts->comp[i] != NULL) {
+            conts->comp[i] = conts->comp[i + 1];
+            conts->comp[i + 1] = NULL;
+            i++;
+        }
+    }
+    return found;
 }
 
 tuple canvas[HORIZONTAL_SIZE][VERTICAL_SIZE];
@@ -527,6 +606,8 @@ material create_material_default() {
     m.specular = 0.9f;
     m.shininess = 200.0f;
     m.reflective = 0.0f;
+    m.transparency = 0.0f;
+    m.refractive_index = 1.0f;
     m.pattern.to = create_point(1.0f, 1.0f, 1.0f);
     m.pattern.from = create_point(0.0f, 0.0f, 0.0f);
     mat4x4_set_ident(m.pattern.transform);
@@ -551,6 +632,15 @@ shape* create_shape(enum shape_type type) {
 
 void delete_shape(shape* s) {
     free(s);
+}
+
+shape* create_glass_sphere() {
+    shape* sp = create_shape(SPHERE); // TODO: Might need to make adjustment for SPHERE type
+    material mt = create_material_default();
+    sp->material = mt;
+    sp->material.transparency = 1.0f;
+    sp->material.refractive_index = 1.5f;
+    return sp;
 }
 
 tuple position(ray r, double t) {
@@ -926,7 +1016,7 @@ comps create_comp() {
     return comp;
 }
 
-comps prepare_computations(intersection* inter, ray* r) {
+comps prepare_computations(intersection* inter, ray* r, containers* glass_containers) {
     comps comp = create_comp();
     comp.t = inter->t;
     comp.object = inter->object_id;
@@ -942,6 +1032,9 @@ comps prepare_computations(intersection* inter, ray* r) {
     }
     comp.over_point = tuple_add(comp.point, tuple_mult_scalar(comp.normalv, EPSILON));
     comp.reflectv = tuple_reflect(r->direction_vector, comp.normalv);
+
+    // refraction section
+
     return comp;
 }
 
@@ -972,7 +1065,7 @@ tuple color_at(world* w, ray* r, int remaining) {
         return create_point(0.0f, 0.0f, 0.0f);
     }
     else {
-        comps comp = prepare_computations(hit1, r);
+        comps comp = prepare_computations(hit1, r, NULL);
         return shade_hit(w, &comp, remaining);
     }
 }
@@ -2751,8 +2844,9 @@ int default_material_test() {
     assert(equal(m2.diffuse, 0.9f));
     assert(equal(m2.specular, 0.9f));
     assert(equal(m2.shininess, 200.0f));
-
     assert(equal(m2.reflective, 0.0f));
+    assert(equal(m2.transparency, 0.0f));
+    assert(equal(m2.refractive_index, 1.0f));
 
     return 0;
 }
@@ -2774,6 +2868,13 @@ int sphere_has_default_material_test() {
 
     assert(equal(m1.reflective, 0.0f));
     assert(equal(sp->material.reflective, 0.0f));
+
+    assert(equal(m1.transparency, 0.0f));
+    assert(equal(sp->material.transparency, 0.0f));
+
+    assert(equal(m1.refractive_index, 1.0f));
+    assert(equal(sp->material.refractive_index, 1.0f));
+
     free(sp);
     return 0;
 }
@@ -3009,7 +3110,7 @@ int prepare_computations_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     shape* sp1 = create_shape(SHAPE);
     intersection inter = { 4.0f, sp1 };
-    comps comp = prepare_computations(&inter, &r);
+    comps comp = prepare_computations(&inter, &r, NULL);
     assert(equal(comp.t, inter.t));
     assert(comp.object == sp1);
     assert(equal(comp.point.x, 0.0f));
@@ -3032,7 +3133,7 @@ int hit_when_intersect_on_outside_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     shape* sp1 = create_shape(SHAPE);
     intersection inter = { 4.0f, sp1 };
-    comps comp = prepare_computations(&inter, &r);
+    comps comp = prepare_computations(&inter, &r, NULL);
     assert(comp.inside == false);
     free(sp1);
     return 0;
@@ -3043,7 +3144,7 @@ int hit_when_intersect_occurs_on_inside_test() {
     ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
     shape* sp1 = create_shape(SHAPE);
     intersection inter = { 1.0f, sp1 };
-    comps comp = prepare_computations(&inter, &r);
+    comps comp = prepare_computations(&inter, &r, NULL);
 
     assert(equal(comp.point.x, 0.0f));
     assert(equal(comp.point.y, 0.0f));
@@ -3082,7 +3183,7 @@ int shading_an_intersection_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     // shape <- the first object in w
     intersection inter = { 4.0f, w.objects };
-    comps comp = prepare_computations(&inter, &r);
+    comps comp = prepare_computations(&inter, &r, NULL);
 
     // testing if prepare_computations overwrote stack
     assert(equal(r.direction_vector.x, 0.0f));
@@ -3163,7 +3264,7 @@ int shading_intersection_from_inside() {
 
     ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
     intersection inter = { 0.5f, w.objects->next };
-    comps comp = prepare_computations(&inter, &r);
+    comps comp = prepare_computations(&inter, &r, NULL);
 
     // testing if prepare_computations overwrote stack
     assert(equal(r.direction_vector.x, 0.0f));
@@ -3526,7 +3627,7 @@ int shade_hit_given_intersection_in_shadow_test() {
     w.objects = sp1;
     ray r = create_ray(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 1.0f);
     intersection i = { 4.0f, sp2 };
-    comps comp = prepare_computations(&i, &r);
+    comps comp = prepare_computations(&i, &r, NULL);
     tuple c = shade_hit(&w, &comp, RECURSION_DEPTH);
     assert(equal(c.x, 0.1f));
     assert(equal(c.y, 0.1f));
@@ -3544,7 +3645,7 @@ int hit_should_offset_point_test() {
     gen_translate_matrix(0.0f, 0.0f, 10.0f, trans_matrix);
     mat4x4_copy(trans_matrix, sp1->transform);
     intersection i = { 5.0f, sp1 };
-    comps comp = prepare_computations(&i, &r);
+    comps comp = prepare_computations(&i, &r, NULL);
     assert(comp.over_point.z < -EPSILON / 2);
     assert(comp.point.z > comp.over_point.z);
     free(sp1);
@@ -3987,8 +4088,9 @@ void render_complete_world_with_plane() {
     material floor_material = create_material_default();
     floor_material.color = create_point(0.9f, 0.9f, 0.9f);
     floor_material.specular = 0.0f;
-    floor_material.pattern = ring_pattern(create_point(0.8f, 1.0f, 0.8f), create_point(1.0f, 1.0f, 1.0f));
-    floor_material.has_pattern = true;
+    //floor_material.pattern = ring_pattern(create_point(0.8f, 1.0f, 0.8f), create_point(1.0f, 1.0f, 1.0f));
+    //floor_material.has_pattern = true;
+    floor_material.reflective = 0.75f;
     floor->material = floor_material;
 
     shape* middle_sphere = create_shape(SHAPE);
@@ -4590,7 +4692,7 @@ int precompute_reflection_vector_test() {
     shape* sp = create_shape(PLANE);
     ray r = create_ray(0.0, 1.0, -1.0, 0.0f, -sqrt(2)/2, sqrt(2)/2);
     intersection intersect1 = { sqrt(2.0f), sp };
-    comps comp = prepare_computations(&intersect1, &r);
+    comps comp = prepare_computations(&intersect1, &r, NULL);
     assert(equal(comp.reflectv.x, 0.0f));
     assert(equal(comp.reflectv.y, sqrt(2) / 2));
     assert(equal(comp.reflectv.z, sqrt(2) / 2));
@@ -4608,7 +4710,7 @@ int reflected_color_for_non_reflective_material_test() {
     w.objects = sp;
     sp->next = sp;
     intersection intersect1 = { sqrt(2.0f), sp };
-    comps comp = prepare_computations(&intersect1, &r);
+    comps comp = prepare_computations(&intersect1, &r, NULL);
     tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.0f, color.x));
     assert(equal(0.0f, color.y));
@@ -4629,7 +4731,7 @@ int reflected_color_for_reflective_material_test() {
     w.objects->next->next = pl; // Two objects already exist in the default world
     ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2)/2, sqrt(2)/2);
     intersection intersect1 = { sqrt(2.0f), pl };
-    comps comp = prepare_computations(&intersect1, &r);
+    comps comp = prepare_computations(&intersect1, &r, NULL);
     tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.19033077235655871f, color.x));
     assert(equal(0.23791346190051155f, color.y));
@@ -4650,7 +4752,7 @@ int shade_hit_with_reflective_material_test() {
     w.objects->next->next = pl; // Two objects already exist in the default world
     ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2)/2, sqrt(2)/2);
     intersection intersect1 = { sqrt(2.0f), pl };
-    comps comp = prepare_computations(&intersect1, &r);
+    comps comp = prepare_computations(&intersect1, &r, NULL);
     tuple color = shade_hit(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.87675614729320861f, color.x));
     assert(equal(0.92433883683716145f, color.y));
@@ -4700,11 +4802,131 @@ int reflected_color_at_max_recursive_depth_test() {
     w.objects = pl;
     ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2)/2, sqrt(2)/2);
     intersection intersect1 = { sqrt(2.0f), pl };
-    comps comp = prepare_computations(&intersect1, &r);
+    comps comp = prepare_computations(&intersect1, &r, NULL);
     tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.0f, color.x));
     assert(equal(0.0f, color.y));
     assert(equal(0.0f, color.z));
+    return 0;
+}
+
+// 151 A helper for producing a sphere with a glassy material
+int helper_for_producing_sphere_with_glassy_material_test() {
+    shape* glass_sphere = create_glass_sphere();
+    Mat4x4 ident;
+    mat4x4_set_ident(ident);
+    mat4x4_equal(glass_sphere->transform, ident);
+    assert(equal(glass_sphere->material.transparency, 1.0f));
+    assert(equal(glass_sphere->material.refractive_index, 1.5f));
+    return 0;
+}
+
+int containers_tests() {
+    containers test_containers = containers_create();
+
+    comps comp1 = create_comp();
+    comps comp2 = create_comp();
+
+    for (int i = 0; i < CONTAINERS_SIZE; i++) {
+        assert(test_containers.comp[i] == NULL);
+    }
+
+    assert(containers_is_empty(&test_containers) == true);
+    // clearing empty container does not crash
+    containers_clear(&test_containers);
+    assert(containers_is_empty(&test_containers) == true);
+
+    for (int i = 0; i < CONTAINERS_SIZE; i++) {
+        assert(test_containers.comp[i] == NULL);
+    }
+
+    // empty container should return null for empty set
+    assert(container_last(&test_containers) == NULL);
+
+    assert(containers_includes(&test_containers, &comp1) == false);
+
+    container_append(&test_containers, &comp1);
+    assert(containers_includes(&test_containers, &comp1) == true);
+    assert(container_last(&test_containers) == &comp1);
+
+    assert(test_containers.comp[0] == &comp1);
+    assert(test_containers.comp[1] == NULL);
+
+    container_append(&test_containers, &comp2);
+    assert(containers_includes(&test_containers, &comp1) == true);
+    assert(containers_includes(&test_containers, &comp2) == true);
+    assert(container_last(&test_containers) == &comp2);
+
+    assert(test_containers.comp[0] == &comp1);
+    assert(test_containers.comp[1] == &comp2);
+    assert(test_containers.comp[2] == NULL);
+
+    assert(containers_includes(&test_containers, &comp1) == true);
+    assert(containers_includes(&test_containers, &comp2) == true);
+
+    assert(container_remove(&test_containers, &comp1) == true);
+    assert(container_last(&test_containers) == &comp2);
+
+    assert(test_containers.comp[0] == &comp2);
+    assert(test_containers.comp[1] == NULL);
+    assert(test_containers.comp[2] == NULL);
+
+    container_append(&test_containers, &comp1);
+    assert(container_last(&test_containers) == &comp1);
+
+    assert(test_containers.comp[0] == &comp2);
+    assert(test_containers.comp[1] == &comp1);
+    assert(test_containers.comp[2] == NULL);
+
+    assert(containers_includes(&test_containers, &comp1) == true);
+    assert(containers_includes(&test_containers, &comp2) == true);
+
+    containers_clear(&test_containers);
+
+    for (int i = 0; i < CONTAINERS_SIZE; i++) {
+        assert(test_containers.comp[i] == NULL);
+    }
+
+    assert(containers_includes(&test_containers, &comp1) == false);
+    assert(containers_includes(&test_containers, &comp2) == false);
+    // clear after adding some to the containers
+    assert(containers_is_empty(&test_containers) == true);
+
+    return 0;
+}
+
+// 152 Finding n1 and n2 at various intersections
+int finding_n1_and_n2_at_various_intersections_test() {
+    shape* glass_sphere_a = create_glass_sphere();
+    Mat4x4 scale_mat;
+    gen_scale_matrix(2.0f, 2.0f, 2.0f, scale_mat);
+    mat4x4_copy(scale_mat, glass_sphere_a->transform);
+    glass_sphere_a->material.refractive_index = 1.5f;
+
+    shape* glass_sphere_b = create_glass_sphere();
+    Mat4x4 translate_mat_b;
+    gen_translate_matrix(0.0f, 0.0f, -0.25f, translate_mat_b);
+    mat4x4_copy(scale_mat, glass_sphere_b->transform);
+    glass_sphere_b->material.refractive_index = 2.0f;
+
+    shape* glass_sphere_c = create_glass_sphere();
+    Mat4x4 translate_mat_c;
+    gen_translate_matrix(0.0f, 0.0f, 0.25f, translate_mat_c);
+    mat4x4_copy(scale_mat, glass_sphere_c->transform);
+    glass_sphere_c->material.refractive_index = 2.5f;
+    ray r = create_ray(0.0f, 0.0f, -4.0f, 0.0f, 0.0f, 1.0f);
+    intersections intersects = create_intersections();
+    add_intersection(&intersects, 2.0f,  glass_sphere_a);
+    add_intersection(&intersects, 2.75f, glass_sphere_b);
+    add_intersection(&intersects, 3.25f, glass_sphere_c);
+    add_intersection(&intersects, 4.75f, glass_sphere_b);
+    add_intersection(&intersects, 5.25f, glass_sphere_c);
+    add_intersection(&intersects, 6.0f,  glass_sphere_a);
+    containers glass_containers = containers_create();
+    comps glass_comps = prepare_computations(&intersects.itersection[0], &r, &glass_containers);
+    assert(equal(glass_comps.n1, 1.0f));
+    assert(equal(glass_comps.n2, 1.5f));
+
     return 0;
 }
 
@@ -4855,6 +5077,9 @@ int main() {
   unit_test("Shade Hit With Reflective Material Test", shade_hit_with_reflective_material_test());
   unit_test("Color At With Mutually Reflective Surfaces Test", color_at_with_mutually_reflective_surfaces_test());
   unit_test("Reflected Color At Max Recursive Depth Test", reflected_color_at_max_recursive_depth_test());
+  unit_test("Helper For Producing Sphere With Glassy Material Test", helper_for_producing_sphere_with_glassy_material_test());
+  unit_test("Containers Tests", containers_tests());
+  unit_test("Finding N1 And N2 At Various Intersections Test", finding_n1_and_n2_at_various_intersections_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
 
   clock_t end_unit_tests = clock();
