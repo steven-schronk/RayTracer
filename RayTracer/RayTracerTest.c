@@ -689,8 +689,7 @@ void intersect(shape* sp, ray* r, intersections* intersects) {
     if (t1 < t2) {
         add_intersection(intersects, t1, sp);
         add_intersection(intersects, t2, sp);
-    }
-    else {
+    } else {
         add_intersection(intersects, t2, sp);
         add_intersection(intersects, t1, sp);
     }
@@ -847,8 +846,7 @@ tuple pattern_at(struct pattern* pat, tuple* point) {
             color.x = pat->from.x;
             color.y = pat->from.y;
             color.z = pat->from.z;
-        }
-        else {
+        } else {
             color.x = pat->to.x;
             color.y = pat->to.y;
             color.z = pat->to.z;
@@ -935,8 +933,7 @@ tuple lighting(material mat, shape* sh, point_light* light, tuple point, tuple e
     tuple color_at_point;
     if (mat.has_pattern == true) {
         color_at_point = stripe_at_object(mat.pattern, sh, &point);
-    }
-    else {
+    } else {
         color_at_point = mat.color;
     }
 
@@ -956,8 +953,7 @@ tuple lighting(material mat, shape* sh, point_light* light, tuple point, tuple e
     if (light_dot_normal < 0) {
         diffuse = color_black;
         specular = color_black;
-    }
-    else {
+    } else {
         diffuse = tuple_mult_scalar( tuple_mult_scalar(effective_color, mat.diffuse), light_dot_normal);
 
         tuple reflectv = tuple_reflect( tuple_negate(lightv), normalv);
@@ -965,16 +961,14 @@ tuple lighting(material mat, shape* sh, point_light* light, tuple point, tuple e
 
         if (reflect_dot_eye <= 0) {
             specular = color_black;
-        }
-        else {
+        } else {
             double factor = pow(reflect_dot_eye, mat.shininess);
             specular = tuple_mult_scalar(tuple_mult_scalar(light->intensity, mat.specular), factor);
         }
     }
     if (in_shadow) {
         return ambient;
-    }
-    else {
+    } else {
         return tuple_add(tuple_add(ambient, specular), diffuse);
     }
 }
@@ -1016,7 +1010,7 @@ comps create_comp() {
     return comp;
 }
 
-comps prepare_computations(intersection* inter, ray* r, containers* glass_containers) {
+comps prepare_computations(intersection* inter, ray* r, containers* containers_list) {
     comps comp = create_comp();
     comp.t = inter->t;
     comp.object = inter->object_id;
@@ -1026,15 +1020,40 @@ comps prepare_computations(intersection* inter, ray* r, containers* glass_contai
     if (tuple_dot(comp.normalv, comp.eyev) < 0.0f) {
         comp.inside = true;
         comp.normalv = tuple_negate(comp.normalv);
-    }
-    else {
+    } else {
         comp.inside = false;
     }
     comp.over_point = tuple_add(comp.point, tuple_mult_scalar(comp.normalv, EPSILON));
     comp.reflectv = tuple_reflect(r->direction_vector, comp.normalv);
 
     // refraction section
+    containers_clear(containers_list);
+    int i = 0;
+    while (containers_list->comp[i] != NULL) {
+        intersection* hit1 = hit(inter);
+        if (hit1 != NULL) {
+            if (containers_is_empty(containers_list)) {
+                comp.n1 = 1.0f;
+            } else {
+                comp.n1 = container_last(containers_list)->object->material.refractive_index;
+            }
+        }
 
+        if (containers_includes(containers_list, containers_list->comp[i])) {
+            container_remove(containers_list, containers_list->comp[i]);
+        } else {
+            container_append(containers_list, containers_list->comp[i]);
+        }
+        if (hit1->object_id == containers_list->comp[i]->object) {
+            if (containers_is_empty(containers_list)) {
+                comp.n2 = 1.0f;
+            } else {
+                comp.n2 = container_last(containers_list)->object->material.refractive_index;
+            }
+            break;
+        }
+        i++;
+    }
     return comp;
 }
 
@@ -1063,8 +1082,7 @@ tuple color_at(world* w, ray* r, int remaining) {
     intersection* hit1 = hit(&inter);
     if (hit1 == NULL) {
         return create_point(0.0f, 0.0f, 0.0f);
-    }
-    else {
+    } else {
         comps comp = prepare_computations(hit1, r, NULL);
         return shade_hit(w, &comp, remaining);
     }
