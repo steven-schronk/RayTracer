@@ -39,7 +39,7 @@ typedef double Mat4x4[4][4];
 
 typedef struct { double x, y, z, w; } tuple;
 
-enum pattern_type { STRIPE, GRADIANT, RING, CHECKER };
+enum pattern_type { TEST, STRIPE, GRADIANT, RING, CHECKER };
 
 typedef struct pattern { tuple from; tuple to; Mat4x4 transform; tuple(*pattern_at_fn_ptr)(struct pattern* pat, tuple* point); enum pattern_type type; } pattern;
 
@@ -57,7 +57,7 @@ typedef struct { double t; shape* object_id; } intersection;
 
 typedef struct { struct _shape* objects; point_light* lights; } world;
 
-typedef struct { double t; shape* object; tuple point; tuple eyev; tuple normalv; bool inside; tuple over_point; tuple reflectv; double n1; double n2; } comps;
+typedef struct { double t; shape* object; tuple point; tuple eyev; tuple normalv; bool inside; tuple over_point; tuple under_point; tuple reflectv; double n1; double n2; } comps;
 
 typedef struct { double hsize; double vsize; double field_of_view; double pixel_size; double half_width; double half_height; Mat4x4 view_transform; } camera;
 
@@ -68,6 +68,8 @@ typedef struct { intersection itersection[INTERSECTIONS_SIZE]; int count; } inte
 #define CONTAINERS_SIZE 100
 
 typedef struct { shape* shape_ptr[CONTAINERS_SIZE]; } containers;
+
+containers contents;
 
 point_light create_point_light(tuple position, tuple intensity) {
     point_light pl;
@@ -735,13 +737,14 @@ tuple normal_at(shape* shape, tuple point) {
     // local_normal_at function substitute
     switch (shape->type) {
     case SHAPE:
+    case SPHERE:
         local_normal = create_vector(local_point.x, local_point.y, local_point.z);
         break;
     case PLANE:
         local_normal = create_vector(0.0f, 1.0f, 0.0f);
         break;
     default:
-        assert("Shape Type Is Not Set For Shape.");
+        assert(0 && "Shape Type Is Not Set For Shape.");
     }
 
     // world_normal <- trnaspose(inverse(shape.transform)) * local_normal;
@@ -837,10 +840,16 @@ camera* create_camera(double hsize, double vsize, double field_of_view) {
     return c;
 }
 
+tuple test_pattern_at(struct pattern* pat, tuple* point) {
+    return create_point(point->x, point->y, point->z);
+}
+
 tuple pattern_at(struct pattern* pat, tuple* point) {
     tuple color = create_point(0.0f, 0.0f, 0.0f);
     tuple distance;
     switch (pat->type) {
+    case TEST:
+        return create_point(point->x, point->y, point->z);
     case STRIPE:
         if ((int)floor(point->x) % 2 == 0) {
             color.x = pat->from.x;
@@ -874,11 +883,21 @@ tuple pattern_at(struct pattern* pat, tuple* point) {
 }
 
 // TODO: Merge these three functions together
+pattern test_pattern(tuple from, tuple to) {
+    pattern pat;
+    pat.from = from;
+    pat.to = to;
+    pat.pattern_at_fn_ptr = test_pattern_at;
+    pat.type = TEST;
+    mat4x4_set_ident(pat.transform);
+    return pat;
+}
+
 pattern stripe_pattern(tuple from, tuple to) {
     pattern pat;
     pat.from = from;
     pat.to = to;
-    pat.pattern_at_fn_ptr = pattern_at;
+    pat.pattern_at_fn_ptr = pattern_at; /* TODO: Start using these function pointers. */
     pat.type = STRIPE;
     mat4x4_set_ident(pat.transform);
     return pat;
@@ -888,7 +907,7 @@ pattern gradiant_pattern(tuple from, tuple to) {
     pattern pat;
     pat.from = from;
     pat.to = to;
-    pat.pattern_at_fn_ptr = pattern_at;
+    pat.pattern_at_fn_ptr = pattern_at; /* TODO: Start using these function pointers. */
     pat.type = GRADIANT;
     mat4x4_set_ident(pat.transform);
     return pat;
@@ -898,7 +917,7 @@ pattern ring_pattern(tuple from, tuple to) {
     pattern pat;
     pat.from = from;
     pat.to = to;
-    pat.pattern_at_fn_ptr = pattern_at;
+    pat.pattern_at_fn_ptr = pattern_at; /* TODO: Start using these function pointers. */
     pat.type = RING;
     mat4x4_set_ident(pat.transform);
     return pat;
@@ -908,7 +927,7 @@ pattern checkers_pattern(tuple from, tuple to) {
     pattern pat;
     pat.from = from;
     pat.to = to;
-    pat.pattern_at_fn_ptr = pattern_at;
+    pat.pattern_at_fn_ptr = pattern_at; /* TODO: Start using these function pointers. */
     pat.type = CHECKER;
     mat4x4_set_ident(pat.transform);
     return pat;
@@ -1010,10 +1029,10 @@ comps create_comp() {
     return comp;
 }
 
-comps prepare_computations(intersection* inter, ray* r, intersections* intersections_list, containers* contents) {
+comps prepare_computations(intersection* i, ray* r, intersections* xs) {
     comps comps = create_comp();
-    comps.t = inter->t;
-    comps.object = inter->object_id;
+    comps.t = i->t;
+    comps.object = i->object_id;
     comps.point = position(*r, comps.t);
     comps.eyev = tuple_negate(r->direction_vector);
     comps.normalv = normal_at(comps.object, comps.point);
@@ -1023,34 +1042,33 @@ comps prepare_computations(intersection* inter, ray* r, intersections* intersect
     } else {
         comps.inside = false;
     }
-    comps.over_point = tuple_add(comps.point, tuple_mult_scalar(comps.normalv, EPSILON));
+    comps.over_point  = tuple_add(comps.point, tuple_mult_scalar(comps.normalv, EPSILON));
+    comps.under_point = tuple_sub(comps.point, tuple_mult_scalar(comps.normalv, EPSILON));
     comps.reflectv = tuple_reflect(r->direction_vector, comps.normalv);
 
     // refraction section
-    if (intersections_list != NULL) {
-        // static containers contents = containers_create();
-        for (int count = 0; count < intersections_list->count; count++) {
-            //if (intersections_list->itersection[count].object_id == inter->object_id) {
-            shape* i = intersections_list->itersection[count].object_id;
-            intersection* hit_inter = hit(intersections_list);
-            if(i == hit_inter->object_id){
-                if (containers_is_empty(contents)) {
+    if (xs != NULL) { // keeps old unit tests passing
+        containers_clear(&contents);
+        for (int count = 0; count < xs->count; count++) {
+            intersection* cur_i = &xs->itersection[count];
+            if(cur_i == i){
+                if (containers_is_empty(&contents)) {
                     comps.n1 = 1.0f;
                 } else {
-                    comps.n1 = container_last(contents)->material.refractive_index;
+                    comps.n1 = container_last(&contents)->material.refractive_index;
                 }
             }
-            if (containers_includes(contents, inter->object_id)) {
-                container_remove(contents, inter->object_id);
+            if (containers_includes(&contents, cur_i->object_id)) {
+                container_remove(&contents, cur_i->object_id);
             } else {
-                container_append(contents, inter->object_id);
+                container_append(&contents, cur_i->object_id);
             }
-            intersection* hit_inter2 = hit(intersections_list);
-            if (i == hit_inter2->object_id) {
-                if (containers_is_empty(contents)) {
+            
+            if (cur_i == i) {
+                if (containers_is_empty(&contents)) {
                     comps.n2 = 1.0f;
                 } else {
-                    comps.n2 = container_last(contents)->material.refractive_index;
+                    comps.n2 = container_last(&contents)->material.refractive_index;
                 }
                 break;
             }
@@ -1085,7 +1103,7 @@ tuple color_at(world* w, ray* r, int remaining) {
     if (hit1 == NULL) {
         return create_point(0.0f, 0.0f, 0.0f);
     } else {
-        comps comp = prepare_computations(hit1, r, NULL, NULL);
+        comps comp = prepare_computations(hit1, r, NULL);
         return shade_hit(w, &comp, remaining);
     }
 }
@@ -1099,13 +1117,46 @@ tuple reflected_color(world* w, comps* comp, int remaining) {
     return tuple_mult_scalar(color, comp->object->material.reflective);
 }
 
+tuple refracted_color(world* w, comps* comp, int remaining) {
+    double n_ratio = comp->n1 / comp->n2;
+    double cos_i = tuple_dot(comp->eyev, comp->normalv);
+    double sin2_t = n_ratio * n_ratio * (1.0f - cos_i * cos_i);
+    if (remaining <= 0 || comp->object->material.transparency == 0.0 || sin2_t > 1.0f) {
+        return create_point(0.0f, 0.0f, 0.0f);
+    }
+    double cos_t = sqrt(1.0f - sin2_t);
+    double n_ratio_cos = n_ratio * cos_i - cos_t;
+    tuple eyev_n_ratio = tuple_mult_scalar(comp->eyev, n_ratio);
+    tuple direction = tuple_sub( tuple_mult_scalar(comp->normalv, n_ratio_cos), eyev_n_ratio);
+    ray refract_ray = create_ray(comp->under_point.x, comp->under_point.y, comp->under_point.z, direction.x, direction.y, direction.z);
+    tuple color_at_value = color_at(w, &refract_ray, remaining - 1);
+    tuple final_color = tuple_mult_scalar(color_at_value,comp->object->material.transparency);
+    return final_color;
+}
+
+double schlick(comps* comp) {
+    double cosine = tuple_dot(comp->eyev, comp->normalv);
+    if (comp->n1 > comp->n2) {
+        double n = comp->n1 / comp->n2;
+        double sin2_t = pow(n,2) * (1.0f - pow(cosine,2));
+        if (sin2_t > 1.0f) {
+            return 1.0f;
+        }
+        double cos_t = sqrt(1.0f - sin2_t);
+        cosine = cos_t;
+    }
+    double r0 = pow((comp->n1 - comp->n2) / (comp->n1 + comp->n2), 2);
+    return r0 + (1 - r0) * pow((1.0f - cosine), 5);
+}
+
 tuple shade_hit(world* w, comps* comp, int remaining) {
     assert(w->lights);
     assert(w->objects);
     bool shadowed = is_shadowed(w, &comp->over_point);
     tuple surface = lighting(comp->object->material,w->objects, w->lights, comp->point, comp->eyev, comp->normalv, shadowed);
     tuple reflected = reflected_color(w, comp, remaining);
-    return tuple_add(surface, reflected);
+    tuple refracted = refracted_color(w, comp, remaining);
+    return tuple_add(tuple_add(surface, reflected), refracted);
 }
 
 void view_transform(tuple from, tuple to, tuple up, Mat4x4 m) {
@@ -2052,7 +2103,7 @@ int gen_rotation_matrix_X_test() {
   mat4x4_mul_tuple(rot_mat, p1, &p2);
   assert(equal(p2.x, 0.0f));
   assert(equal(p2.y, sqrt(2.0f)/2.0f));
-  assert(equal(p2.z, sqrt(2.0f) / 2.0f));
+  assert(equal(p2.z, sqrt(2.0f)/2.0f));
   assert(equal(p2.w, 1.0f));
 
   gen_rotate_matrix_X(M_PI / 2, rot_mat);
@@ -3130,7 +3181,7 @@ int prepare_computations_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     shape* sp1 = create_shape(SHAPE);
     intersection inter = { 4.0f, sp1 };
-    comps comp = prepare_computations(&inter, &r, NULL, NULL);
+    comps comp = prepare_computations(&inter, &r, NULL);
     assert(equal(comp.t, inter.t));
     assert(comp.object == sp1);
     assert(equal(comp.point.x, 0.0f));
@@ -3153,7 +3204,7 @@ int hit_when_intersect_on_outside_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     shape* sp1 = create_shape(SHAPE);
     intersection inter = { 4.0f, sp1 };
-    comps comp = prepare_computations(&inter, &r, NULL, NULL);
+    comps comp = prepare_computations(&inter, &r, NULL);
     assert(comp.inside == false);
     free(sp1);
     return 0;
@@ -3164,7 +3215,7 @@ int hit_when_intersect_occurs_on_inside_test() {
     ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
     shape* sp1 = create_shape(SHAPE);
     intersection inter = { 1.0f, sp1 };
-    comps comp = prepare_computations(&inter, &r, NULL, NULL);
+    comps comp = prepare_computations(&inter, &r, NULL);
 
     assert(equal(comp.point.x, 0.0f));
     assert(equal(comp.point.y, 0.0f));
@@ -3203,7 +3254,7 @@ int shading_an_intersection_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     // shape <- the first object in w
     intersection inter = { 4.0f, w.objects };
-    comps comp = prepare_computations(&inter, &r, NULL, NULL);
+    comps comp = prepare_computations(&inter, &r, NULL);
 
     // testing if prepare_computations overwrote stack
     assert(equal(r.direction_vector.x, 0.0f));
@@ -3284,7 +3335,7 @@ int shading_intersection_from_inside() {
 
     ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
     intersection inter = { 0.5f, w.objects->next };
-    comps comp = prepare_computations(&inter, &r, NULL, NULL);
+    comps comp = prepare_computations(&inter, &r, NULL);
 
     // testing if prepare_computations overwrote stack
     assert(equal(r.direction_vector.x, 0.0f));
@@ -3647,7 +3698,7 @@ int shade_hit_given_intersection_in_shadow_test() {
     w.objects = sp1;
     ray r = create_ray(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 1.0f);
     intersection i = { 4.0f, sp2 };
-    comps comp = prepare_computations(&i, &r, NULL, NULL);
+    comps comp = prepare_computations(&i, &r, NULL);
     tuple c = shade_hit(&w, &comp, RECURSION_DEPTH);
     assert(equal(c.x, 0.1f));
     assert(equal(c.y, 0.1f));
@@ -3665,7 +3716,7 @@ int hit_should_offset_point_test() {
     gen_translate_matrix(0.0f, 0.0f, 10.0f, trans_matrix);
     mat4x4_copy(trans_matrix, sp1->transform);
     intersection i = { 5.0f, sp1 };
-    comps comp = prepare_computations(&i, &r, NULL, NULL);
+    comps comp = prepare_computations(&i, &r, NULL);
     assert(comp.over_point.z < -EPSILON / 2);
     assert(comp.point.z > comp.over_point.z);
     free(sp1);
@@ -4712,7 +4763,7 @@ int precompute_reflection_vector_test() {
     shape* sp = create_shape(PLANE);
     ray r = create_ray(0.0, 1.0, -1.0, 0.0f, -sqrt(2)/2, sqrt(2)/2);
     intersection intersect1 = { sqrt(2.0f), sp };
-    comps comp = prepare_computations(&intersect1, &r, NULL, NULL);
+    comps comp = prepare_computations(&intersect1, &r, NULL);
     assert(equal(comp.reflectv.x, 0.0f));
     assert(equal(comp.reflectv.y, sqrt(2) / 2));
     assert(equal(comp.reflectv.z, sqrt(2) / 2));
@@ -4730,7 +4781,7 @@ int reflected_color_for_non_reflective_material_test() {
     w.objects = sp;
     sp->next = sp;
     intersection intersect1 = { sqrt(2.0f), sp };
-    comps comp = prepare_computations(&intersect1, &r, NULL, NULL);
+    comps comp = prepare_computations(&intersect1, &r, NULL);
     tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.0f, color.x));
     assert(equal(0.0f, color.y));
@@ -4751,7 +4802,7 @@ int reflected_color_for_reflective_material_test() {
     w.objects->next->next = pl; // Two objects already exist in the default world
     ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2)/2, sqrt(2)/2);
     intersection intersect1 = { sqrt(2.0f), pl };
-    comps comp = prepare_computations(&intersect1, &r, NULL, NULL);
+    comps comp = prepare_computations(&intersect1, &r, NULL);
     tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.19033077235655871f, color.x));
     assert(equal(0.23791346190051155f, color.y));
@@ -4772,7 +4823,7 @@ int shade_hit_with_reflective_material_test() {
     w.objects->next->next = pl; // Two objects already exist in the default world
     ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2)/2, sqrt(2)/2);
     intersection intersect1 = { sqrt(2.0f), pl };
-    comps comp = prepare_computations(&intersect1, &r, NULL, NULL);
+    comps comp = prepare_computations(&intersect1, &r, NULL);
     tuple color = shade_hit(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.87675614729320861f, color.x));
     assert(equal(0.92433883683716145f, color.y));
@@ -4822,7 +4873,7 @@ int reflected_color_at_max_recursive_depth_test() {
     w.objects = pl;
     ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2)/2, sqrt(2)/2);
     intersection intersect1 = { sqrt(2.0f), pl };
-    comps comp = prepare_computations(&intersect1, &r, NULL, NULL);
+    comps comp = prepare_computations(&intersect1, &r, NULL);
     tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.0f, color.x));
     assert(equal(0.0f, color.y));
@@ -4947,29 +4998,215 @@ int finding_n1_and_n2_at_various_intersections_test() {
     add_intersection(&intersects, 5.25f, glass_sphere_c);
     add_intersection(&intersects, 6.0f,  glass_sphere_a);
 
-    containers contents = containers_create();
-    comps glass_comps = prepare_computations(&intersects.itersection[0], &r, &intersects, &contents);
+    comps glass_comps = prepare_computations(&intersects.itersection[0], &r, &intersects);
     assert(equal(glass_comps.n1, 1.0f));
     assert(equal(glass_comps.n2, 1.5f));
-    glass_comps = prepare_computations(&intersects.itersection[1], &r, &intersects, &contents);
+    glass_comps = prepare_computations(&intersects.itersection[1], &r, &intersects);
     assert(equal(glass_comps.n1, 1.5f));
     assert(equal(glass_comps.n2, 2.0f));
-    glass_comps = prepare_computations(&intersects.itersection[2], &r, &intersects, &contents);
+    glass_comps = prepare_computations(&intersects.itersection[2], &r, &intersects);
     assert(equal(glass_comps.n1, 2.0f));
     assert(equal(glass_comps.n2, 2.5f));
-    glass_comps = prepare_computations(&intersects.itersection[3], &r, &intersects, &contents);
+    glass_comps = prepare_computations(&intersects.itersection[3], &r, &intersects);
     assert(equal(glass_comps.n1, 2.5f));
     assert(equal(glass_comps.n2, 2.5f));
-    glass_comps = prepare_computations(&intersects.itersection[4], &r, &intersects, &contents);
+    glass_comps = prepare_computations(&intersects.itersection[4], &r, &intersects);
     assert(equal(glass_comps.n1, 2.5f));
     assert(equal(glass_comps.n2, 1.5f));
-    glass_comps = prepare_computations(&intersects.itersection[5], &r, &intersects, &contents);
+    glass_comps = prepare_computations(&intersects.itersection[5], &r, &intersects);
     assert(equal(glass_comps.n1, 1.5f));
     assert(equal(glass_comps.n2, 1.0f));
     return 0;
 }
 
+// 154 The under point is offset below the surface
+int under_point_is_offset_below_the_suface_test() {
+    ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+
+    shape* glass_sphere_a = create_glass_sphere();
+    Mat4x4 translate_mat_b;
+    gen_translate_matrix(0.0f, 0.0f, 1.0f, translate_mat_b);
+    mat4x4_copy(translate_mat_b, glass_sphere_a->transform);
+ 
+    intersections intersects = create_intersections();
+    add_intersection(&intersects, 5.0f, glass_sphere_a);
+
+    comps glass_comps = prepare_computations(&intersects.itersection[0], &r, &intersects);
+    assert(glass_comps.under_point.z > EPSILON / 2);
+    assert(glass_comps.point.z < glass_comps.under_point.z);
+    return 0;
+}
+
+// 155 The refracted color with an opaque surface
+int refracted_color_with_opaque_surface_test() {
+    world w = create_default_world();
+    shape* sh = create_shape(SHAPE);
+    w.objects = sh;
+    ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+    intersections intersects = create_intersections();
+    add_intersection(&intersects, 4.0f, sh);
+    add_intersection(&intersects, 6.0f, sh);
+    comps comp = prepare_computations(&intersects.itersection[0], &r, &intersects);
+    tuple color = refracted_color(&w, &comp, RECURSION_DEPTH);
+    assert(equal(0.0f, color.x));
+    assert(equal(0.0f, color.y));
+    assert(equal(0.0f, color.z));
+    return 0;
+}
+
+// 156 The refracted color at maximum recursive depth
+int refracted_color_with_maximum_recursive_depth_test() {
+    world w = create_default_world();
+    shape* sh = create_shape(SHAPE);
+
+    material sh_material = create_material_default();
+    sh_material.transparency = 1.0f;
+    sh_material.refractive_index = 1.5f;
+    sh->material = sh_material;
+    w.objects = sh;
+
+    ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
+    intersections intersects = create_intersections();
+    add_intersection(&intersects, 4.0f, sh);
+    add_intersection(&intersects, 6.0f, sh);
+    comps comp = prepare_computations(&intersects.itersection[0], &r, &intersects);
+    tuple color = refracted_color(&w, &comp, 0);
+    assert(equal(0.0f, color.x));
+    assert(equal(0.0f, color.y));
+    assert(equal(0.0f, color.z));
+    return 0;
+}
+
+// 157 The reflected color under total internal reflection
+int reflected_color_under_total_internal_reflection_test() {
+    world w = create_default_world();
+    shape* sh = create_shape(SHAPE);
+
+    material sh_material = create_material_default();
+    sh_material.transparency = 1.0f;
+    sh_material.refractive_index = 1.5f;
+    sh->material = sh_material;
+    w.objects = sh;
+
+    ray r = create_ray(0.0f, 0.0f, sqrt(2)/2, 0.0f, 1.0f, 0.0f);
+    intersections intersects = create_intersections();
+    add_intersection(&intersects, -sqrt(2)/2, sh);
+    add_intersection(&intersects, sqrt(2)/2, sh);
+    comps comp = prepare_computations(&intersects.itersection[1], &r, &intersects);
+    tuple color = refracted_color(&w, &comp, 0);
+    assert(equal(0.0f, color.x));
+    assert(equal(0.0f, color.y));
+    assert(equal(0.0f, color.z));
+    return 0;
+}
+
+// 158 The refracted color with a refracted ray
+int refracted_color_with_refracted_ray_test() {
+    world w = create_default_world();
+
+    tuple white = create_point(1.0f, 1.0f, 1.0f);
+    pattern pat = test_pattern(white, white);
+    w.objects->material.pattern = pat;
+    w.objects->material.has_pattern = true;
+    w.objects->material.ambient = 1.0f;
+
+
+    w.objects->next->material.transparency = 1.0f;
+    w.objects->next->material.refractive_index = 1.5f;
+
+    ray r = create_ray(0.0f, 0.0f, 0.1f, 0.0f, 1.0f, 0.0f);
+    intersections intersects = create_intersections();
+    add_intersection(&intersects, -0.9899f, w.objects);
+    add_intersection(&intersects, -0.4899f, w.objects->next);
+    add_intersection(&intersects, 0.4899f, w.objects->next);
+    add_intersection(&intersects, 0.9899f, w.objects);
+    comps comp = prepare_computations(&intersects.itersection[2], &r, &intersects);
+    tuple color = refracted_color(&w, &comp, 5);
+    assert(equal(0.0f, color.x));
+    assert(equal(0.99888466851208102f, color.y));
+    assert(equal(0.047216723854055828f, color.z));
+    return 0;
+}
+
+// 159 shade_hit with a transparent material
+int shade_hit_with_transparent_material_test() {
+    world w = create_default_world();
+
+    shape* floor = create_shape(PLANE);
+    Mat4x4 floor_transform;
+    gen_translate_matrix(0.0f, -1.0f, 0.0f, floor_transform);
+    mat4x4_copy(floor_transform, floor->transform);
+
+    material floor_material = create_material_default();
+    floor_material.transparency = 0.5;
+    floor_material.refractive_index = 1.5f;
+    floor->material = floor_material;
+    w.objects = floor;
+
+    shape* ball = create_shape(SPHERE);
+    Mat4x4 ball_transform;
+    gen_translate_matrix(0.0f, -3.5f, -0.5f, ball_transform);
+    mat4x4_copy(ball_transform, ball->transform);
+
+    material ball_material = create_material_default();
+    ball_material.color = create_point(1.0f, 0.0f, 0.0f);
+    ball_material.ambient = 0.5;
+    ball->material = ball_material;
+    w.objects->next = ball;
+
+    ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2.0f)/2.0f, sqrt(2.0f)/2.0f);
+    intersections intersects = create_intersections();
+    add_intersection(&intersects, sqrt(2), w.objects);
+    comps comp = prepare_computations(&intersects.itersection[0], &r, &intersects);
+    tuple color = shade_hit(&w, &comp, 5);
+    assert(equal(0.93642537493664990f, color.x));
+    assert(equal(0.68642537493664990f, color.y));
+    assert(equal(0.68642537493664990f, color.z));
+    return 0;
+}
+
+// 161 The Schlick approximation under total internal reflection
+int schlick_approximation_under_total_internal_reflection_test() {
+    shape* glass_sphere = create_glass_sphere();
+    ray r = create_ray(0.0f, 0.0f, sqrt(2.0f) / 2.0f, 0.0f, 1.0f, 0.0f);
+    intersections intersects = create_intersections();
+    add_intersection(&intersects, -sqrt(2)/2.0f, glass_sphere);
+    add_intersection(&intersects, sqrt(2)/2.0f, glass_sphere);
+    comps comp = prepare_computations(&intersects.itersection[1], &r, &intersects);
+    double reflectance = schlick(&comp);
+    assert(equal(reflectance, 1.0f));
+    return 0;
+}
+
+// 162 The Schlick approximation with a perpendicular viewing angle
+int schlick_approximation_with_perpedicular_viewing_angle_test() {
+    shape* glass_sphere = create_glass_sphere();
+    ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    intersections intersects = create_intersections();
+    add_intersection(&intersects, -1.0f, glass_sphere);
+    add_intersection(&intersects, 1.0f, glass_sphere);
+    comps comp = prepare_computations(&intersects.itersection[1], &r, &intersects);
+    double reflectance = schlick(&comp);
+    assert(equal(reflectance, 0.04f));
+    return 0;
+}
+
+// 163 The Schlick approximation with a small angle and n2 > n1
+int schlick_approximation_with_small_angle_n2_gt_n1_test() {
+    shape* glass_sphere = create_glass_sphere();
+    ray r = create_ray(0.0f, 0.99f, -2.0f, 0.0f, 0.0f, 1.0f);
+    intersections intersects = create_intersections();
+    add_intersection(&intersects, 1.8589f, glass_sphere);
+    comps comp = prepare_computations(&intersects.itersection[0], &r, &intersects);
+    double reflectance = schlick(&comp);
+    assert(equal(reflectance, 0.48873f));
+    return 0;
+}
+
 int main() {
+
+  contents = containers_create();
+
 #if defined _DEBUG
   clock_t start_unit_tests = clock();
   unit_test("Create Point Test", create_point_test());
@@ -5119,6 +5356,15 @@ int main() {
   unit_test("Helper For Producing Sphere With Glassy Material Test", helper_for_producing_sphere_with_glassy_material_test());
   unit_test("Containers Tests", containers_tests());
   unit_test("Finding N1 And N2 At Various Intersections Test", finding_n1_and_n2_at_various_intersections_test());
+  unit_test("Under Point Is Offset Below The Suface Test", under_point_is_offset_below_the_suface_test());
+  unit_test("Refracted Color With Opaque Surface Test", refracted_color_with_opaque_surface_test());
+  unit_test("Refracted Color With Maximum Recursive Depth Test", refracted_color_with_maximum_recursive_depth_test());
+  unit_test("Reflected Color Under Total Internal Reflection Test", reflected_color_under_total_internal_reflection_test());
+  unit_test("Refracted Color With Refracted Ray Test", refracted_color_with_refracted_ray_test());
+  unit_test("Shade Hit With Transparent Material Test", shade_hit_with_transparent_material_test());
+  unit_test("Schlick Approximation Under Total Internal Reflection Test", schlick_approximation_under_total_internal_reflection_test());
+  unit_test("Schlick Approximation With Perpedicular Viewing Angle Test", schlick_approximation_with_perpedicular_viewing_angle_test());
+  unit_test("Schlick Approximation With Small Angle N2 > N1 Test", schlick_approximation_with_small_angle_n2_gt_n1_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
 
   clock_t end_unit_tests = clock();
