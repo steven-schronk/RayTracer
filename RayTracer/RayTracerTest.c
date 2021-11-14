@@ -30,7 +30,7 @@ Copyright 2021 Steven Ray Schronk
 // remaining number of iterations when calculating reflection
 #define RECURSION_DEPTH 5
 
-#define VERTICAL_SIZE   60
+#define VERTICAL_SIZE   120
 #define HORIZONTAL_SIZE 120
 
 typedef double Mat2x2[2][2];
@@ -144,6 +144,7 @@ bool add_intersection(intersections* intersection_list, double t, shape* sp ) {
   intersection_list->count++;
   intersection_list->itersection[i].object_id = sp;
   intersection_list->itersection[i].t = t;
+  //sort_intersects(intersection_list); // TODO: This might need to come out.
   return true;
 }
 
@@ -1047,31 +1048,29 @@ comps prepare_computations(intersection* i, ray* r, intersections* xs) {
     comps.reflectv = tuple_reflect(r->direction_vector, comps.normalv);
 
     // refraction section
-    if (xs != NULL) { // keeps old unit tests passing
-        containers_clear(&contents);
-        for (int count = 0; count < xs->count; count++) {
-            intersection* cur_i = &xs->itersection[count];
-            if(cur_i == i){
-                if (containers_is_empty(&contents)) {
-                    comps.n1 = 1.0f;
-                } else {
-                    comps.n1 = container_last(&contents)->material.refractive_index;
-                }
-            }
-            if (containers_includes(&contents, cur_i->object_id)) {
-                container_remove(&contents, cur_i->object_id);
+    containers_clear(&contents);
+    for (int count = 0; count < xs->count; count++) {
+        intersection* cur_i = &xs->itersection[count];
+        if(cur_i == i){
+            if (containers_is_empty(&contents)) {
+                comps.n1 = 1.0f;
             } else {
-                container_append(&contents, cur_i->object_id);
+                comps.n1 = container_last(&contents)->material.refractive_index;
             }
+        }
+        if (containers_includes(&contents, cur_i->object_id)) {
+            container_remove(&contents, cur_i->object_id);
+        } else {
+            container_append(&contents, cur_i->object_id);
+        }
             
-            if (cur_i == i) {
-                if (containers_is_empty(&contents)) {
-                    comps.n2 = 1.0f;
-                } else {
-                    comps.n2 = container_last(&contents)->material.refractive_index;
-                }
-                break;
+        if (cur_i == i) {
+            if (containers_is_empty(&contents)) {
+                comps.n2 = 1.0f;
+            } else {
+                comps.n2 = container_last(&contents)->material.refractive_index;
             }
+            break;
         }
     }
     return comps;
@@ -1103,7 +1102,8 @@ tuple color_at(world* w, ray* r, int remaining) {
     if (hit1 == NULL) {
         return create_point(0.0f, 0.0f, 0.0f);
     } else {
-        comps comp = prepare_computations(hit1, r, NULL);
+        intersections intersects = create_intersections();
+        comps comp = prepare_computations(hit1, r, &intersects);
         return shade_hit(w, &comp, remaining);
     }
 }
@@ -1120,7 +1120,7 @@ tuple reflected_color(world* w, comps* comp, int remaining) {
 tuple refracted_color(world* w, comps* comp, int remaining) {
     double n_ratio = comp->n1 / comp->n2;
     double cos_i = tuple_dot(comp->eyev, comp->normalv);
-    double sin2_t = n_ratio * n_ratio * (1.0f - cos_i * cos_i);
+    double sin2_t = pow(n_ratio,2) * (1.0f - pow(cos_i,2));
     if (remaining <= 0 || comp->object->material.transparency == 0.0 || sin2_t > 1.0f) {
         return create_point(0.0f, 0.0f, 0.0f);
     }
@@ -1145,17 +1145,25 @@ double schlick(comps* comp) {
         double cos_t = sqrt(1.0f - sin2_t);
         cosine = cos_t;
     }
-    double r0 = pow((comp->n1 - comp->n2) / (comp->n1 + comp->n2), 2);
-    return r0 + (1 - r0) * pow((1.0f - cosine), 5);
+    double r0 = pow(((comp->n1 - comp->n2) / (comp->n1 + comp->n2)), 2);
+    return r0 + (1.0f - r0) * pow((1.0f - cosine), 5);
 }
 
 tuple shade_hit(world* w, comps* comp, int remaining) {
     assert(w->lights);
     assert(w->objects);
     bool shadowed = is_shadowed(w, &comp->over_point);
-    tuple surface = lighting(comp->object->material,w->objects, w->lights, comp->point, comp->eyev, comp->normalv, shadowed);
+    tuple surface = lighting(comp->object->material,w->objects, w->lights, comp->over_point, comp->eyev, comp->normalv, shadowed);
     tuple reflected = reflected_color(w, comp, remaining);
     tuple refracted = refracted_color(w, comp, remaining);
+
+    material mater = comp->object->material;
+    if (mater.reflective > 0.0f && mater.transparency > 0.0f) {
+        double reflectance = schlick(comp);
+        tuple reflect_reflectance = tuple_mult_scalar(reflected, reflectance);
+        tuple refracted_reflectance = tuple_mult_scalar(refracted, (1.0 - reflectance));
+        return tuple_add(tuple_add(surface, reflect_reflectance), refracted_reflectance);
+    }
     return tuple_add(tuple_add(surface, reflected), refracted);
 }
 
@@ -3181,7 +3189,8 @@ int prepare_computations_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     shape* sp1 = create_shape(SHAPE);
     intersection inter = { 4.0f, sp1 };
-    comps comp = prepare_computations(&inter, &r, NULL);
+    intersections intersects = create_intersections();
+    comps comp = prepare_computations(&inter, &r, &intersects);
     assert(equal(comp.t, inter.t));
     assert(comp.object == sp1);
     assert(equal(comp.point.x, 0.0f));
@@ -3204,7 +3213,8 @@ int hit_when_intersect_on_outside_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     shape* sp1 = create_shape(SHAPE);
     intersection inter = { 4.0f, sp1 };
-    comps comp = prepare_computations(&inter, &r, NULL);
+    intersections intersects = create_intersections();
+    comps comp = prepare_computations(&inter, &r, &intersects);
     assert(comp.inside == false);
     free(sp1);
     return 0;
@@ -3215,7 +3225,9 @@ int hit_when_intersect_occurs_on_inside_test() {
     ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
     shape* sp1 = create_shape(SHAPE);
     intersection inter = { 1.0f, sp1 };
-    comps comp = prepare_computations(&inter, &r, NULL);
+
+    intersections intersects = create_intersections();
+    comps comp = prepare_computations(&inter, &r, &intersects);
 
     assert(equal(comp.point.x, 0.0f));
     assert(equal(comp.point.y, 0.0f));
@@ -3254,7 +3266,8 @@ int shading_an_intersection_test() {
     ray r = create_ray(0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 1.0f);
     // shape <- the first object in w
     intersection inter = { 4.0f, w.objects };
-    comps comp = prepare_computations(&inter, &r, NULL);
+    intersections intersects = create_intersections();
+    comps comp = prepare_computations(&inter, &r, &intersects);
 
     // testing if prepare_computations overwrote stack
     assert(equal(r.direction_vector.x, 0.0f));
@@ -3326,7 +3339,7 @@ int shading_an_intersection_test() {
 }
 
 // 95 Shading an intersection from the inside
-int shading_intersection_from_inside() {
+int shading_intersection_from_inside_test() {
     world w = create_default_world();
     tuple light_pos = create_point(0.0f, 0.25f, 0.0f);
     tuple light_color = create_point(1.0f, 1.0f, 1.0f);
@@ -3335,7 +3348,8 @@ int shading_intersection_from_inside() {
 
     ray r = create_ray(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
     intersection inter = { 0.5f, w.objects->next };
-    comps comp = prepare_computations(&inter, &r, NULL);
+    intersections intersects = create_intersections();
+    comps comp = prepare_computations(&inter, &r, &intersects);
 
     // testing if prepare_computations overwrote stack
     assert(equal(r.direction_vector.x, 0.0f));
@@ -3698,7 +3712,8 @@ int shade_hit_given_intersection_in_shadow_test() {
     w.objects = sp1;
     ray r = create_ray(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 1.0f);
     intersection i = { 4.0f, sp2 };
-    comps comp = prepare_computations(&i, &r, NULL);
+    intersections intersects = create_intersections();
+    comps comp = prepare_computations(&i, &r, &intersects);
     tuple c = shade_hit(&w, &comp, RECURSION_DEPTH);
     assert(equal(c.x, 0.1f));
     assert(equal(c.y, 0.1f));
@@ -3716,7 +3731,8 @@ int hit_should_offset_point_test() {
     gen_translate_matrix(0.0f, 0.0f, 10.0f, trans_matrix);
     mat4x4_copy(trans_matrix, sp1->transform);
     intersection i = { 5.0f, sp1 };
-    comps comp = prepare_computations(&i, &r, NULL);
+    intersections intersects = create_intersections();
+    comps comp = prepare_computations(&i, &r, &intersects);
     assert(comp.over_point.z < -EPSILON / 2);
     assert(comp.point.z > comp.over_point.z);
     free(sp1);
@@ -3797,7 +3813,7 @@ void render_complete_world() {
     assert(equal(floor->transform[3][3], 1.0f));
 
     material floor_material= create_material_default();
-    floor_material.color = create_point(1.0f, 0.9f, 0.9f);
+    floor_material.color = create_point(0.9f, 0.9f, 0.9f); // gray
     floor_material.specular = 0.0f;
     floor->material = floor_material;
 
@@ -3812,6 +3828,9 @@ void render_complete_world() {
     // 2. wall on left has same scale and color but also rotated and translated into place
     shape* left_wall = create_shape(SHAPE);
     Mat4x4 translate_left;
+
+    floor_material.color = create_point(1.0f, 0.0f, 0.0f); // red
+    left_wall->material = floor_material;
     
     gen_translate_matrix(0.0f, 0.0f, 5.0f, translate_left);
     Mat4x4 rotate_y_left;
@@ -3958,6 +3977,8 @@ void render_complete_world() {
 
     // 3. wall on right is identical to left, rotated opposite direction in y
     shape* right_wall = create_shape(SHAPE);
+
+    floor_material.color = create_point(0.0f, 0.0f, 1.0f); // blue
     mat4x4_set_ident(final_transform_left);
     mat4x4_mul_in_place(final_transform_left, translate_left, final_transform_left);
     Mat4x4 rotate_y_right;
@@ -3966,6 +3987,8 @@ void render_complete_world() {
     mat4x4_mul_in_place(final_transform_left, rotate_x_left, final_transform_left);
     mat4x4_mul_in_place(final_transform_left, scale_left, final_transform_left);
     mat4x4_copy(final_transform_left, right_wall->transform);
+
+
     left_wall->material = floor_material;
 
     assert(equal(right_wall->transform[0][0], 7.071067812000001f));
@@ -4151,22 +4174,73 @@ void render_complete_world() {
 // 125 Render complete world with plane
 void render_complete_world_with_plane() {
     world w = create_default_world();
-    shape* floor = create_shape(PLANE);
-    Mat4x4 rot_mat;
-    gen_rotate_matrix_X(-0.175f, rot_mat);
-    mat4x4_copy(rot_mat, floor->transform);
 
+    shape* floor = create_shape(PLANE);
     material floor_material = create_material_default();
-    floor_material.color = create_point(0.9f, 0.9f, 0.9f);
+    floor_material.color = create_point(1.0f, 1.0f, 1.0f); // white
     floor_material.specular = 0.0f;
     //floor_material.pattern = ring_pattern(create_point(0.8f, 1.0f, 0.8f), create_point(1.0f, 1.0f, 1.0f));
     //floor_material.has_pattern = true;
-    floor_material.reflective = 0.75f;
+    floor_material.reflective = 0.0f;
+    floor_material.transparency = 0.0f;
     floor->material = floor_material;
+
+    shape* right_wall = create_shape(PLANE);
+    Mat4x4 rot_wall_mat;
+    gen_rotate_matrix_Z(M_PI / 2.0f, rot_wall_mat);
+
+    Mat4x4 trans_wall_mat;
+    gen_translate_matrix(0.0f, -8.25f, 0.0f, trans_wall_mat);
+    //mat4x4_mul_in_place(trans_wall_mat, rot_wall_mat, trans_wall_mat);
+    mat4x4_copy(rot_wall_mat, right_wall->transform);
+    floor_material.color = create_point(0.0f, 0.0f, 1.0f); // blue
+    right_wall->material = floor_material;
+
+    shape* left_wall = create_shape(PLANE);
+    floor_material.color = create_point(1.0f, 0.0f, 0.0f); // red
+    gen_rotate_matrix_X(-M_PI / 2.0f, rot_wall_mat);
+
+    gen_translate_matrix(0.0f, 0.0f, -2.75f, trans_wall_mat);
+    mat4x4_mul_in_place(rot_wall_mat, trans_wall_mat, rot_wall_mat);
+    mat4x4_copy(rot_wall_mat, left_wall->transform);
+    left_wall->material = floor_material;
+
+    shape* glass_sphere = create_glass_sphere();
+    Mat4x4 front_transform;
+    gen_translate_matrix(-7.0f, 1.0f, -8.0f, front_transform);
+
+    mat4x4_copy(front_transform, glass_sphere->transform);
+
+    glass_sphere->material.diffuse = 0.0f;
+    glass_sphere->material.refractive_index = 1.5;
+    glass_sphere->material.transparency = 0.9f;
+    glass_sphere->material.reflective = 0.2f;
+
+    //material front_material = create_material_default();
+    //front_material.color = create_point(0.1f, 0.0f, 0.45f);
+    //front_material.ambient = 0.0f;
+    //front_material.diffuse = 0.0f;
+    //front_material.specular = 0.0f;
+    //front_material.shininess = 200.0f;
+    //front_material.reflective = 0.2f;
+    //front_material.transparency = 0.8f;
+    //front_material.has_pattern = false;
+    /*
+    m.ambient = 0.1f;
+    m.diffuse = 0.9f;
+    m.specular = 0.9f;
+    m.shininess = 200.0f;
+    m.reflective = 0.0f;
+    m.transparency = 0.0f;
+    m.refractive_index = 1.0f;
+    */
+    //front_material.transparency = 1.0f;
+
+    //glass_sphere->material = front_material;
 
     shape* middle_sphere = create_shape(SHAPE);
     Mat4x4 middle_transform;
-    gen_translate_matrix(-0.125, 1.0, 0.5, middle_transform);
+    gen_translate_matrix(-3.5, 1.0, -3.0, middle_transform);
 
     mat4x4_copy(middle_transform, middle_sphere->transform);
 
@@ -4174,6 +4248,7 @@ void render_complete_world_with_plane() {
     middle_material.color = create_point(0.1f, 1.0f, 0.5);
     middle_material.diffuse = 0.7f;
     middle_material.specular = 0.3f;
+    middle_material.transparency = 0.0f;
 
     tuple light = create_point(1.0f, 1.0f, 1.0f);
     tuple dark = create_point(0.439f, 0.305f, 0.827f); // purple
@@ -4190,7 +4265,7 @@ void render_complete_world_with_plane() {
 
     shape* right_sphere = create_shape(SHAPE);
     Mat4x4 translate_right_sphere;
-    gen_translate_matrix(1.95f, 0.5f, -0.5f, translate_right_sphere);
+    gen_translate_matrix(-1.95f, 1.0f, -5.5f, translate_right_sphere);
     Mat4x4 scale_right_sphere;
     gen_scale_matrix(0.5f, 0.5f, 0.5f, scale_right_sphere);
     Mat4x4 final_transform_right_sphere;
@@ -4201,19 +4276,26 @@ void render_complete_world_with_plane() {
     mat4x4_copy(final_transform_right_sphere, right_sphere->transform);
 
     material right_sphere_material = create_material_default();
-    right_sphere_material.color = create_point(0.5f, 1.0f, 0.1);
+    right_sphere_material.color = create_point(0.0f, 0.0f, 0.0f);
     right_sphere_material.diffuse = 0.7f;
     right_sphere_material.specular = 0.3f;
-    right_sphere_material.has_pattern = true;
-    tuple white = create_point(1.0f, 1.0f, 1.0f);
-    tuple black = create_point(0.0f, 0.0f, 0.0f);
-    right_sphere_material.pattern = gradiant_pattern(white, black);
+    floor_material.reflective = 1.0f;
+    floor_material.transparency = 0.0f;
+    //right_sphere_material.has_pattern = true;
+    //tuple white = create_point(1.0f, 1.0f, 1.0f);
+    //tuple black = create_point(0.0f, 0.0f, 0.0f);
+    //right_sphere_material.pattern = gradiant_pattern(white, black);
     right_sphere->material = right_sphere_material;
 
-    // 6. Smallest sphere is scaled by a tird, before being translated
+    shape* origin_sphere = create_shape(SHAPE);
+    origin_sphere->material.color.z = 0.0f; // green color
+    origin_sphere->material.color.x = 0.0f;
+
+
+
     shape* small_sphere = create_shape(SHAPE);
     Mat4x4 translate_small_sphere;
-    gen_translate_matrix(-1.5f, 0.33f, -0.75f, translate_small_sphere);
+    gen_translate_matrix(-6.5f, 0.33f, -2.75f, translate_small_sphere);
     Mat4x4 scale_small_sphere;
     gen_scale_matrix(0.33f, 0.33f, 0.33f, scale_small_sphere);
     Mat4x4 final_transform_small_sphere;
@@ -4221,33 +4303,40 @@ void render_complete_world_with_plane() {
     mat4x4_mul_in_place(final_transform_small_sphere, translate_small_sphere, final_transform_small_sphere);
     mat4x4_mul_in_place(final_transform_small_sphere, scale_small_sphere, final_transform_small_sphere);
     mat4x4_copy(final_transform_small_sphere, small_sphere->transform);
-
     material small_sphere_material = create_material_default();
     small_sphere_material.color = create_point(1.0f, 0.8f, 0.1);
     small_sphere_material.diffuse = 0.7f;
     small_sphere_material.specular = 0.3f;
     small_sphere_material.shininess = 100.0f;
-
     tuple small_sphere_light = create_point(0.2f, 0.2f, 0.2f);
     tuple small_sphere_dark = create_point(0.0f, 0.0f, 0.0f);
     pattern small_sphere_pat = stripe_pattern(small_sphere_light, small_sphere_dark);
-
     Mat4x4 small_sphere_scale_pattern;
     gen_scale_matrix(0.07f, 0.07f, 0.07f, small_sphere_scale_pattern);
-
     set_pattern_transform(&small_sphere_pat, small_sphere_scale_pattern);
     small_sphere_material.pattern = small_sphere_pat;
     small_sphere_material.has_pattern = true;
-
-
     small_sphere->material = small_sphere_material;
 
+    /*
+    origin_sphere->next = NULL;
+    left_wall->next = origin_sphere;
+    right_wall->next = left_wall;
+    floor->next = right_wall;
+    w.objects = floor;
+    */
     // putting geometry together
-    small_sphere->next = NULL;
+
+    origin_sphere->next = NULL;
+    small_sphere->next = origin_sphere;
     right_sphere->next = small_sphere;
     middle_sphere->next = right_sphere;
-    floor->next = middle_sphere;
+    glass_sphere->next = middle_sphere;
+    left_wall->next = glass_sphere;
+    right_wall->next = left_wall;
+    floor->next = right_wall;
     w.objects = floor;
+
 
     // lighting
     tuple light_position = create_point(-10.0f, 10.0f, -10.0f);
@@ -4255,8 +4344,8 @@ void render_complete_world_with_plane() {
     *w.lights = create_point_light(light_position, light_intensity);
 
     camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, M_PI / 3.0f);
-    tuple from = create_point(0.0f, 1.5f, -5.0f);
-    tuple to = create_point(0.0f, 1.0f, 0.0f);
+    tuple from = create_point(-10.0f, 1.5f, -10.0f);
+    tuple to = create_point(0.0f, 0.0f, 0.0f);
     tuple up = create_vector(0.0f, 1.0f, 0.0f);
     view_transform(from, to, up, c->view_transform);
 
@@ -4266,7 +4355,7 @@ void render_complete_world_with_plane() {
     free(floor);
     free(middle_sphere);
     free(right_sphere);
-    free(small_sphere);
+    free(origin_sphere);
 }
 
 // 119 The default transformation
@@ -4763,7 +4852,8 @@ int precompute_reflection_vector_test() {
     shape* sp = create_shape(PLANE);
     ray r = create_ray(0.0, 1.0, -1.0, 0.0f, -sqrt(2)/2, sqrt(2)/2);
     intersection intersect1 = { sqrt(2.0f), sp };
-    comps comp = prepare_computations(&intersect1, &r, NULL);
+    intersections intersects = create_intersections();
+    comps comp = prepare_computations(&intersect1, &r, &intersects);
     assert(equal(comp.reflectv.x, 0.0f));
     assert(equal(comp.reflectv.y, sqrt(2) / 2));
     assert(equal(comp.reflectv.z, sqrt(2) / 2));
@@ -4781,7 +4871,8 @@ int reflected_color_for_non_reflective_material_test() {
     w.objects = sp;
     sp->next = sp;
     intersection intersect1 = { sqrt(2.0f), sp };
-    comps comp = prepare_computations(&intersect1, &r, NULL);
+    intersections intersects = create_intersections();
+    comps comp = prepare_computations(&intersect1, &r, &intersects);
     tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.0f, color.x));
     assert(equal(0.0f, color.y));
@@ -4802,7 +4893,8 @@ int reflected_color_for_reflective_material_test() {
     w.objects->next->next = pl; // Two objects already exist in the default world
     ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2)/2, sqrt(2)/2);
     intersection intersect1 = { sqrt(2.0f), pl };
-    comps comp = prepare_computations(&intersect1, &r, NULL);
+    intersections intersects = create_intersections();
+    comps comp = prepare_computations(&intersect1, &r, &intersects);
     tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.19033077235655871f, color.x));
     assert(equal(0.23791346190051155f, color.y));
@@ -4823,7 +4915,8 @@ int shade_hit_with_reflective_material_test() {
     w.objects->next->next = pl; // Two objects already exist in the default world
     ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2)/2, sqrt(2)/2);
     intersection intersect1 = { sqrt(2.0f), pl };
-    comps comp = prepare_computations(&intersect1, &r, NULL);
+    intersections intersects = create_intersections();
+    comps comp = prepare_computations(&intersect1, &r, &intersects);
     tuple color = shade_hit(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.87675614729320861f, color.x));
     assert(equal(0.92433883683716145f, color.y));
@@ -4873,7 +4966,8 @@ int reflected_color_at_max_recursive_depth_test() {
     w.objects = pl;
     ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2)/2, sqrt(2)/2);
     intersection intersect1 = { sqrt(2.0f), pl };
-    comps comp = prepare_computations(&intersect1, &r, NULL);
+    intersections intersects = create_intersections();
+    comps comp = prepare_computations(&intersect1, &r, &intersects);
     tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.0f, color.x));
     assert(equal(0.0f, color.y));
@@ -5123,8 +5217,8 @@ int refracted_color_with_refracted_ray_test() {
     comps comp = prepare_computations(&intersects.itersection[2], &r, &intersects);
     tuple color = refracted_color(&w, &comp, 5);
     assert(equal(0.0f, color.x));
-    assert(equal(0.99888466851208102f, color.y));
-    assert(equal(0.047216723854055828f, color.z));
+    assert(equal(0.99888366962741248f, color.y));
+    assert(equal(0.047216676637331971f, color.z));
     return 0;
 }
 
@@ -5165,6 +5259,84 @@ int shade_hit_with_transparent_material_test() {
     return 0;
 }
 
+// extra rendering of dual spheres refracting on floor
+void render_dual_spheres_refracting_on_floor() {
+    world w = create_default_world();
+
+    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, 0.45);
+    tuple from = create_point(0.0f, 0.0f, -5.0f);
+    tuple to = create_point(0.0f, 0.0f, 0.0f);
+    tuple up = create_vector(0.0f, 1.0f, 0.0f);
+    view_transform(from, to, up, c->view_transform);
+
+    tuple light_position = create_point(2.0f, 10.0f, -5.0f);
+    tuple light_intensity = create_point(0.9f, 0.9f, 0.9f);
+    *w.lights = create_point_light(light_position, light_intensity);
+
+    shape* wall = create_shape(PLANE);
+
+    Mat4x4 wall_rotate_transform;
+    gen_rotate_matrix_X(1.5708f, wall_rotate_transform);
+
+    Mat4x4 wall_position_transform;
+    gen_translate_matrix(0.0f, 0.0f, 10.0f, wall_position_transform);
+
+    mat4x4_mul_in_place(wall_position_transform, wall_rotate_transform, wall_position_transform);
+
+    mat4x4_copy(wall_position_transform, wall->transform);
+
+    material wall_material = create_material_default();
+    tuple from_color = create_point(0.15f, 0.15f, 0.15f);
+    tuple to_color = create_point(0.85f, 0.85f, 0.85f);
+    pattern checkers = checkers_pattern(from_color, to_color);
+    wall_material.has_pattern = true;
+    wall_material.pattern = checkers;
+    wall_material.ambient = 0.8f;
+    wall_material.diffuse = 0.2f;
+    wall_material.specular = 0.0f;
+
+    Mat4x4 floor_pattern_transform;
+    gen_translate_matrix(0.0f, 0.0f, 0.0f, floor_pattern_transform);
+    mat4x4_copy(floor_pattern_transform, wall->material.pattern.transform);
+    wall->material = wall_material;
+
+    shape* middle_sphere = create_shape(SHAPE);
+    material sphere_material = create_material_default();
+
+    sphere_material.ambient = 0.0f;
+    sphere_material.color = create_point(1.0f, 1.0f, 1.0f);
+    sphere_material.diffuse = 0.0f;
+    sphere_material.specular = 0.9f;
+    sphere_material.shininess = 300.0f;
+    sphere_material.reflective = 0.9f;
+    sphere_material.transparency = 0.9f;
+    sphere_material.refractive_index = 1.5f;
+    middle_sphere->material = sphere_material;
+
+    shape* hollow_center = create_shape(SHAPE);
+    Mat4x4 hollow_center_transform;
+    gen_scale_matrix(0.5f, 0.5f, 0.5f, hollow_center_transform);
+    mat4x4_copy(hollow_center_transform, hollow_center->transform);
+
+    material hollow_sphere_material = create_material_default();
+
+    hollow_sphere_material.ambient = 0.0f;
+    hollow_sphere_material.color = create_point(1.0f, 1.0f, 1.0f);
+    hollow_sphere_material.diffuse = 0.0f;
+    hollow_sphere_material.specular = 0.9f;
+    hollow_sphere_material.shininess = 300.0f;
+    hollow_sphere_material.reflective = 0.9f;
+    hollow_sphere_material.transparency = 0.9f;
+    hollow_sphere_material.refractive_index = 1.0000034f;
+    hollow_center->material = hollow_sphere_material;
+
+    w.objects = wall;
+    w.objects->next = middle_sphere;
+    w.objects->next->next = hollow_center;
+    
+    render(c, &w);
+}
+
 // 161 The Schlick approximation under total internal reflection
 int schlick_approximation_under_total_internal_reflection_test() {
     shape* glass_sphere = create_glass_sphere();
@@ -5200,6 +5372,44 @@ int schlick_approximation_with_small_angle_n2_gt_n1_test() {
     comps comp = prepare_computations(&intersects.itersection[0], &r, &intersects);
     double reflectance = schlick(&comp);
     assert(equal(reflectance, 0.48873f));
+    return 0;
+}
+
+// 164 shade_hit() with reflective, transparent material
+int shade_hit_with_reflective_transparent_material_test() {
+    world w = create_default_world();
+
+    shape* floor = create_shape(PLANE);
+    Mat4x4 floor_transform;
+    gen_translate_matrix(0.0f, -1.0f, 0.0f, floor_transform);
+    mat4x4_copy(floor_transform, floor->transform);
+
+    material floor_material = create_material_default();
+    floor_material.reflective = 0.5f;
+    floor_material.transparency = 0.5f;
+    floor_material.refractive_index = 1.5f;
+    floor->material = floor_material;
+    w.objects = floor;
+
+    shape* ball = create_shape(SPHERE);
+    Mat4x4 ball_transform;
+    gen_translate_matrix(0.0f, -3.5f, -0.5f, ball_transform);
+    mat4x4_copy(ball_transform, ball->transform);
+
+    material ball_material = create_material_default();
+    ball_material.color = create_point(1.0f, 0.0f, 0.0f);
+    ball_material.ambient = 0.5f;
+    ball->material = ball_material;
+    w.objects->next = ball;
+
+    ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2.0f) / 2.0f, sqrt(2.0f) / 2.0f);
+    intersections intersects = create_intersections();
+    add_intersection(&intersects, sqrt(2), w.objects);
+    comps comp = prepare_computations(&intersects.itersection[0], &r, &intersects);
+    tuple color = shade_hit(&w, &comp, 5);
+    assert(equal(0.92590802597811939f, color.x)); // TODO: These numbers are not exactly right
+    assert(equal(0.68642534425921242f, color.y));
+    assert(equal(0.68642534425921242f, color.z));
     return 0;
 }
 
@@ -5304,7 +5514,7 @@ int main() {
   unit_test("Hit When Intersection Occurs On Outside Test", hit_when_intersect_on_outside_test());
   unit_test("Hit When Intersect Occurs On Inside Test", hit_when_intersect_occurs_on_inside_test());
   unit_test("Shading An Intersection Test", shading_an_intersection_test());
-  unit_test("Shading Intersection From Inside Test", shading_intersection_from_inside());
+  unit_test("Shading Intersection From Inside Test", shading_intersection_from_inside_test());
   unit_test("Color When Ray Misses Test", color_when_ray_misses_test());
   unit_test("Color When Ray Hits Test", color_when_ray_hits_test());
   unit_test("Color With Intersect Behind Ray Test", color_with_intersect_behind_ray_test());
@@ -5365,6 +5575,7 @@ int main() {
   unit_test("Schlick Approximation Under Total Internal Reflection Test", schlick_approximation_under_total_internal_reflection_test());
   unit_test("Schlick Approximation With Perpedicular Viewing Angle Test", schlick_approximation_with_perpedicular_viewing_angle_test());
   unit_test("Schlick Approximation With Small Angle N2 > N1 Test", schlick_approximation_with_small_angle_n2_gt_n1_test());
+  unit_test("Shade Hit With Reflective Transparent Material Test", shade_hit_with_reflective_transparent_material_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
 
   clock_t end_unit_tests = clock();
@@ -5376,7 +5587,8 @@ int main() {
   printf("Starting Render Process\n");
   //render_sphere();
   //render_complete_world();
-  render_complete_world_with_plane();
+  render_dual_spheres_refracting_on_floor();
+  //render_complete_world_with_plane();
 
   clock_t end_render = clock();
   float seconds_render = (float)(end_render - start_render) / CLOCKS_PER_SEC;
