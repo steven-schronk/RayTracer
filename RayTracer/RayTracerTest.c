@@ -772,6 +772,20 @@ world create_world() {
     return w;
 }
 
+void add_shape_to_world(shape * sh, world* w) {
+    assert(sh != NULL);
+    assert(w != NULL);
+    shape* next_shape = w->objects;
+    if (next_shape == NULL) {
+        w->objects = sh;
+        return;
+    }
+    while (next_shape->next != NULL) {
+        next_shape = next_shape->next;
+    }
+    next_shape->next = sh;
+}
+
 world create_default_world() {
     world w;
     w.lights = NULL;
@@ -792,7 +806,7 @@ world create_default_world() {
     w.lights->position.w = 1.0;
 
     w.lights->next = NULL;
-    shape* s1 = create_shape(SHAPE);
+    shape* s1 = create_shape(SPHERE);
     tuple material_color = create_point(0.8f, 1.0f, 0.6f);
     material matl = create_material_default();
     matl.color = material_color;
@@ -802,7 +816,7 @@ world create_default_world() {
     w.objects = s1;
     w.objects->next = NULL;
 
-    shape* s2 = create_shape(SHAPE);
+    shape* s2 = create_shape(SPHERE);
     gen_scale_matrix(0.5f, 0.5f, 0.5f, s2->transform);
     w.objects->next = s2;
     return w;
@@ -1160,9 +1174,7 @@ tuple shade_hit(world* w, comps* comp, int remaining) {
     material mater = comp->object->material;
     if (mater.reflective > 0.0f && mater.transparency > 0.0f) {
         double reflectance = schlick(comp);
-        tuple reflected_reflectance = tuple_mult_scalar(reflected, reflectance);
-        tuple reflectance_refracted = tuple_mult_scalar(refracted, reflectance - 1.0f);
-        return tuple_add(tuple_add(surface, reflected_reflectance), reflectance_refracted);    
+        return tuple_add(surface, tuple_add(tuple_mult_scalar(reflected, reflectance),tuple_mult_scalar(refracted, (1.0f - reflectance))));
     }
     return tuple_add(tuple_add(surface, reflected), refracted);
 }
@@ -5375,9 +5387,35 @@ int schlick_approximation_with_small_angle_n2_gt_n1_test() {
     return 0;
 }
 
+// Extra tests for add_shape_to_world
+int add_shape_to_world_tests() {
+    world w = create_default_world();
+
+    shape* sh1 = create_shape(PLANE);
+    shape* sh2 = create_shape(PLANE);
+
+    shape* default1 = w.objects;
+    shape* default2 = w.objects->next;
+
+    assert(w.objects->next->next == NULL);
+
+    add_shape_to_world(sh1, &w);
+    assert(w.objects == default1);
+    assert(w.objects->next = default2);
+    assert(w.objects->next->next == sh1);
+
+    add_shape_to_world(sh2, &w);
+    assert(w.objects == default1);
+    assert(w.objects->next = default2);
+    assert(w.objects->next->next == sh1);
+    assert(w.objects->next->next->next == sh2);
+    return 0;
+}
+
 // 164 shade_hit() with reflective, transparent material
 int shade_hit_with_reflective_transparent_material_test() {
     world w = create_default_world();
+    ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2.0f) / 2.0f, sqrt(2.0f) / 2.0f);
 
     shape* floor = create_shape(PLANE);
     Mat4x4 floor_transform;
@@ -5389,28 +5427,30 @@ int shade_hit_with_reflective_transparent_material_test() {
     floor_material.transparency = 0.5f;
     floor_material.refractive_index = 1.5f;
     floor->material = floor_material;
-    w.objects = floor;
+
+    add_shape_to_world(floor, &w);
 
     shape* ball = create_shape(SPHERE);
-    Mat4x4 ball_transform;
-    gen_translate_matrix(0.0f, -3.5f, -0.5f, ball_transform);
-    mat4x4_copy(ball_transform, ball->transform);
 
     material ball_material = create_material_default();
     ball_material.color = create_point(1.0f, 0.0f, 0.0f);
     ball_material.ambient = 0.5f;
     ball->material = ball_material;
-    w.objects->next = ball;
 
-    ray r = create_ray(0.0f, 0.0f, -3.0f, 0.0f, -sqrt(2.0f) / 2.0f, sqrt(2.0f) / 2.0f);
+    Mat4x4 ball_transform;
+    gen_translate_matrix(0.0f, -3.5f, -0.5f, ball_transform);
+    mat4x4_copy(ball_transform, ball->transform);
+
+    add_shape_to_world(ball, &w);
+
     intersections intersects = create_intersections();
-    add_intersection(&intersects, sqrt(2), w.objects);
+    add_intersection(&intersects, sqrt(2), floor);
     assert(intersects.count == 1);
     comps comp = prepare_computations(&intersects.itersection[0], &r, &intersects);
     tuple color = shade_hit(&w, &comp, 5);
-    //assert(equal(0.93391f, color.x)); // TODO: These numbers are not exactly right
-    //assert(equal(0.696430027f, color.y));
-    //assert(equal(0.69243f, color.z));
+    assert(equal(0.933915102f, color.x));
+    assert(equal(0.69643419f, color.y));
+    assert(equal(0.69243009f, color.z));
     return 0;
 }
 
@@ -5576,6 +5616,7 @@ int main() {
   unit_test("Schlick Approximation Under Total Internal Reflection Test", schlick_approximation_under_total_internal_reflection_test());
   unit_test("Schlick Approximation With Perpedicular Viewing Angle Test", schlick_approximation_with_perpedicular_viewing_angle_test());
   unit_test("Schlick Approximation With Small Angle N2 > N1 Test", schlick_approximation_with_small_angle_n2_gt_n1_test());
+  unit_test("Add Shape To World Tests", add_shape_to_world_tests());
   unit_test("Shade Hit With Reflective Transparent Material Test", shade_hit_with_reflective_transparent_material_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
 
