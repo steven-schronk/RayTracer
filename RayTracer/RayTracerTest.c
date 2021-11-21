@@ -5482,13 +5482,10 @@ void render_dual_spheres_refracting_on_floor() {
     shape* wall = create_shape(PLANE);
 
     Mat4x4 wall_rotate_transform;
-    gen_rotate_matrix_X(1.5708f, wall_rotate_transform);
-
+    gen_rotate_matrix_X(M_PI/2.0f, wall_rotate_transform);
     Mat4x4 wall_position_transform;
     gen_translate_matrix(0.0f, 0.0f, 10.0f, wall_position_transform);
-
     mat4x4_mul_in_place(wall_position_transform, wall_rotate_transform, wall_position_transform);
-
     mat4x4_copy(wall_position_transform, wall->transform);
 
     material wall_material = create_material_default();
@@ -5501,23 +5498,20 @@ void render_dual_spheres_refracting_on_floor() {
     wall_material.diffuse = 0.2f;
     wall_material.specular = 0.0f;
 
-    Mat4x4 floor_pattern_transform;
-    gen_translate_matrix(0.0f, 0.0f, 0.0f, floor_pattern_transform);
-    mat4x4_copy(floor_pattern_transform, wall->material.pattern.transform);
     wall->material = wall_material;
 
-    shape* middle_sphere = create_shape(SHAPE);
+    shape* outer_sphere = create_shape(SHAPE);
     material sphere_material = create_material_default();
 
     sphere_material.ambient = 0.0f;
     sphere_material.color = create_point(1.0f, 1.0f, 1.0f);
-    sphere_material.diffuse = 0.0f;
+    sphere_material.diffuse = 0.1f;
     sphere_material.specular = 0.9f;
     sphere_material.shininess = 300.0f;
     sphere_material.reflective = 0.9f;
     sphere_material.transparency = 0.9f;
-    sphere_material.refractive_index = 1.5f;
-    middle_sphere->material = sphere_material;
+    sphere_material.refractive_index = 1.52f;
+    outer_sphere->material = sphere_material;
 
     shape* hollow_center = create_shape(SHAPE);
     Mat4x4 hollow_center_transform;
@@ -5531,13 +5525,13 @@ void render_dual_spheres_refracting_on_floor() {
     hollow_sphere_material.diffuse = 0.0f;
     hollow_sphere_material.specular = 0.9f;
     hollow_sphere_material.shininess = 300.0f;
-    hollow_sphere_material.reflective = 1.0f;
+    hollow_sphere_material.reflective = 0.9f;
     hollow_sphere_material.transparency = 0.0f;
     hollow_sphere_material.refractive_index = 1.0000034f;
     hollow_center->material = hollow_sphere_material;
 
     w.objects = wall;
-    w.objects->next = middle_sphere;
+    w.objects->next = outer_sphere;
     w.objects->next->next = hollow_center;
     
     render(c, &w);
