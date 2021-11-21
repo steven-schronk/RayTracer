@@ -3118,6 +3118,141 @@ int sort_intersects_test() {
     assert(intersect_compare(&i9, &i6) == -1);
 
     clear_intersections(&intersects);
+
+    assert(intersects_in_order_test(&intersects) == true);
+
+    intersects.itersection[0].t = -22.23821f;
+    intersects.itersection[1].t = -1.3210377f;
+    intersects.itersection[2].t = -1.8887736f;
+    intersects.itersection[3].t = -0.567737f;
+    intersects.itersection[4].t = -1.058888f;
+
+    intersects.count = 5;
+
+    assert(intersects_in_order_test(&intersects) == false);
+
+    clear_intersections(&intersects);
+
+    intersects.itersection[0].t = 0.0f;
+    intersects.itersection[1].t = 0.0f;
+    intersects.itersection[2].t = 0.0f;
+    intersects.itersection[3].t = 0.0f;
+    intersects.itersection[4].t = 0.0f;
+
+    intersects.count = 5;
+
+    assert(intersects_in_order_test(&intersects) == true);
+
+    clear_intersections(&intersects);
+
+    intersects.itersection[0].t = 0.0001f;
+    intersects.itersection[1].t = 0.0001f;
+    intersects.itersection[2].t = 0.0002f;
+    intersects.itersection[3].t = 0.0001f;
+    intersects.itersection[4].t = 0.0001f;
+
+    intersects.count = 5;
+
+    assert(intersects_in_order_test(&intersects) == false);
+
+    clear_intersections(&intersects);
+
+    intersects.itersection[0].t = -0.004f;
+    intersects.itersection[1].t = -0.003f;
+    intersects.itersection[2].t = -0.002f;
+    intersects.itersection[3].t = -0.001f;
+    intersects.itersection[4].t =  0.000f;
+
+    intersects.count = 5;
+
+    assert(intersects_in_order_test(&intersects) == true);
+
+    clear_intersections(&intersects);
+
+    intersects.itersection[0].t = -0.004f;
+    intersects.itersection[1].t = -0.003f;
+    intersects.itersection[2].t = -0.002f;
+    intersects.itersection[3].t = -0.000f;  // flipped at end of array
+    intersects.itersection[4].t = -0.001f;
+
+    intersects.count = 5;
+
+    assert(intersects_in_order_test(&intersects) == false);
+
+    clear_intersections(&intersects);
+
+    intersects.itersection[0].t = -0.003f;
+    intersects.itersection[1].t = -0.004f; // flipped at beginning of array
+    intersects.itersection[2].t = -0.002f;
+    intersects.itersection[3].t = -0.001f;
+    intersects.itersection[4].t = -0.000f;
+
+    intersects.count = 5;
+
+    assert(intersects_in_order_test(&intersects) == false);
+
+    clear_intersections(&intersects);
+
+    intersects.itersection[0].t = -0.0002f;
+    intersects.itersection[1].t = -0.0001f; // positive and negative close to zero
+    intersects.itersection[2].t = -0.0000f;
+    intersects.itersection[3].t =  0.0001f;
+    intersects.itersection[4].t =  0.0002f;
+
+    intersects.count = 5;
+
+    assert(intersects_in_order_test(&intersects) == true);
+
+    clear_intersections(&intersects);
+
+    intersects.itersection[0].t = -0.0001f;
+    intersects.itersection[1].t = -0.0002f; // positive and negative close to zero
+    intersects.itersection[2].t = -0.0000f; // flipped at beginning
+    intersects.itersection[3].t =  0.0001f;
+    intersects.itersection[4].t =  0.0002f;
+
+    intersects.count = 5;
+
+    assert(intersects_in_order_test(&intersects) == false);
+
+    clear_intersections(&intersects);
+
+    intersects.itersection[0].t = -0.0002f;
+    intersects.itersection[1].t = -0.0001f; // positive and negative close to zero
+    intersects.itersection[2].t = -0.0000f; // flipped at end
+    intersects.itersection[3].t =  0.0002f;
+    intersects.itersection[4].t =  0.0001f;
+
+    intersects.count = 5;
+
+    assert(intersects_in_order_test(&intersects) == false);
+
+    clear_intersections(&intersects);
+
+    intersects.itersection[0].t = -0.00000002f;
+    intersects.itersection[1].t = -0.00000001f; // very large and small
+    intersects.itersection[2].t = -0.0f;
+    intersects.itersection[3].t = 1000000000.0f;
+    intersects.itersection[4].t = 2000000000.0f;
+
+    intersects.count = 5;
+
+    assert(intersects_in_order_test(&intersects) == true);
+
+    clear_intersections(&intersects);
+
+    intersects.itersection[0].t = 1000000000.0f;
+    intersects.itersection[1].t = 2000000000.0f;
+    intersects.itersection[2].t = -0.00000002f;
+    intersects.itersection[3].t = -0.00000001f; // very large and small
+    intersects.itersection[4].t = -0.0f;
+
+    intersects.count = 5;
+
+    assert(intersects_in_order_test(&intersects) == false);
+
+    clear_intersections(&intersects);
+
     shape* sp1 = create_shape(SHAPE);
     shape* sp2 = create_shape(SHAPE);
     shape* sp3 = create_shape(SHAPE);
