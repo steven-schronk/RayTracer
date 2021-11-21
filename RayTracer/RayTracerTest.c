@@ -28,10 +28,10 @@ Copyright 2021 Steven Ray Schronk
 #define EPSILON 0.000001
 
 // remaining number of iterations when calculating reflection
-#define RECURSION_DEPTH 10
+#define RECURSION_DEPTH 5
 
-#define VERTICAL_SIZE   60
-#define HORIZONTAL_SIZE 60
+#define VERTICAL_SIZE   120
+#define HORIZONTAL_SIZE 120
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -99,16 +99,13 @@ void clear_intersections(intersections* intersection_list) {
 }
 
 int intersect_compare(const intersection* a, const intersection* b) {
-    if (a->t == b->t) {
-        return 0;
-    } else if (a->t < b->t) {
-        return -1;
-    }
-    return 1;
+    if (a->t > b->t) { return  1; }
+    if (a->t < b->t) { return -1; }
+    return 0;
 }
 
 void sort_intersects(intersections* intersects) {
-    qsort(intersects, intersects->count, sizeof(intersection), intersect_compare);
+    qsort(intersects->itersection, intersects->count, sizeof(intersection), intersect_compare);
 }
 
 intersection* hit(intersections* intersection_list) {
@@ -117,8 +114,8 @@ intersection* hit(intersections* intersection_list) {
   intersection* intersect1 = NULL;
   double t = DBL_MAX;
   for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
-      if (intersection_list->itersection[i].t == DBL_MIN) { break; } // sentinal value
-      if (intersection_list->itersection[i].t < 0) { continue; }
+      if (intersection_list->itersection[i].t == DBL_MIN) { break; } // intersections list empty
+      if (intersection_list->itersection[i].t < 0) { continue; } // do not store t under 0 in list
       if(intersection_list->itersection[i].t < t) {
           t = intersection_list->itersection[i].t;
           intersect1 = &intersection_list->itersection[i];
@@ -3079,10 +3076,53 @@ int intersect_compare_test() {
 
 int sort_intersects_test() {
     intersections intersects = create_intersections();
+
+    intersects.itersection[0].t = -22.23821f;
+    intersects.itersection[1].t = -1.3210377f;
+    intersects.itersection[2].t = -1.8887736f;
+    intersects.itersection[3].t = -0.567737f;
+    intersects.itersection[4].t = -1.058888f;
+
+    intersects.count = 5;
+
+    // testing quicksort setup
+    qsort(intersects.itersection, intersects.count, sizeof(intersection), intersect_compare);
+
+    assert(equal(intersects.itersection[0].t, -22.23821f));
+    assert(equal(intersects.itersection[1].t, -1.8887736f));
+    assert(equal(intersects.itersection[2].t, -1.3210377f));
+    assert(equal(intersects.itersection[3].t, -1.058888f));
+    assert(equal(intersects.itersection[4].t, -0.567737f));
+    assert(equal(intersects.itersection[5].t, DBL_MIN));
+
+    intersection i1 = { -22.23821f, NULL };
+    intersection i2 = { -1.3210377f, NULL };
+    intersection i3 = { -1.8887736f, NULL };
+    intersection i4 = { -0.567737f, NULL };
+    intersection i5 = { -1.058888f, NULL };
+    intersection i6 = { 0.0f, NULL };
+    intersection i7 = { 0.0000000000001f, NULL };
+    intersection i8 = { 0.0000000000002f, NULL };
+    intersection i9 = { -0.0000000000001f, NULL };
+
+    assert(intersect_compare(&i1, &i1) == 0);
+    assert(intersect_compare(&i2, &i2) == 0);
+    assert(intersect_compare(&i6, &i6) == 0);
+
+    assert(intersect_compare(&i6, &i7) == -1);
+    assert(intersect_compare(&i7, &i6) ==  1);
+    assert(intersect_compare(&i7, &i8) == -1);
+    assert(intersect_compare(&i8, &i7) ==  1);
+
+    assert(intersect_compare(&i6, &i9) ==  1);
+    assert(intersect_compare(&i9, &i6) == -1);
+
+    clear_intersections(&intersects);
     shape* sp1 = create_shape(SHAPE);
     shape* sp2 = create_shape(SHAPE);
     shape* sp3 = create_shape(SHAPE);
     shape* sp4 = create_shape(SHAPE);
+    shape* sp5 = create_shape(SHAPE);
 
     add_intersection(&intersects, 1.0, sp1);
     add_intersection(&intersects, 2.0, sp2);
@@ -3092,6 +3132,7 @@ int sort_intersects_test() {
     assert(intersects.count == 2);
     assert(equal(intersects.itersection[0].t, 1.0f));
     assert(equal(intersects.itersection[1].t, 2.0f));
+    assert(intersects.itersection[2].t == DBL_MIN);
 
     clear_intersections(&intersects);
 
@@ -3111,13 +3152,14 @@ int sort_intersects_test() {
     assert(intersects.itersection[2].object_id == sp2);
     assert(equal(intersects.itersection[3].t, 4.0f));
     assert(intersects.itersection[3].object_id == sp1);
+    assert(intersects.itersection[4].t == DBL_MIN);
 
     clear_intersections(&intersects);
 
-    add_intersection(&intersects, -6.0, sp1);
-    add_intersection(&intersects, 1.0, sp2);
-    add_intersection(&intersects, 1.0, sp2);
-    add_intersection(&intersects, 57.0, sp3);
+    add_intersection(&intersects,  -6.0, sp1);
+    add_intersection(&intersects,   1.0, sp2);
+    add_intersection(&intersects,   1.0, sp2);
+    add_intersection(&intersects,  57.0, sp3);
     add_intersection(&intersects, -90.0, sp4);
 
     sort_intersects(&intersects);
@@ -3133,6 +3175,30 @@ int sort_intersects_test() {
     assert(intersects.itersection[3].object_id == sp2);
     assert(equal(intersects.itersection[4].t, 57.0f));
     assert(intersects.itersection[4].object_id == sp3);
+    assert(intersects.itersection[5].t == DBL_MIN);
+
+    clear_intersections(&intersects);
+
+    add_intersection(&intersects, -22.23821f,  sp1);
+    add_intersection(&intersects, -1.3210377f, sp2);
+    add_intersection(&intersects, -1.8887736f, sp3);
+    add_intersection(&intersects, -0.567737f,  sp4);
+    add_intersection(&intersects, -1.058888f,  sp5);
+
+    sort_intersects(&intersects);
+
+    assert(intersects.count == 5);
+    assert(equal(intersects.itersection[0].t, -22.23821f));
+    assert(intersects.itersection[0].object_id == sp1);
+    assert(equal(intersects.itersection[1].t, -1.8887736f));
+    assert(intersects.itersection[1].object_id == sp3);
+    assert(equal(intersects.itersection[2].t, -1.3210377f));
+    assert(intersects.itersection[2].object_id == sp2);
+    assert(equal(intersects.itersection[3].t, -1.058888f));
+    assert(intersects.itersection[3].object_id == sp5);
+    assert(equal(intersects.itersection[4].t, -0.567737f));
+    assert(intersects.itersection[4].object_id == sp4);
+    assert(intersects.itersection[5].t == DBL_MIN);
 
     free(sp1);
     free(sp2);
@@ -3633,19 +3699,14 @@ int render_a_world_with_camera_test() {
 
 // extra
 bool intersects_in_order_test(intersections* intersects) {
-    if (intersects->count == 0) { return true; }
-    bool in_order = true;
-    int count = 0;
-
-    do {
-        double previous_value = intersects->itersection[count].t;
-        if (intersects->itersection[count].t < previous_value) {
-            in_order = false;
-            break;
+    assert(intersects != NULL);
+    if (intersects->count <= 1) { return true; }
+    for (int i = 0; i < intersects->count-1; i++) {
+        if (intersects->itersection[i].t > intersects->itersection[i + 1].t) {
+            return false;
         }
-        ++count;
-    } while (count != intersects->count);
-    return in_order;
+    }
+    return true;
 }
 
 // 110 Lighting with the surface in shadow
@@ -4291,8 +4352,8 @@ void render_complete_world_with_plane() {
     right_sphere_material.color = create_point(0.0f, 0.0f, 0.0f);
     right_sphere_material.diffuse = 0.7f;
     right_sphere_material.specular = 0.3f;
-    floor_material.reflective = 1.0f;
-    floor_material.transparency = 0.0f;
+    right_sphere_material.reflective = 1.0f;
+    right_sphere_material.transparency = 0.0f;
     //right_sphere_material.has_pattern = true;
     //tuple white = create_point(1.0f, 1.0f, 1.0f);
     //tuple black = create_point(0.0f, 0.0f, 0.0f);
@@ -4302,8 +4363,6 @@ void render_complete_world_with_plane() {
     shape* origin_sphere = create_shape(SHAPE);
     origin_sphere->material.color.z = 0.0f; // green color
     origin_sphere->material.color.x = 0.0f;
-
-
 
     shape* small_sphere = create_shape(SHAPE);
     Mat4x4 translate_small_sphere;
@@ -5337,8 +5396,8 @@ void render_dual_spheres_refracting_on_floor() {
     hollow_sphere_material.diffuse = 0.0f;
     hollow_sphere_material.specular = 0.9f;
     hollow_sphere_material.shininess = 300.0f;
-    hollow_sphere_material.reflective = 0.9f;
-    hollow_sphere_material.transparency = 0.9f;
+    hollow_sphere_material.reflective = 1.0f;
+    hollow_sphere_material.transparency = 0.0f;
     hollow_sphere_material.refractive_index = 1.0000034f;
     hollow_center->material = hollow_sphere_material;
 
