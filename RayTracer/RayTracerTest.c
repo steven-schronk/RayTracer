@@ -1041,44 +1041,48 @@ comps create_comp() {
     return comp;
 }
 
-comps prepare_computations(intersection* i, ray* r, intersections* xs) {
+comps prepare_computations(intersection* hit, ray* r, intersections* xs) {
     comps comps = create_comp();
-    comps.t = i->t;
-    comps.object = i->object_id;
+    comps.t = hit->t;
+    comps.object = hit->object_id;
     comps.point = position(*r, comps.t);
     comps.eyev = tuple_negate(r->direction_vector);
     comps.normalv = normal_at(comps.object, comps.point);
     if (tuple_dot(comps.normalv, comps.eyev) < 0.0f) {
         comps.inside = true;
         comps.normalv = tuple_negate(comps.normalv);
-    } else {
+    }
+    else {
         comps.inside = false;
     }
-    comps.over_point  = tuple_add(comps.point, tuple_mult_scalar(comps.normalv, EPSILON));
+    comps.over_point = tuple_add(comps.point, tuple_mult_scalar(comps.normalv, EPSILON));
     comps.under_point = tuple_sub(comps.point, tuple_mult_scalar(comps.normalv, EPSILON));
     comps.reflectv = tuple_reflect(r->direction_vector, comps.normalv);
 
     // refraction section
     containers_clear(&contents);
     for (int count = 0; count < xs->count; count++) {
-        intersection* cur_i = &xs->itersection[count];
-        if(cur_i == i){
+        intersection* i = &xs->itersection[count];
+        if (i == hit) {
             if (containers_is_empty(&contents)) {
                 comps.n1 = 1.0f;
-            } else {
+            }
+            else {
                 comps.n1 = container_last(&contents)->material.refractive_index;
             }
         }
-        if (containers_includes(&contents, cur_i->object_id)) {
-            container_remove(&contents, cur_i->object_id);
-        } else {
-            container_append(&contents, cur_i->object_id);
+        if (containers_includes(&contents, i->object_id)) {
+            container_remove(&contents, i->object_id);
         }
-            
-        if (cur_i == i) {
+        else {
+            container_append(&contents, i->object_id);
+        }
+
+        if (i == hit) {
             if (containers_is_empty(&contents)) {
                 comps.n2 = 1.0f;
-            } else {
+            }
+            else {
                 comps.n2 = container_last(&contents)->material.refractive_index;
             }
             break;
@@ -1120,7 +1124,7 @@ tuple color_at(world* w, ray* r, int remaining) {
 }
 
 tuple reflected_color(world* w, comps* comp, int remaining) {
-    if(remaining <= 0 || comp->object->material.reflective == 0.0) {
+    if(remaining <= 0 || equal(comp->object->material.reflective,0.0)) {
         return create_point(0.0f, 0.0f, 0.0f);
     }
     ray reflect_ray = create_ray(comp->over_point.x, comp->over_point.y, comp->over_point.z, comp->reflectv.x, comp->reflectv.y, comp->reflectv.z);
@@ -1132,7 +1136,7 @@ tuple refracted_color(world* w, comps* comp, int remaining) {
     double n_ratio = comp->n1 / comp->n2;
     double cos_i = tuple_dot(comp->eyev, comp->normalv);
     double sin2_t = pow(n_ratio,2) * (1.0f - pow(cos_i,2));
-    if (remaining <= 0 || comp->object->material.transparency == 0.0 || sin2_t > 1.0f) {
+    if (remaining <= 0 || equal(comp->object->material.transparency,0.0) || sin2_t > 1.0f) {
         return create_point(0.0f, 0.0f, 0.0f);
     }
     double cos_t = sqrt(1.0f - sin2_t);
@@ -5220,6 +5224,7 @@ int containers_tests() {
     assert(container_last(&test_containers) == NULL);
 
     assert(containers_includes(&test_containers, comp1.object) == false);
+    assert(containers_includes(&test_containers, comp2.object) == false);
 
     container_append(&test_containers, comp1.object);
     assert(containers_includes(&test_containers, comp1.object) == true);
@@ -5467,7 +5472,7 @@ int shade_hit_with_transparent_material_test() {
 
 // extra rendering of dual spheres refracting on floor
 void render_dual_spheres_refracting_on_floor() {
-    world w = create_default_world();
+    world w = create_world();
 
     camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, 0.45);
     tuple from = create_point(0.0f, 0.0f, -5.0f);
@@ -5500,20 +5505,20 @@ void render_dual_spheres_refracting_on_floor() {
 
     wall->material = wall_material;
 
-    shape* outer_sphere = create_shape(SHAPE);
+    shape* outer_sphere = create_shape(SPHERE);
     material sphere_material = create_material_default();
 
     sphere_material.ambient = 0.0f;
     sphere_material.color = create_point(1.0f, 1.0f, 1.0f);
-    sphere_material.diffuse = 0.1f;
+    sphere_material.diffuse = 0.0f;
     sphere_material.specular = 0.9f;
     sphere_material.shininess = 300.0f;
     sphere_material.reflective = 0.9f;
     sphere_material.transparency = 0.9f;
-    sphere_material.refractive_index = 1.52f;
+    sphere_material.refractive_index = 1.5f;
     outer_sphere->material = sphere_material;
 
-    shape* hollow_center = create_shape(SHAPE);
+    shape* hollow_center = create_shape(SPHERE);
     Mat4x4 hollow_center_transform;
     gen_scale_matrix(0.5f, 0.5f, 0.5f, hollow_center_transform);
     mat4x4_copy(hollow_center_transform, hollow_center->transform);
@@ -5526,14 +5531,14 @@ void render_dual_spheres_refracting_on_floor() {
     hollow_sphere_material.specular = 0.9f;
     hollow_sphere_material.shininess = 300.0f;
     hollow_sphere_material.reflective = 0.9f;
-    hollow_sphere_material.transparency = 0.0f;
+    hollow_sphere_material.transparency = 0.9f;
     hollow_sphere_material.refractive_index = 1.0000034f;
     hollow_center->material = hollow_sphere_material;
 
-    w.objects = wall;
-    w.objects->next = outer_sphere;
-    w.objects->next->next = hollow_center;
-    
+    add_shape_to_world(hollow_center, &w);
+    add_shape_to_world(outer_sphere, &w);
+    add_shape_to_world(wall, &w);
+
     render(c, &w);
 }
 
