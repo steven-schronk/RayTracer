@@ -1051,11 +1051,10 @@ comps prepare_computations(intersection* hit, ray* r, intersections* xs) {
     if (tuple_dot(comps.normalv, comps.eyev) < 0.0f) {
         comps.inside = true;
         comps.normalv = tuple_negate(comps.normalv);
-    }
-    else {
+    } else {
         comps.inside = false;
     }
-    comps.over_point = tuple_add(comps.point, tuple_mult_scalar(comps.normalv, EPSILON));
+    comps.over_point =  tuple_add(comps.point, tuple_mult_scalar(comps.normalv, EPSILON));
     comps.under_point = tuple_sub(comps.point, tuple_mult_scalar(comps.normalv, EPSILON));
     comps.reflectv = tuple_reflect(r->direction_vector, comps.normalv);
 
@@ -1063,26 +1062,23 @@ comps prepare_computations(intersection* hit, ray* r, intersections* xs) {
     containers_clear(&contents);
     for (int count = 0; count < xs->count; count++) {
         intersection* i = &xs->itersection[count];
-        if (i == hit) {
+        if (i->object_id == hit->object_id) {
             if (containers_is_empty(&contents)) {
                 comps.n1 = 1.0f;
-            }
-            else {
+            } else {
                 comps.n1 = container_last(&contents)->material.refractive_index;
             }
         }
         if (containers_includes(&contents, i->object_id)) {
             container_remove(&contents, i->object_id);
-        }
-        else {
+        } else {
             container_append(&contents, i->object_id);
         }
 
-        if (i == hit) {
+        if (i->object_id == hit->object_id) {
             if (containers_is_empty(&contents)) {
                 comps.n2 = 1.0f;
-            }
-            else {
+            } else {
                 comps.n2 = container_last(&contents)->material.refractive_index;
             }
             break;
@@ -5489,7 +5485,7 @@ void render_dual_spheres_refracting_on_floor() {
     Mat4x4 wall_rotate_transform;
     gen_rotate_matrix_X(M_PI/2.0f, wall_rotate_transform);
     Mat4x4 wall_position_transform;
-    gen_translate_matrix(0.0f, 0.0f, 10.0f, wall_position_transform);
+    gen_translate_matrix(0.0f, 0.0f, 20.0f, wall_position_transform);
     mat4x4_mul_in_place(wall_position_transform, wall_rotate_transform, wall_position_transform);
     mat4x4_copy(wall_position_transform, wall->transform);
 
@@ -5812,7 +5808,6 @@ int main() {
   unit_test("Add Shape To World Tests", add_shape_to_world_tests());
   unit_test("Shade Hit With Reflective Transparent Material Test", shade_hit_with_reflective_transparent_material_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
-
   clock_t end_unit_tests = clock();
   float seconds_unit_test = (float)(end_unit_tests - start_unit_tests) / CLOCKS_PER_SEC;
   printf("\nUnit Tests Took %f Seconds\n", seconds_unit_test);
