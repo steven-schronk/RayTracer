@@ -402,21 +402,85 @@ void mat4x4_transpose(Mat4x4 a) {
   }
 }
 
+// TODO: All these print statements should be in debug
 void tuple_print(tuple t) {
-  printf("{ %.8f, %.8f, %.8f, %.8f }\n", t.x, t.y, t.z, t.w);
+  printf("{ %+10.5f, %+10.5f, %+10.5f, %+10.5f }\n", t.x, t.y, t.z, t.w);
 }
 
 void mat4x4_print(Mat4x4 mat) {
-  printf(" [ ");
   for (int i = 0; i < 4; ++i) {
-    
     for (int j = 0; j < 4; ++j) {
-      printf("%11.10f", mat[i][j]);
-      if (j < 3) { printf(", "); }
+      printf("%+15.5f", mat[i][j]);
     }
-    printf("; ");
   }
-  printf(" ]\n");
+}
+
+void camera_print(camera* c) {
+    printf("\nCAMERA\n");
+    printf("field_of_view: %+10.5f\n", c->field_of_view);
+    printf("half_height:   %+10.5f\n", c->half_height);
+    printf("half_width:    %+10.5f\n", c->half_width);
+    printf("hsize:         %+10.5f\n", c->hsize);
+    printf("pixel_size:    %+10.5f\n", c->pixel_size);
+    printf("vsize:         %+10.5f\n", c->vsize);
+    printf("view_transform:\n");
+    mat4x4_print(c->view_transform);
+    printf("\n");
+}
+
+void material_print(material* mat) {
+    printf("\nMATERIAL\n");
+    printf("ambient:          %+10.5f\n", mat->ambient);
+    printf("color:");
+    tuple_print(mat->color);
+    printf("diffuse:          %+10.5f\n", mat->diffuse);
+    printf("reflective:       %+10.5f\n", mat->reflective);
+    printf("refractive_index: %+10.5f\n", mat->refractive_index);
+    printf("shininess:        %+10.5f\n", mat->shininess);
+    printf("specular:         %+10.5f\n", mat->specular);
+    printf("transparency:     %+10.5f\n", mat->transparency);
+    printf("has_pattern:      %+10.5d\n", mat->has_pattern);
+}
+
+void object_print(shape* s) {
+    printf("\nOBJECT    \n");
+    printf("location:");
+    tuple_print(s->location);
+    printf("transform:  \n");
+    mat4x4_print(s->transform);
+    material_print(&s->material);
+    printf("shape_type: ");
+    switch (s->type)
+    {
+    case SHAPE: printf("SHAPE");
+    case PLANE: printf("PLANE");
+    case SPHERE: printf("SPHERE");
+    }
+    printf("\n");
+}
+
+void light_print(point_light *pl) {
+    printf("\nLIGHT\n");
+    printf("intensity:");
+    tuple_print(pl->intensity);
+    printf("position: ");
+    tuple_print(pl->position);
+    printf("\n");
+}
+
+void world_print(world w) {
+    printf("\nWORLD\n");
+    shape* obj = w.objects;
+    while (obj != NULL) {
+        object_print(obj);
+        obj = obj->next;
+    }
+    point_light* pl = w.lights;
+    while (pl != NULL) {
+        light_print(pl);
+        pl = pl->next;
+    }
+    printf("\n");
 }
 
 double mat2x2_det(Mat2x2 a) {
@@ -5538,7 +5602,8 @@ void render_dual_spheres_refracting_on_floor() {
     add_shape_to_world(hollow_center, &w);
     add_shape_to_world(outer_sphere, &w);
     add_shape_to_world(wall, &w);
-
+    world_print(w);
+    camera_print(c);
     render(c, &w);
 }
 
