@@ -1063,7 +1063,7 @@ comps prepare_computations(intersection* hit, ray* r, intersections* xs) {
     containers_clear(&contents);
     for (int count = 0; count < xs->count; count++) {
         intersection* i = &xs->itersection[count];
-        if (i == hit) {
+        if (i->t == hit->t) {
             if (containers_is_empty(&contents)) {
                 comps.n1 = 1.0f;
             }
@@ -1078,7 +1078,7 @@ comps prepare_computations(intersection* hit, ray* r, intersections* xs) {
             container_append(&contents, i->object_id);
         }
 
-        if (i == hit) {
+        if (i->t == hit->t) {
             if (containers_is_empty(&contents)) {
                 comps.n2 = 1.0f;
             }
