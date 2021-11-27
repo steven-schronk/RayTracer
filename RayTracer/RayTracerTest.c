@@ -115,7 +115,7 @@ intersection* hit(intersections* intersection_list) {
   double t = DBL_MAX;
   for (int i = 0; i < INTERSECTIONS_SIZE; ++i) {
       if (intersection_list->itersection[i].t == DBL_MIN) { break; } // intersections list empty
-      if (intersection_list->itersection[i].t < 0) { continue; } // do not store t under 0 in list
+      if (intersection_list->itersection[i].t < 0) { continue; }
       if(intersection_list->itersection[i].t < t) {
           t = intersection_list->itersection[i].t;
           intersect1 = &intersection_list->itersection[i];
@@ -766,13 +766,11 @@ void intersect_world(world* w, ray* r, intersections* intersects) {
     assert(w != NULL);
     assert(r != NULL);
     assert(intersects != NULL);
-
     shape* sp = w->objects;
-    if (sp == NULL) { return; } // empty world
-    do {
+    while (sp != NULL) {
         intersect(sp, r, intersects);
         sp = sp->next;
-    } while (sp != NULL);
+    }
     sort_intersects(intersects);
     assert(intersects_in_order_test(intersects));
     return;
@@ -1159,7 +1157,7 @@ bool is_shadowed(world* world, tuple* point) {
     tuple v = tuple_sub(world->lights->position, *point);
     double distance = tuple_mag_vec(v);
     tuple direction = tuple_normalize(v);
-    ray r = { *point, direction };
+    ray r = create_ray(point->x, point->y, point->z, direction.x, direction.y, direction.z);
     intersections inter = create_intersections();
     intersect_world(world, &r, &inter);
     intersection* h = hit(&inter);
