@@ -651,17 +651,6 @@ void mat4x4_reset_to_zero(Mat4x4 mat) {
     }
 }
 
-material create_material(tuple color, double ambient, double diffuse, double specular, double shininess, double reflectivity) {
-    material m;
-    m.color = color;
-    m.ambient = ambient;
-    m.diffuse = diffuse;
-    m.specular = specular;
-    m.shininess = shininess;
-    m.reflective = reflectivity;
-    return m;
-}
-
 material create_material_default() {
     material m;
     m.color.x = 1.0; m.color.y = 1.0; m.color.z = 1.0; m.color.w = 0.0;
@@ -701,9 +690,9 @@ void delete_shape(shape* s) {
 shape* create_glass_sphere() {
     shape* sp = create_shape(SPHERE); // TODO: Might need to make adjustment for SPHERE type
     material mt = create_material_default();
+    mt.transparency = 1.0;
+    mt.refractive_index = 1.5;
     sp->material = mt;
-    sp->material.transparency = 1.0;
-    sp->material.refractive_index = 1.5;
     return sp;
 }
 
@@ -1179,18 +1168,19 @@ tuple color_at(world* w, ray* r, int remaining) {
     if (hit1 == NULL) {
         return create_point(0.0, 0.0, 0.0);
     } else {
-        intersections intersects = create_intersections();
-        comps comp = prepare_computations(hit1, r, &intersects);
+        comps comp = prepare_computations(hit1, r, &inter);
         return shade_hit(w, &comp, remaining);
     }
 }
 
+// spawns new ray for reflection
 tuple reflected_color(world* w, comps* comp, int remaining) {
-    if(remaining <= 0 || equal(comp->object->material.reflective,0.0)) {
+    if(remaining < 1 || equal(comp->object->material.reflective,0.0)) {
         return create_point(0.0, 0.0, 0.0);
     }
     ray reflect_ray = create_ray(comp->over_point.x, comp->over_point.y, comp->over_point.z, comp->reflectv.x, comp->reflectv.y, comp->reflectv.z);
-    tuple color = color_at(w, &reflect_ray, remaining - 1);
+    remaining -= 1;
+    tuple color = color_at(w, &reflect_ray, remaining);
     return tuple_mult_scalar(color, comp->object->material.reflective);
 }
 
@@ -1335,7 +1325,6 @@ void render(camera* c, world* w) {
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
-
 #if defined _DEBUG
 
 void unit_test(char* msg, int assert) {
@@ -2973,9 +2962,7 @@ int point_light_position_intensity_test() {
 
 // 85 The default material
 int default_material_test() {
-    // typedef struct { tuple color; double ambient; double diffuse; double specualar; double shininess; } material;
-    tuple color_white = create_vector(1.0, 1.0, 1.0);
-    material m1 = create_material(color_white, 0.1, 0.9, 0.9, 200.0, 0.0);
+    material m1 = create_material_default();
 
     assert(equal(m1.color.x, 1.0));
     assert(equal(m1.color.y, 1.0));
@@ -2986,22 +2973,9 @@ int default_material_test() {
     assert(equal(m1.diffuse, 0.9));
     assert(equal(m1.specular, 0.9));
     assert(equal(m1.shininess, 200.0));
-
-    material m2 = create_material_default();
-
-    assert(equal(m2.color.x, 1.0));
-    assert(equal(m2.color.y, 1.0));
-    assert(equal(m2.color.z, 1.0));
-    assert(equal(m2.color.w, 0.0));
-
-    assert(equal(m2.ambient, 0.1));
-    assert(equal(m2.diffuse, 0.9));
-    assert(equal(m2.specular, 0.9));
-    assert(equal(m2.shininess, 200.0));
-    assert(equal(m2.reflective, 0.0));
-    assert(equal(m2.transparency, 0.0));
-    assert(equal(m2.refractive_index, 1.0));
-
+    assert(equal(m1.reflective, 0.0));
+    assert(equal(m1.transparency, 0.0));
+    assert(equal(m1.refractive_index, 1.0));
     return 0;
 }
 
@@ -4013,623 +3987,6 @@ int hit_should_offset_point_test() {
     return 0;
 }
 
-#endif
-
-// 72 Hint #4
-void render_sphere() {
-  tuple ray_origin = create_point(0.0, 0.0, -5.0);
-
-  double wall_z = 10.0;
-  double wall_size = 7.0;
-  double pixel_size = wall_size / HORIZONTAL_SIZE;
-  double half = wall_size / 2.0;
-
-  material m = create_material_default();
-  m.color.x = 1.0; m.color.y = 0.2; m.color.z = 1.0;
-  shape* sphere1 = create_shape(SHAPE);
-  sphere1->material = m;
-  sphere1->material.ambient = 0.15;
-  sphere1->material.color.x = 0.254901;
-  sphere1->material.color.y = 0.423529;
-  sphere1->material.color.z = 0.58823;
-  sphere1->material.shininess = 100.0;
-
-  tuple l_color = create_vector(1.0, 1.0, 1.0);
-  tuple l_position = create_point(-10.0, -10.0, -10.0);
-  point_light p_light = create_point_light(l_position, l_color);
-  shape* sh = create_shape(SHAPE);
-
-  for (int y = 0; y < HORIZONTAL_SIZE; ++y) {
-    double world_y = half - pixel_size * y;
-    for (int x = 0; x < VERTICAL_SIZE; ++x) {
-      double world_x = -half + pixel_size * x;
-      tuple position1 = create_point(world_x, world_y, wall_z);
-      tuple posRayOrigin = tuple_sub(position1, ray_origin);
-      tuple normRayOrigin = tuple_normalize(posRayOrigin);
-      ray ray_to_draw = create_ray(ray_origin.x, ray_origin.y, ray_origin.z, normRayOrigin.x, normRayOrigin.y, normRayOrigin.z );
-      ray_to_draw.direction_vector = tuple_normalize(ray_to_draw.direction_vector);
-      intersections inter = create_intersections();
-      intersect(sphere1, &ray_to_draw, &inter);
-      intersection* hit_intersection = hit(&inter);
-      if (hit_intersection) {
-        tuple point2 = position(ray_to_draw, hit_intersection->t);
-        tuple normal = normal_at(hit_intersection->object_id, point2);
-        tuple eye = tuple_negate(ray_to_draw.direction_vector);
-        tuple pix_color = lighting(hit_intersection->object_id->material, sh, &p_light, point2, eye, normal, true);
-        assert(pix_color.x <= 255 && pix_color.x >= 0);
-        assert(pix_color.y <= 255 && pix_color.y >= 0);
-        assert(pix_color.z <= 255 && pix_color.z >= 0);
-        write_pixel(x, y, pix_color);
-      }
-    }
-  }
-}
-
-// 106 Render complete world
-void render_complete_world() {
-    world w = create_default_world();
-
-    // 1. floor extremely flattened sphere with matte texture
-    shape* floor = create_shape(SHAPE);
-    Mat4x4 floor_transform;
-    gen_scale_matrix(10.0, 0.01, 10.0, floor_transform);
-    mat4x4_mul_in_place(floor_transform, floor->transform, floor->transform);
-
-    assert(equal(floor->t, 1.0));
-    assert(equal(floor->location.x, 0.0));
-    assert(equal(floor->location.y, 0.0));
-    assert(equal(floor->location.z, 0.0));
-    assert(equal(floor->location.w, 0.0));
-
-    assert(equal(floor->transform[0][0], 10.0));
-    assert(equal(floor->transform[1][1], 0.01));
-    assert(equal(floor->transform[2][2], 10.0));
-    assert(equal(floor->transform[3][3], 1.0));
-
-    material floor_material= create_material_default();
-    floor_material.color = create_point(0.9, 0.9, 0.9); // gray
-    floor_material.specular = 0.0;
-    floor->material = floor_material;
-
-    assert(equal(floor->material.color.x, 1.0));
-    assert(equal(floor->material.color.y, 0.9));
-    assert(equal(floor->material.color.z, 0.9));
-    assert(equal(floor->material.specular, 0.0));
-
-    assert(equal(floor->material.ambient, 0.1));
-    assert(equal(floor->material.diffuse, 0.9));
-
-    // 2. wall on left has same scale and color but also rotated and translated into place
-    shape* left_wall = create_shape(SHAPE);
-    Mat4x4 translate_left;
-
-    floor_material.color = create_point(1.0, 0.0, 0.0); // red
-    left_wall->material = floor_material;
-    
-    gen_translate_matrix(0.0, 0.0, 5.0, translate_left);
-    Mat4x4 rotate_y_left;
-    gen_rotate_matrix_Y(-M_PI / 4.0, rotate_y_left);
-    Mat4x4 rotate_x_left;
-    gen_rotate_matrix_X(M_PI / 2.0, rotate_x_left);
-    Mat4x4 scale_left;
-    gen_scale_matrix(10.0, 0.01, 10.0, scale_left);
-    Mat4x4 final_transform_left;
-    mat4x4_set_ident(final_transform_left);
-    mat4x4_mul_in_place(translate_left, final_transform_left, final_transform_left);
-    
-    assert(equal(final_transform_left[0][0], 1.0));
-    assert(equal(final_transform_left[1][0], 0.0));
-    assert(equal(final_transform_left[2][0], 0.0));
-    assert(equal(final_transform_left[3][0], 0.0));
-
-    assert(equal(final_transform_left[0][1], 0.0));
-    assert(equal(final_transform_left[1][1], 1.0));
-    assert(equal(final_transform_left[2][1], 0.0));
-    assert(equal(final_transform_left[3][1], 0.0));
-
-    assert(equal(final_transform_left[0][2], 0.0));
-    assert(equal(final_transform_left[1][2], 0.0));
-    assert(equal(final_transform_left[2][2], 1.0));
-    assert(equal(final_transform_left[3][2], 0.0));
-
-    assert(equal(final_transform_left[0][3], 0.0));
-    assert(equal(final_transform_left[1][3], 0.0));
-    assert(equal(final_transform_left[2][3], 5.0));
-    assert(equal(final_transform_left[3][3], 1.0));
-
-    mat4x4_mul_in_place(final_transform_left, rotate_y_left, final_transform_left);
-
-    assert(equal(final_transform_left[0][0], 0.707106781200000));
-    assert(equal(final_transform_left[1][0], 0.0));
-    assert(equal(final_transform_left[2][0], 0.707106781200000));
-    assert(equal(final_transform_left[3][0], 0.0));
-
-    assert(equal(final_transform_left[0][1], 0.0));
-    assert(equal(final_transform_left[1][1], 1.0));
-    assert(equal(final_transform_left[2][1], 0.0));
-    assert(equal(final_transform_left[3][1], 0.0));
-
-    assert(equal(final_transform_left[0][2], -0.707106781200000));
-    assert(equal(final_transform_left[1][2], 0.0));
-    assert(equal(final_transform_left[2][2], 0.707106781200000));
-    assert(equal(final_transform_left[3][2], 0.0));
-
-    assert(equal(final_transform_left[0][3], 0.0));
-    assert(equal(final_transform_left[1][3], 0.0));
-    assert(equal(final_transform_left[2][3], 5.0));
-    assert(equal(final_transform_left[3][3], 1.0));
-    
-    mat4x4_mul_in_place(final_transform_left, rotate_x_left, final_transform_left);
-    
-    assert(equal(final_transform_left[0][0], 0.707106781200000));
-    assert(equal(final_transform_left[1][0], 0.0));
-    assert(equal(final_transform_left[2][0], 0.707106781200000));
-    assert(equal(final_transform_left[3][0], 0.0));
-
-    assert(equal(final_transform_left[0][1], -0.707106781200000));
-    assert(equal(final_transform_left[1][1], 0.0));
-    assert(equal(final_transform_left[2][1], 0.707106781200000));
-    assert(equal(final_transform_left[3][1], 0.0));
-
-    assert(equal(final_transform_left[0][2], 0.0));
-    assert(equal(final_transform_left[1][2], -1.0));
-    assert(equal(final_transform_left[2][2], 0.0));
-    assert(equal(final_transform_left[3][2], 0.0));
-
-    assert(equal(final_transform_left[0][3], 0.0));
-    assert(equal(final_transform_left[1][3], 0.0));
-    assert(equal(final_transform_left[2][3], 5.0));
-    assert(equal(final_transform_left[3][3], 1.0));
-
-    mat4x4_mul_in_place(final_transform_left, scale_left, final_transform_left);
-
-    assert(equal(final_transform_left[0][0], 7.071067812000001));
-    assert(equal(final_transform_left[1][0], 0.0));
-    assert(equal(final_transform_left[2][0], 7.071067812000001));
-    assert(equal(final_transform_left[3][0], 0.0));
-
-    assert(equal(final_transform_left[0][1], -.007071067670578643));
-    assert(equal(final_transform_left[1][1], 0.0));
-    assert(equal(final_transform_left[2][1], .007071067670578643));
-    assert(equal(final_transform_left[3][1], 0.0));
-
-    assert(equal(final_transform_left[0][2], 0.0));
-    assert(equal(final_transform_left[1][2], -10.0));
-    assert(equal(final_transform_left[2][2], 0.0));
-    assert(equal(final_transform_left[3][2], 0.0));
-
-    assert(equal(final_transform_left[0][3], 0.0));
-    assert(equal(final_transform_left[1][3], 0.0));
-    assert(equal(final_transform_left[2][3], 5.0));
-    assert(equal(final_transform_left[3][3], 1.0));
-
-    mat4x4_copy(final_transform_left, left_wall->transform);
-
-    assert(mat4x4_equal(final_transform_left, left_wall->transform));
-
-    assert(equal(left_wall->transform[0][0], 7.071067812000001));
-    assert(equal(left_wall->transform[1][0], 0.0));
-    assert(equal(left_wall->transform[2][0], 7.071067812000001));
-    assert(equal(left_wall->transform[3][0], 0.0));
-
-    assert(equal(left_wall->transform[0][1], -.007071067670578643));
-    assert(equal(left_wall->transform[1][1], 0.0));
-    assert(equal(left_wall->transform[2][1], .007071067670578643));
-    assert(equal(left_wall->transform[3][1], 0.0));
-
-    assert(equal(left_wall->transform[0][2], 0.0));
-    assert(equal(left_wall->transform[1][2], -10.0));
-    assert(equal(left_wall->transform[2][2], 0.0));
-    assert(equal(left_wall->transform[3][2], 0.0));
-
-    assert(equal(left_wall->transform[0][3], 0.0));
-    assert(equal(left_wall->transform[1][3], 0.0));
-    assert(equal(left_wall->transform[2][3], 5.0));
-    assert(equal(left_wall->transform[3][3], 1.0));
-
-    left_wall->material = floor_material;
-
-    assert(equal(translate_left[0][3], 0.0));
-    assert(equal(translate_left[1][3], 0.0));
-    assert(equal(translate_left[2][3], 5.0));
-    assert(equal(translate_left[3][3], 1.0));
-
-    assert(equal(rotate_y_left[0][0], cos(-M_PI/4.0)));
-    assert(equal(rotate_y_left[0][2], sin(-M_PI/4.0)));
-    assert(equal(rotate_y_left[2][0], -sin(-M_PI / 4.0)));
-    assert(equal(rotate_y_left[2][2], cos(-M_PI / 4.0)));
-
-    assert(equal(rotate_x_left[0][0], 1.0));
-    assert(equal(rotate_x_left[1][1], cos(M_PI / 2.0)));
-    assert(equal(rotate_x_left[1][2], -sin(M_PI / 2.0)));
-    assert(equal(rotate_x_left[2][1], sin(M_PI / 2.0)));
-    assert(equal(rotate_x_left[2][2], cos(M_PI / 2.0)));
-
-    assert(equal(scale_left[0][0], 10.0));
-    assert(equal(scale_left[1][1], 0.01));
-    assert(equal(scale_left[2][2], 10.0));
-
-    // 3. wall on right is identical to left, rotated opposite direction in y
-    shape* right_wall = create_shape(SHAPE);
-
-    floor_material.color = create_point(0.0, 0.0, 1.0); // blue
-    mat4x4_set_ident(final_transform_left);
-    mat4x4_mul_in_place(final_transform_left, translate_left, final_transform_left);
-    Mat4x4 rotate_y_right;
-    gen_rotate_matrix_Y(M_PI / 4.0, rotate_y_right);
-    mat4x4_mul_in_place(final_transform_left, rotate_y_right, final_transform_left);
-    mat4x4_mul_in_place(final_transform_left, rotate_x_left, final_transform_left);
-    mat4x4_mul_in_place(final_transform_left, scale_left, final_transform_left);
-    mat4x4_copy(final_transform_left, right_wall->transform);
-
-
-    left_wall->material = floor_material;
-
-    assert(equal(right_wall->transform[0][0], 7.071067812000001));
-    assert(equal(right_wall->transform[1][0], 0.0));
-    assert(equal(right_wall->transform[2][0], -7.071067812000001));
-    assert(equal(right_wall->transform[3][0], 0.0));
-
-    assert(equal(right_wall->transform[0][1], .007071067670578643));
-    assert(equal(right_wall->transform[1][1], 0.0));
-    assert(equal(right_wall->transform[2][1], .007071067670578643));
-    assert(equal(right_wall->transform[3][1], 0.0));
-
-    assert(equal(right_wall->transform[0][2], 0.0));
-    assert(equal(right_wall->transform[1][2], -10.0));
-    assert(equal(right_wall->transform[2][2], 0.0));
-    assert(equal(right_wall->transform[3][2], 0.0));
-
-    assert(equal(right_wall->transform[0][3], 0.0));
-    assert(equal(right_wall->transform[1][3], 0.0));
-    assert(equal(right_wall->transform[2][3], 5.0));
-    assert(equal(right_wall->transform[3][3], 1.0));
-
-    // 4. Large sphere in middle is a unit sphere, translated upward slightly and colored green
-    shape* middle_sphere = create_shape(SHAPE);
-    Mat4x4 middle_transform;
-    gen_translate_matrix(-0.5, 1.0, 0.5, middle_transform);
-
-    mat4x4_copy(middle_transform, middle_sphere->transform);
-
-    assert(equal(middle_sphere->transform[0][0], 1.0));
-    assert(equal(middle_sphere->transform[1][0], 0.0));
-    assert(equal(middle_sphere->transform[2][0], 0.0));
-    assert(equal(middle_sphere->transform[3][0], 0.0));
-
-    assert(equal(middle_sphere->transform[0][1], 0.0));
-    assert(equal(middle_sphere->transform[1][1], 1.0));
-    assert(equal(middle_sphere->transform[2][1], 0.0));
-    assert(equal(middle_sphere->transform[3][1], 0.0));
-
-    assert(equal(middle_sphere->transform[0][2], 0.0));
-    assert(equal(middle_sphere->transform[1][2], 0.0));
-    assert(equal(middle_sphere->transform[2][2], 1.0));
-    assert(equal(middle_sphere->transform[3][2], 0.0));
-
-    assert(equal(middle_sphere->transform[0][3], -0.5));
-    assert(equal(middle_sphere->transform[1][3], 1.0));
-    assert(equal(middle_sphere->transform[2][3], 0.5));
-    assert(equal(middle_sphere->transform[3][3], 1.0));
-
-    material middle_material = create_material_default();
-    middle_material.color = create_point(0.1, 1.0, 0.5);
-    middle_material.diffuse = 0.7;
-    middle_material.specular = 0.3;
-    middle_sphere->material = middle_material;
-
-    // 5. Smaller green sphere on the right is scaled in half
-    shape* right_sphere = create_shape(SHAPE);
-    Mat4x4 translate_right_sphere;
-    gen_translate_matrix(1.5, 0.5, -0.5, translate_right_sphere);
-    Mat4x4 scale_right_sphere;
-    gen_scale_matrix(0.5, 0.5, 0.5, scale_right_sphere);
-    Mat4x4 final_transform_right_sphere;
-    mat4x4_set_ident(final_transform_right_sphere);
-
-    mat4x4_mul_in_place(final_transform_right_sphere, translate_right_sphere, final_transform_right_sphere);
-    mat4x4_mul_in_place(final_transform_right_sphere, scale_right_sphere, final_transform_right_sphere);
-    mat4x4_copy(final_transform_right_sphere, right_sphere->transform);
-
-    assert(equal(right_sphere->transform[0][0], 0.5));
-    assert(equal(right_sphere->transform[1][0], 0.0));
-    assert(equal(right_sphere->transform[2][0], 0.0));
-    assert(equal(right_sphere->transform[3][0], 0.0));
-
-    assert(equal(right_sphere->transform[0][1], 0.0));
-    assert(equal(right_sphere->transform[1][1], 0.5));
-    assert(equal(right_sphere->transform[2][1], 0.0));
-    assert(equal(right_sphere->transform[3][1], 0.0));
-
-    assert(equal(right_sphere->transform[0][2], 0.0));
-    assert(equal(right_sphere->transform[1][2], 0.0));
-    assert(equal(right_sphere->transform[2][2], 0.5));
-    assert(equal(right_sphere->transform[3][2], 0.0));
-
-    assert(equal(right_sphere->transform[0][3], 1.5));
-    assert(equal(right_sphere->transform[1][3], 0.5));
-    assert(equal(right_sphere->transform[2][3], -0.5));
-    assert(equal(right_sphere->transform[3][3], 1.0));
-
-    material right_sphere_material = create_material_default();
-    right_sphere_material.color = create_point(0.5, 1.0, 0.1);
-    right_sphere_material.diffuse = 0.7;
-    right_sphere_material.specular = 0.3;
-    right_sphere->material = right_sphere_material;
-
-    // 6. Smallest sphere is scaled by a tird, before being translated
-    shape* small_sphere = create_shape(SHAPE);
-    Mat4x4 translate_small_sphere;
-    gen_translate_matrix(-1.5, 0.33, -0.75, translate_small_sphere);
-    Mat4x4 scale_small_sphere;
-    gen_scale_matrix(0.33, 0.33, 0.33, scale_small_sphere);
-    Mat4x4 final_transform_small_sphere;
-    mat4x4_set_ident(final_transform_small_sphere);
-    mat4x4_mul_in_place(final_transform_small_sphere, translate_small_sphere, final_transform_small_sphere);
-    mat4x4_mul_in_place(final_transform_small_sphere, scale_small_sphere, final_transform_small_sphere);
-    mat4x4_copy(final_transform_small_sphere, small_sphere->transform);
-
-    material small_sphere_material = create_material_default();
-    small_sphere_material.color = create_point(1.0, 0.8f, 0.1);
-    small_sphere_material.diffuse = 0.7;
-    small_sphere_material.specular = 0.3;
-    small_sphere->material = small_sphere_material;
-
-    // putting geometry together
-    small_sphere->next = NULL;
-    right_sphere->next = small_sphere;
-    middle_sphere->next = right_sphere;
-    right_wall->next = middle_sphere;
-    left_wall->next = right_wall;
-    floor->next = left_wall;
-    w.objects = floor;
-
-    assert(equal(w.objects->material.color.x, 1.0));
-    assert(equal(w.objects->material.color.y, 0.9));
-    assert(equal(w.objects->material.color.z, 0.9));
-    assert(equal(w.objects->material.specular, 0.0));
-
-    assert(equal(w.objects->material.ambient, 0.1));
-    assert(equal(w.objects->material.diffuse, 0.9));
-
-    // Ensure the values here have not changed after stringing together the objects
-
-    shape* test_object = w.objects; // floor
-
-    assert(equal(test_object->transform[0][0], 10.0));
-    assert(equal(test_object->transform[1][1], 0.01));
-    assert(equal(test_object->transform[2][2], 10.0));
-    assert(equal(test_object->transform[3][3], 1.0));
-
-    test_object = test_object->next; // left wall
-
-    assert(equal(test_object->transform[0][0], 7.071067812000001));
-    assert(equal(test_object->transform[1][0], 0.0));
-    assert(equal(test_object->transform[2][0], 7.071067812000001));
-    assert(equal(test_object->transform[3][0], 0.0));
-
-    assert(equal(test_object->transform[0][1], -.007071067670578643));
-    assert(equal(test_object->transform[1][1], 0.0));
-    assert(equal(test_object->transform[2][1], .007071067670578643));
-    assert(equal(test_object->transform[3][1], 0.0));
-
-    assert(equal(test_object->transform[0][2], 0.0));
-    assert(equal(test_object->transform[1][2], -10.0));
-    assert(equal(test_object->transform[2][2], 0.0));
-    assert(equal(test_object->transform[3][2], 0.0));
-
-    assert(equal(test_object->transform[0][3], 0.0));
-    assert(equal(test_object->transform[1][3], 0.0));
-    assert(equal(test_object->transform[2][3], 5.0));
-    assert(equal(test_object->transform[3][3], 1.0));
-
-    // lighting
-    tuple light_position = create_point(-10.0, 10.0, -10.0);
-    tuple light_intensity = create_point(1.0, 1.0, 1.0);
-    *w.lights = create_point_light(light_position, light_intensity);
-
-    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, M_PI/3.0);
-    tuple from = create_point(0.0, 1.5, -5.0);
-    tuple to = create_point(0.0, 1.0, 0.0);
-    tuple up = create_vector(0.0, 1.0, 0.0);
-    view_transform(from, to, up, c->view_transform);
-
-    render(c, &w);
-
-    free(c);
-    free(floor);
-    free(left_wall);
-    free(right_wall);
-    free(middle_sphere);
-    free(right_sphere);
-    free(small_sphere);
-}
-
-// 125 Render complete world with plane
-void render_complete_world_with_plane() {
-    world w = create_default_world();
-
-    shape* floor = create_shape(PLANE);
-    material floor_material = create_material_default();
-    floor_material.color = create_point(1.0, 1.0, 1.0); // white
-    floor_material.specular = 0.0;
-    //floor_material.pattern = ring_pattern(create_point(0.8f, 1.0, 0.8f), create_point(1.0, 1.0, 1.0));
-    //floor_material.has_pattern = true;
-    floor_material.reflective = 0.0;
-    floor_material.transparency = 0.0;
-    floor->material = floor_material;
-
-    shape* right_wall = create_shape(PLANE);
-    Mat4x4 rot_wall_mat;
-    gen_rotate_matrix_Z(M_PI / 2.0, rot_wall_mat);
-
-    Mat4x4 trans_wall_mat;
-    gen_translate_matrix(0.0, -8.25, 0.0, trans_wall_mat);
-    //mat4x4_mul_in_place(trans_wall_mat, rot_wall_mat, trans_wall_mat);
-    mat4x4_copy(rot_wall_mat, right_wall->transform);
-    floor_material.color = create_point(0.0, 0.0, 1.0); // blue
-    right_wall->material = floor_material;
-
-    shape* left_wall = create_shape(PLANE);
-    floor_material.color = create_point(1.0, 0.0, 0.0); // red
-    gen_rotate_matrix_X(-M_PI / 2.0, rot_wall_mat);
-
-    gen_translate_matrix(0.0, 0.0, -2.75, trans_wall_mat);
-    mat4x4_mul_in_place(rot_wall_mat, trans_wall_mat, rot_wall_mat);
-    mat4x4_copy(rot_wall_mat, left_wall->transform);
-    left_wall->material = floor_material;
-
-    shape* glass_sphere = create_glass_sphere();
-    Mat4x4 front_transform;
-    gen_translate_matrix(-7.0, 1.0, -8.0, front_transform);
-
-    mat4x4_copy(front_transform, glass_sphere->transform);
-
-    glass_sphere->material.diffuse = 0.0;
-    glass_sphere->material.refractive_index = 1.5;
-    glass_sphere->material.transparency = 0.9;
-    glass_sphere->material.reflective = 0.2;
-
-    //material front_material = create_material_default();
-    //front_material.color = create_point(0.1, 0.0, 0.45);
-    //front_material.ambient = 0.0;
-    //front_material.diffuse = 0.0;
-    //front_material.specular = 0.0;
-    //front_material.shininess = 200.0;
-    //front_material.reflective = 0.2;
-    //front_material.transparency = 0.8f;
-    //front_material.has_pattern = false;
-    /*
-    m.ambient = 0.1;
-    m.diffuse = 0.9;
-    m.specular = 0.9;
-    m.shininess = 200.0;
-    m.reflective = 0.0;
-    m.transparency = 0.0;
-    m.refractive_index = 1.0;
-    */
-    //front_material.transparency = 1.0;
-
-    //glass_sphere->material = front_material;
-
-    shape* middle_sphere = create_shape(SHAPE);
-    Mat4x4 middle_transform;
-    gen_translate_matrix(-3.5, 1.0, -3.0, middle_transform);
-
-    mat4x4_copy(middle_transform, middle_sphere->transform);
-
-    material middle_material = create_material_default();
-    middle_material.color = create_point(0.1, 1.0, 0.5);
-    middle_material.diffuse = 0.7;
-    middle_material.specular = 0.3;
-    middle_material.transparency = 0.0;
-
-    tuple light = create_point(1.0, 1.0, 1.0);
-    tuple dark = create_point(0.439, 0.305, 0.827); // purple
-    pattern pat = stripe_pattern(light, dark);
-
-    Mat4x4 scale_pattern;
-    gen_scale_matrix(0.175, 0.175, 0.175, scale_pattern);
-
-    set_pattern_transform(&pat, scale_pattern);
-    middle_material.pattern = pat;
-    middle_material.has_pattern = true;
-
-    middle_sphere->material = middle_material;
-
-    shape* right_sphere = create_shape(SHAPE);
-    Mat4x4 translate_right_sphere;
-    gen_translate_matrix(-1.95, 1.0, -5.5, translate_right_sphere);
-    Mat4x4 scale_right_sphere;
-    gen_scale_matrix(0.5, 0.5, 0.5, scale_right_sphere);
-    Mat4x4 final_transform_right_sphere;
-    mat4x4_set_ident(final_transform_right_sphere);
-
-    mat4x4_mul_in_place(final_transform_right_sphere, translate_right_sphere, final_transform_right_sphere);
-    mat4x4_mul_in_place(final_transform_right_sphere, scale_right_sphere, final_transform_right_sphere);
-    mat4x4_copy(final_transform_right_sphere, right_sphere->transform);
-
-    material right_sphere_material = create_material_default();
-    right_sphere_material.color = create_point(0.0, 0.0, 0.0);
-    right_sphere_material.diffuse = 0.7;
-    right_sphere_material.specular = 0.3;
-    right_sphere_material.reflective = 1.0;
-    right_sphere_material.transparency = 0.0;
-    //right_sphere_material.has_pattern = true;
-    //tuple white = create_point(1.0, 1.0, 1.0);
-    //tuple black = create_point(0.0, 0.0, 0.0);
-    //right_sphere_material.pattern = gradiant_pattern(white, black);
-    right_sphere->material = right_sphere_material;
-
-    shape* origin_sphere = create_shape(SHAPE);
-    origin_sphere->material.color.z = 0.0; // green color
-    origin_sphere->material.color.x = 0.0;
-
-    shape* small_sphere = create_shape(SHAPE);
-    Mat4x4 translate_small_sphere;
-    gen_translate_matrix(-6.5, 0.33, -2.75, translate_small_sphere);
-    Mat4x4 scale_small_sphere;
-    gen_scale_matrix(0.33, 0.33, 0.33, scale_small_sphere);
-    Mat4x4 final_transform_small_sphere;
-    mat4x4_set_ident(final_transform_small_sphere);
-    mat4x4_mul_in_place(final_transform_small_sphere, translate_small_sphere, final_transform_small_sphere);
-    mat4x4_mul_in_place(final_transform_small_sphere, scale_small_sphere, final_transform_small_sphere);
-    mat4x4_copy(final_transform_small_sphere, small_sphere->transform);
-    material small_sphere_material = create_material_default();
-    small_sphere_material.color = create_point(1.0, 0.8f, 0.1);
-    small_sphere_material.diffuse = 0.7;
-    small_sphere_material.specular = 0.3;
-    small_sphere_material.shininess = 100.0;
-    tuple small_sphere_light = create_point(0.2, 0.2, 0.2);
-    tuple small_sphere_dark = create_point(0.0, 0.0, 0.0);
-    pattern small_sphere_pat = stripe_pattern(small_sphere_light, small_sphere_dark);
-    Mat4x4 small_sphere_scale_pattern;
-    gen_scale_matrix(0.07, 0.07, 0.07, small_sphere_scale_pattern);
-    set_pattern_transform(&small_sphere_pat, small_sphere_scale_pattern);
-    small_sphere_material.pattern = small_sphere_pat;
-    small_sphere_material.has_pattern = true;
-    small_sphere->material = small_sphere_material;
-
-    /*
-    origin_sphere->next = NULL;
-    left_wall->next = origin_sphere;
-    right_wall->next = left_wall;
-    floor->next = right_wall;
-    w.objects = floor;
-    */
-    // putting geometry together
-
-    origin_sphere->next = NULL;
-    small_sphere->next = origin_sphere;
-    right_sphere->next = small_sphere;
-    middle_sphere->next = right_sphere;
-    glass_sphere->next = middle_sphere;
-    left_wall->next = glass_sphere;
-    right_wall->next = left_wall;
-    floor->next = right_wall;
-    w.objects = floor;
-
-
-    // lighting
-    tuple light_position = create_point(-10.0, 10.0, -10.0);
-    tuple light_intensity = create_point(1.0, 1.0, 1.0);
-    *w.lights = create_point_light(light_position, light_intensity);
-
-    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, M_PI / 3.0);
-    tuple from = create_point(-10.0, 1.5, -10.0);
-    tuple to = create_point(0.0, 0.0, 0.0);
-    tuple up = create_vector(0.0, 1.0, 0.0);
-    view_transform(from, to, up, c->view_transform);
-
-    render(c, &w);
-
-    free(c);
-    free(floor);
-    free(middle_sphere);
-    free(right_sphere);
-    free(origin_sphere);
-}
-
 // 119 The default transformation
 int default_transformation_of_shape() {
     shape* s = create_shape(SHAPE);
@@ -5123,9 +4480,9 @@ int checkers_pattern_should_repeat_in_z_test() {
 int precompute_reflection_vector_test() {
     shape* sp = create_shape(PLANE);
     ray r = create_ray(0.0, 1.0, -1.0, 0.0, -sqrt(2)/2, sqrt(2)/2);
-    intersection intersect1 = { sqrt(2.0), sp };
     intersections intersects = create_intersections();
-    comps comp = prepare_computations(&intersect1, &r, &intersects);
+    add_intersection(&intersects, sqrt(2.0), sp);
+    comps comp = prepare_computations(&intersects.itersection[0], &r, &intersects);
     assert(equal(comp.reflectv.x, 0.0));
     assert(equal(comp.reflectv.y, sqrt(2) / 2));
     assert(equal(comp.reflectv.z, sqrt(2) / 2));
@@ -5140,11 +4497,10 @@ int reflected_color_for_non_reflective_material_test() {
     material sp_material = create_material_default();
     sp_material.ambient = 1.0;
     sp->material = sp_material;
-    w.objects = sp;
-    sp->next = sp;
-    intersection intersect1 = { sqrt(2.0), sp };
+    w.objects->next = sp; // sphere is 2nd object in world
     intersections intersects = create_intersections();
-    comps comp = prepare_computations(&intersect1, &r, &intersects);
+    add_intersection(&intersects, 1.0, sp);
+    comps comp = prepare_computations(&intersects.itersection[0], &r, &intersects);
     tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.0, color.x));
     assert(equal(0.0, color.y));
@@ -5156,17 +4512,17 @@ int reflected_color_for_non_reflective_material_test() {
 int reflected_color_for_reflective_material_test() {
     world w = create_default_world();
     shape* pl = create_shape(PLANE);
-    Mat4x4 trans_mat;
-    gen_translate_matrix(0.0, -1.0, 0.0, trans_mat);
-    mat4x4_copy(trans_mat, pl->transform);
     material plane_material = create_material_default();
     plane_material.reflective = 0.5;
     pl->material = plane_material;
-    w.objects->next->next = pl; // Two objects already exist in the default world
+    Mat4x4 trans_mat;
+    gen_translate_matrix(0.0, -1.0, 0.0, trans_mat);
+    mat4x4_copy(trans_mat, pl->transform);
+    add_shape_to_world(pl, &w);
     ray r = create_ray(0.0, 0.0, -3.0, 0.0, -sqrt(2)/2, sqrt(2)/2);
-    intersection intersect1 = { sqrt(2.0), pl };
     intersections intersects = create_intersections();
-    comps comp = prepare_computations(&intersect1, &r, &intersects);
+    add_intersection(&intersects, sqrt(2.0), pl);
+    comps comp = prepare_computations(&intersects.itersection[0], &r, &intersects);
     tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.19033077235655871, color.x));
     assert(equal(0.23791346190051155, color.y));
@@ -5184,11 +4540,11 @@ int shade_hit_with_reflective_material_test() {
     Mat4x4 trans_mat;
     gen_translate_matrix(0.0, -1.0, 0.0, trans_mat);
     mat4x4_copy(trans_mat, pl->transform);
-    w.objects->next->next = pl; // Two objects already exist in the default world
+    add_shape_to_world(pl, &w);
     ray r = create_ray(0.0, 0.0, -3.0, 0.0, -sqrt(2)/2, sqrt(2)/2);
-    intersection intersect1 = { sqrt(2.0), pl };
     intersections intersects = create_intersections();
-    comps comp = prepare_computations(&intersect1, &r, &intersects);
+    add_intersection(&intersects, sqrt(2.0), pl);
+    comps comp = prepare_computations(&intersects.itersection[0], &r, &intersects);
     tuple color = shade_hit(&w, &comp, RECURSION_DEPTH);
     assert(equal(0.87675614729320861, color.x));
     assert(equal(0.92433883683716145, color.y));
@@ -5198,9 +4554,10 @@ int shade_hit_with_reflective_material_test() {
 
 // 146 color_at with mutually reflective surfaces
 int color_at_with_mutually_reflective_surfaces_test() {
-    world w = create_default_world();
+    world w = create_world();
     point_light plight = create_point_light(create_point(0.0, 0.0, 0.0), create_point(1.0, 1.0, 1.0));
     w.lights = &plight;
+
     shape* lower = create_shape(PLANE);
     material lower_material = create_material_default();
     lower_material.reflective = 1.0;
@@ -5208,7 +4565,7 @@ int color_at_with_mutually_reflective_surfaces_test() {
     Mat4x4 trans_mat1;
     gen_translate_matrix(0.0, -1.0, 0.0, trans_mat1);
     mat4x4_copy(trans_mat1, lower->transform);
-    w.objects = lower;
+    add_shape_to_world(lower, &w);
 
     shape* upper = create_shape(PLANE);
     material upper_material = create_material_default();
@@ -5217,11 +4574,11 @@ int color_at_with_mutually_reflective_surfaces_test() {
     Mat4x4 trans_mat2;
     gen_translate_matrix(0.0, 1.0, 0.0, trans_mat2);
     mat4x4_copy(trans_mat2, upper->transform);
-    upper->next = upper;
+    add_shape_to_world(upper, &w);
 
     ray r = create_ray(0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
     color_at(&w, &r, RECURSION_DEPTH);
-    // NOTE: This test should eventually end to pass
+    // NOTE: This test should eventually exit to pass
     return 0;
 }
 
@@ -5235,12 +4592,13 @@ int reflected_color_at_max_recursive_depth_test() {
     Mat4x4 trans_mat;
     gen_translate_matrix(0.0, -1.0, 0.0, trans_mat);
     mat4x4_copy(trans_mat, pl->transform);
-    w.objects = pl;
+    add_shape_to_world(pl, &w);
     ray r = create_ray(0.0, 0.0, -3.0, 0.0, -sqrt(2)/2, sqrt(2)/2);
-    intersection intersect1 = { sqrt(2.0), pl };
+    
     intersections intersects = create_intersections();
-    comps comp = prepare_computations(&intersect1, &r, &intersects);
-    tuple color = reflected_color(&w, &comp, RECURSION_DEPTH);
+    add_intersection(&intersects, sqrt(2.0), pl);
+    comps comp = prepare_computations(&intersects.itersection[0], &r, &intersects);
+    tuple color = reflected_color(&w, &comp, 0);
     assert(equal(0.0, color.x));
     assert(equal(0.0, color.y));
     assert(equal(0.0, color.z));
@@ -5376,7 +4734,7 @@ int finding_n1_and_n2_at_various_intersections_test() {
     assert(equal(glass_comps.n2, 2.5));
     glass_comps = prepare_computations(&intersects.itersection[3], &r, &intersects);
     assert(equal(glass_comps.n1, 2.5));
-    assert(equal(glass_comps.n2, 2.5));
+    assert(equal(glass_comps.n2, 2.5)); 
     glass_comps = prepare_computations(&intersects.itersection[4], &r, &intersects);
     assert(equal(glass_comps.n1, 2.5));
     assert(equal(glass_comps.n2, 1.5));
@@ -5532,79 +4890,6 @@ int shade_hit_with_transparent_material_test() {
     return 0;
 }
 
-// extra rendering of dual spheres refracting on floor
-void render_dual_spheres_refracting_on_floor() {
-    world w = create_world();
-
-    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, 0.45);
-    tuple from = create_point(0.0, 0.0, -5.0);
-    tuple to = create_point(0.0, 0.0, 0.0);
-    tuple up = create_vector(0.0, 1.0, 0.0);
-    view_transform(from, to, up, c->view_transform);
-
-    tuple light_position = create_point(2.0, 10.0, -5.0);
-    tuple light_intensity = create_point(0.9, 0.9, 0.9);
-    *w.lights = create_point_light(light_position, light_intensity);
-
-    shape* wall = create_shape(PLANE);
-
-    Mat4x4 wall_rotate_transform;
-    gen_rotate_matrix_X(M_PI/2.0, wall_rotate_transform);
-    Mat4x4 wall_position_transform;
-    gen_translate_matrix(0.0, 0.0, 20.0, wall_position_transform);
-    mat4x4_mul_in_place(wall_position_transform, wall_rotate_transform, wall_position_transform);
-    mat4x4_copy(wall_position_transform, wall->transform);
-
-    material wall_material = create_material_default();
-    tuple from_color = create_point(0.15, 0.15, 0.15);
-    tuple to_color = create_point(0.85, 0.85, 0.85);
-    pattern checkers = checkers_pattern(from_color, to_color);
-    wall_material.has_pattern = true;
-    wall_material.pattern = checkers;
-    wall_material.ambient = 0.8f;
-    wall_material.diffuse = 0.2;
-    wall_material.specular = 0.0;
-
-    wall->material = wall_material;
-
-    shape* outer_sphere = create_shape(SPHERE);
-    material sphere_material = create_material_default();
-
-    sphere_material.ambient = 0.0;
-    sphere_material.color = create_point(1.0, 1.0, 1.0);
-    sphere_material.diffuse = 0.0;
-    sphere_material.specular = 0.9;
-    sphere_material.shininess = 300.0;
-    sphere_material.reflective = 0.9;
-    sphere_material.transparency = 0.9;
-    sphere_material.refractive_index = 1.5;
-    outer_sphere->material = sphere_material;
-
-    shape* hollow_center = create_shape(SPHERE);
-    Mat4x4 hollow_center_transform;
-    gen_scale_matrix(0.5, 0.5, 0.5, hollow_center_transform);
-    mat4x4_copy(hollow_center_transform, hollow_center->transform);
-
-    material hollow_sphere_material = create_material_default();
-
-    hollow_sphere_material.ambient = 0.0;
-    hollow_sphere_material.color = create_point(1.0, 1.0, 1.0);
-    hollow_sphere_material.diffuse = 0.0;
-    hollow_sphere_material.specular = 0.9;
-    hollow_sphere_material.shininess = 300.0;
-    hollow_sphere_material.reflective = 0.9;
-    hollow_sphere_material.transparency = 0.9;
-    hollow_sphere_material.refractive_index = 1.0000034;
-    hollow_center->material = hollow_sphere_material;
-
-    add_shape_to_world(hollow_center, &w);
-    add_shape_to_world(outer_sphere, &w);
-    add_shape_to_world(wall, &w);
-    world_print(w);
-    camera_print(c);
-    render(c, &w);
-}
-
 // 161 The Schlick approximation under total internal reflection
 int schlick_approximation_under_total_internal_reflection_test() {
     shape* glass_sphere = create_glass_sphere();
@@ -5710,10 +4995,701 @@ int shade_hit_with_reflective_transparent_material_test() {
     return 0;
 }
 
+#endif
+
+/*------------------------------------------------------------------------------------------------------------------*/
+/*------------------------------------------------------------------------------------------------------------------*/
+/*------------------------------------------------------------------------------------------------------------------*/
+
+// 72 Hint #4
+void render_sphere() {
+    tuple ray_origin = create_point(0.0, 0.0, -5.0);
+
+    double wall_z = 10.0;
+    double wall_size = 7.0;
+    double pixel_size = wall_size / HORIZONTAL_SIZE;
+    double half = wall_size / 2.0;
+
+    material m = create_material_default();
+    m.color.x = 1.0; m.color.y = 0.2; m.color.z = 1.0;
+    shape* sphere1 = create_shape(SHAPE);
+    sphere1->material = m;
+    sphere1->material.ambient = 0.15;
+    sphere1->material.color.x = 0.254901;
+    sphere1->material.color.y = 0.423529;
+    sphere1->material.color.z = 0.58823;
+    sphere1->material.shininess = 100.0;
+
+    tuple l_color = create_vector(1.0, 1.0, 1.0);
+    tuple l_position = create_point(-10.0, -10.0, -10.0);
+    point_light p_light = create_point_light(l_position, l_color);
+    shape* sh = create_shape(SHAPE);
+
+    for (int y = 0; y < HORIZONTAL_SIZE; ++y) {
+        double world_y = half - pixel_size * y;
+        for (int x = 0; x < VERTICAL_SIZE; ++x) {
+            double world_x = -half + pixel_size * x;
+            tuple position1 = create_point(world_x, world_y, wall_z);
+            tuple posRayOrigin = tuple_sub(position1, ray_origin);
+            tuple normRayOrigin = tuple_normalize(posRayOrigin);
+            ray ray_to_draw = create_ray(ray_origin.x, ray_origin.y, ray_origin.z, normRayOrigin.x, normRayOrigin.y, normRayOrigin.z);
+            ray_to_draw.direction_vector = tuple_normalize(ray_to_draw.direction_vector);
+            intersections inter = create_intersections();
+            intersect(sphere1, &ray_to_draw, &inter);
+            intersection* hit_intersection = hit(&inter);
+            if (hit_intersection) {
+                tuple point2 = position(ray_to_draw, hit_intersection->t);
+                tuple normal = normal_at(hit_intersection->object_id, point2);
+                tuple eye = tuple_negate(ray_to_draw.direction_vector);
+                tuple pix_color = lighting(hit_intersection->object_id->material, sh, &p_light, point2, eye, normal, true);
+                assert(pix_color.x <= 255 && pix_color.x >= 0);
+                assert(pix_color.y <= 255 && pix_color.y >= 0);
+                assert(pix_color.z <= 255 && pix_color.z >= 0);
+                write_pixel(x, y, pix_color);
+            }
+        }
+    }
+}
+
+// 106 Render complete world
+void render_complete_world() {
+    world w = create_default_world();
+
+    // 1. floor extremely flattened sphere with matte texture
+    shape* floor = create_shape(SHAPE);
+    Mat4x4 floor_transform;
+    gen_scale_matrix(10.0, 0.01, 10.0, floor_transform);
+    mat4x4_mul_in_place(floor_transform, floor->transform, floor->transform);
+
+    assert(equal(floor->t, 1.0));
+    assert(equal(floor->location.x, 0.0));
+    assert(equal(floor->location.y, 0.0));
+    assert(equal(floor->location.z, 0.0));
+    assert(equal(floor->location.w, 0.0));
+
+    assert(equal(floor->transform[0][0], 10.0));
+    assert(equal(floor->transform[1][1], 0.01));
+    assert(equal(floor->transform[2][2], 10.0));
+    assert(equal(floor->transform[3][3], 1.0));
+
+    material floor_material = create_material_default();
+    floor_material.color = create_point(0.9, 0.9, 0.9); // gray
+    floor_material.specular = 0.0;
+    floor->material = floor_material;
+
+    assert(equal(floor->material.color.x, 1.0));
+    assert(equal(floor->material.color.y, 0.9));
+    assert(equal(floor->material.color.z, 0.9));
+    assert(equal(floor->material.specular, 0.0));
+
+    assert(equal(floor->material.ambient, 0.1));
+    assert(equal(floor->material.diffuse, 0.9));
+
+    // 2. wall on left has same scale and color but also rotated and translated into place
+    shape* left_wall = create_shape(SHAPE);
+    Mat4x4 translate_left;
+
+    floor_material.color = create_point(1.0, 0.0, 0.0); // red
+    left_wall->material = floor_material;
+
+    gen_translate_matrix(0.0, 0.0, 5.0, translate_left);
+    Mat4x4 rotate_y_left;
+    gen_rotate_matrix_Y(-M_PI / 4.0, rotate_y_left);
+    Mat4x4 rotate_x_left;
+    gen_rotate_matrix_X(M_PI / 2.0, rotate_x_left);
+    Mat4x4 scale_left;
+    gen_scale_matrix(10.0, 0.01, 10.0, scale_left);
+    Mat4x4 final_transform_left;
+    mat4x4_set_ident(final_transform_left);
+    mat4x4_mul_in_place(translate_left, final_transform_left, final_transform_left);
+
+    assert(equal(final_transform_left[0][0], 1.0));
+    assert(equal(final_transform_left[1][0], 0.0));
+    assert(equal(final_transform_left[2][0], 0.0));
+    assert(equal(final_transform_left[3][0], 0.0));
+
+    assert(equal(final_transform_left[0][1], 0.0));
+    assert(equal(final_transform_left[1][1], 1.0));
+    assert(equal(final_transform_left[2][1], 0.0));
+    assert(equal(final_transform_left[3][1], 0.0));
+
+    assert(equal(final_transform_left[0][2], 0.0));
+    assert(equal(final_transform_left[1][2], 0.0));
+    assert(equal(final_transform_left[2][2], 1.0));
+    assert(equal(final_transform_left[3][2], 0.0));
+
+    assert(equal(final_transform_left[0][3], 0.0));
+    assert(equal(final_transform_left[1][3], 0.0));
+    assert(equal(final_transform_left[2][3], 5.0));
+    assert(equal(final_transform_left[3][3], 1.0));
+
+    mat4x4_mul_in_place(final_transform_left, rotate_y_left, final_transform_left);
+
+    assert(equal(final_transform_left[0][0], 0.707106781200000));
+    assert(equal(final_transform_left[1][0], 0.0));
+    assert(equal(final_transform_left[2][0], 0.707106781200000));
+    assert(equal(final_transform_left[3][0], 0.0));
+
+    assert(equal(final_transform_left[0][1], 0.0));
+    assert(equal(final_transform_left[1][1], 1.0));
+    assert(equal(final_transform_left[2][1], 0.0));
+    assert(equal(final_transform_left[3][1], 0.0));
+
+    assert(equal(final_transform_left[0][2], -0.707106781200000));
+    assert(equal(final_transform_left[1][2], 0.0));
+    assert(equal(final_transform_left[2][2], 0.707106781200000));
+    assert(equal(final_transform_left[3][2], 0.0));
+
+    assert(equal(final_transform_left[0][3], 0.0));
+    assert(equal(final_transform_left[1][3], 0.0));
+    assert(equal(final_transform_left[2][3], 5.0));
+    assert(equal(final_transform_left[3][3], 1.0));
+
+    mat4x4_mul_in_place(final_transform_left, rotate_x_left, final_transform_left);
+
+    assert(equal(final_transform_left[0][0], 0.707106781200000));
+    assert(equal(final_transform_left[1][0], 0.0));
+    assert(equal(final_transform_left[2][0], 0.707106781200000));
+    assert(equal(final_transform_left[3][0], 0.0));
+
+    assert(equal(final_transform_left[0][1], -0.707106781200000));
+    assert(equal(final_transform_left[1][1], 0.0));
+    assert(equal(final_transform_left[2][1], 0.707106781200000));
+    assert(equal(final_transform_left[3][1], 0.0));
+
+    assert(equal(final_transform_left[0][2], 0.0));
+    assert(equal(final_transform_left[1][2], -1.0));
+    assert(equal(final_transform_left[2][2], 0.0));
+    assert(equal(final_transform_left[3][2], 0.0));
+
+    assert(equal(final_transform_left[0][3], 0.0));
+    assert(equal(final_transform_left[1][3], 0.0));
+    assert(equal(final_transform_left[2][3], 5.0));
+    assert(equal(final_transform_left[3][3], 1.0));
+
+    mat4x4_mul_in_place(final_transform_left, scale_left, final_transform_left);
+
+    assert(equal(final_transform_left[0][0], 7.071067812000001));
+    assert(equal(final_transform_left[1][0], 0.0));
+    assert(equal(final_transform_left[2][0], 7.071067812000001));
+    assert(equal(final_transform_left[3][0], 0.0));
+
+    assert(equal(final_transform_left[0][1], -.007071067670578643));
+    assert(equal(final_transform_left[1][1], 0.0));
+    assert(equal(final_transform_left[2][1], .007071067670578643));
+    assert(equal(final_transform_left[3][1], 0.0));
+
+    assert(equal(final_transform_left[0][2], 0.0));
+    assert(equal(final_transform_left[1][2], -10.0));
+    assert(equal(final_transform_left[2][2], 0.0));
+    assert(equal(final_transform_left[3][2], 0.0));
+
+    assert(equal(final_transform_left[0][3], 0.0));
+    assert(equal(final_transform_left[1][3], 0.0));
+    assert(equal(final_transform_left[2][3], 5.0));
+    assert(equal(final_transform_left[3][3], 1.0));
+
+    mat4x4_copy(final_transform_left, left_wall->transform);
+
+    assert(mat4x4_equal(final_transform_left, left_wall->transform));
+
+    assert(equal(left_wall->transform[0][0], 7.071067812000001));
+    assert(equal(left_wall->transform[1][0], 0.0));
+    assert(equal(left_wall->transform[2][0], 7.071067812000001));
+    assert(equal(left_wall->transform[3][0], 0.0));
+
+    assert(equal(left_wall->transform[0][1], -.007071067670578643));
+    assert(equal(left_wall->transform[1][1], 0.0));
+    assert(equal(left_wall->transform[2][1], .007071067670578643));
+    assert(equal(left_wall->transform[3][1], 0.0));
+
+    assert(equal(left_wall->transform[0][2], 0.0));
+    assert(equal(left_wall->transform[1][2], -10.0));
+    assert(equal(left_wall->transform[2][2], 0.0));
+    assert(equal(left_wall->transform[3][2], 0.0));
+
+    assert(equal(left_wall->transform[0][3], 0.0));
+    assert(equal(left_wall->transform[1][3], 0.0));
+    assert(equal(left_wall->transform[2][3], 5.0));
+    assert(equal(left_wall->transform[3][3], 1.0));
+
+    left_wall->material = floor_material;
+
+    assert(equal(translate_left[0][3], 0.0));
+    assert(equal(translate_left[1][3], 0.0));
+    assert(equal(translate_left[2][3], 5.0));
+    assert(equal(translate_left[3][3], 1.0));
+
+    assert(equal(rotate_y_left[0][0], cos(-M_PI / 4.0)));
+    assert(equal(rotate_y_left[0][2], sin(-M_PI / 4.0)));
+    assert(equal(rotate_y_left[2][0], -sin(-M_PI / 4.0)));
+    assert(equal(rotate_y_left[2][2], cos(-M_PI / 4.0)));
+
+    assert(equal(rotate_x_left[0][0], 1.0));
+    assert(equal(rotate_x_left[1][1], cos(M_PI / 2.0)));
+    assert(equal(rotate_x_left[1][2], -sin(M_PI / 2.0)));
+    assert(equal(rotate_x_left[2][1], sin(M_PI / 2.0)));
+    assert(equal(rotate_x_left[2][2], cos(M_PI / 2.0)));
+
+    assert(equal(scale_left[0][0], 10.0));
+    assert(equal(scale_left[1][1], 0.01));
+    assert(equal(scale_left[2][2], 10.0));
+
+    // 3. wall on right is identical to left, rotated opposite direction in y
+    shape* right_wall = create_shape(SHAPE);
+
+    floor_material.color = create_point(0.0, 0.0, 1.0); // blue
+    mat4x4_set_ident(final_transform_left);
+    mat4x4_mul_in_place(final_transform_left, translate_left, final_transform_left);
+    Mat4x4 rotate_y_right;
+    gen_rotate_matrix_Y(M_PI / 4.0, rotate_y_right);
+    mat4x4_mul_in_place(final_transform_left, rotate_y_right, final_transform_left);
+    mat4x4_mul_in_place(final_transform_left, rotate_x_left, final_transform_left);
+    mat4x4_mul_in_place(final_transform_left, scale_left, final_transform_left);
+    mat4x4_copy(final_transform_left, right_wall->transform);
+
+    left_wall->material = floor_material;
+
+    assert(equal(right_wall->transform[0][0], 7.071067812000001));
+    assert(equal(right_wall->transform[1][0], 0.0));
+    assert(equal(right_wall->transform[2][0], -7.071067812000001));
+    assert(equal(right_wall->transform[3][0], 0.0));
+
+    assert(equal(right_wall->transform[0][1], .007071067670578643));
+    assert(equal(right_wall->transform[1][1], 0.0));
+    assert(equal(right_wall->transform[2][1], .007071067670578643));
+    assert(equal(right_wall->transform[3][1], 0.0));
+
+    assert(equal(right_wall->transform[0][2], 0.0));
+    assert(equal(right_wall->transform[1][2], -10.0));
+    assert(equal(right_wall->transform[2][2], 0.0));
+    assert(equal(right_wall->transform[3][2], 0.0));
+
+    assert(equal(right_wall->transform[0][3], 0.0));
+    assert(equal(right_wall->transform[1][3], 0.0));
+    assert(equal(right_wall->transform[2][3], 5.0));
+    assert(equal(right_wall->transform[3][3], 1.0));
+
+    // 4. Large sphere in middle is a unit sphere, translated upward slightly and colored green
+    shape* middle_sphere = create_shape(SHAPE);
+    Mat4x4 middle_transform;
+    gen_translate_matrix(-0.5, 1.0, 0.5, middle_transform);
+
+    mat4x4_copy(middle_transform, middle_sphere->transform);
+
+    assert(equal(middle_sphere->transform[0][0], 1.0));
+    assert(equal(middle_sphere->transform[1][0], 0.0));
+    assert(equal(middle_sphere->transform[2][0], 0.0));
+    assert(equal(middle_sphere->transform[3][0], 0.0));
+
+    assert(equal(middle_sphere->transform[0][1], 0.0));
+    assert(equal(middle_sphere->transform[1][1], 1.0));
+    assert(equal(middle_sphere->transform[2][1], 0.0));
+    assert(equal(middle_sphere->transform[3][1], 0.0));
+
+    assert(equal(middle_sphere->transform[0][2], 0.0));
+    assert(equal(middle_sphere->transform[1][2], 0.0));
+    assert(equal(middle_sphere->transform[2][2], 1.0));
+    assert(equal(middle_sphere->transform[3][2], 0.0));
+
+    assert(equal(middle_sphere->transform[0][3], -0.5));
+    assert(equal(middle_sphere->transform[1][3], 1.0));
+    assert(equal(middle_sphere->transform[2][3], 0.5));
+    assert(equal(middle_sphere->transform[3][3], 1.0));
+
+    material middle_material = create_material_default();
+    middle_material.color = create_point(0.1, 1.0, 0.5);
+    middle_material.diffuse = 0.7;
+    middle_material.specular = 0.3;
+    middle_sphere->material = middle_material;
+
+    // 5. Smaller green sphere on the right is scaled in half
+    shape* right_sphere = create_shape(SHAPE);
+    Mat4x4 translate_right_sphere;
+    gen_translate_matrix(1.5, 0.5, -0.5, translate_right_sphere);
+    Mat4x4 scale_right_sphere;
+    gen_scale_matrix(0.5, 0.5, 0.5, scale_right_sphere);
+    Mat4x4 final_transform_right_sphere;
+    mat4x4_set_ident(final_transform_right_sphere);
+
+    mat4x4_mul_in_place(final_transform_right_sphere, translate_right_sphere, final_transform_right_sphere);
+    mat4x4_mul_in_place(final_transform_right_sphere, scale_right_sphere, final_transform_right_sphere);
+    mat4x4_copy(final_transform_right_sphere, right_sphere->transform);
+
+    assert(equal(right_sphere->transform[0][0], 0.5));
+    assert(equal(right_sphere->transform[1][0], 0.0));
+    assert(equal(right_sphere->transform[2][0], 0.0));
+    assert(equal(right_sphere->transform[3][0], 0.0));
+
+    assert(equal(right_sphere->transform[0][1], 0.0));
+    assert(equal(right_sphere->transform[1][1], 0.5));
+    assert(equal(right_sphere->transform[2][1], 0.0));
+    assert(equal(right_sphere->transform[3][1], 0.0));
+
+    assert(equal(right_sphere->transform[0][2], 0.0));
+    assert(equal(right_sphere->transform[1][2], 0.0));
+    assert(equal(right_sphere->transform[2][2], 0.5));
+    assert(equal(right_sphere->transform[3][2], 0.0));
+
+    assert(equal(right_sphere->transform[0][3], 1.5));
+    assert(equal(right_sphere->transform[1][3], 0.5));
+    assert(equal(right_sphere->transform[2][3], -0.5));
+    assert(equal(right_sphere->transform[3][3], 1.0));
+
+    material right_sphere_material = create_material_default();
+    right_sphere_material.color = create_point(0.5, 1.0, 0.1);
+    right_sphere_material.diffuse = 0.7;
+    right_sphere_material.specular = 0.3;
+    right_sphere->material = right_sphere_material;
+
+    // 6. Smallest sphere is scaled by a tird, before being translated
+    shape* small_sphere = create_shape(SHAPE);
+    Mat4x4 translate_small_sphere;
+    gen_translate_matrix(-1.5, 0.33, -0.75, translate_small_sphere);
+    Mat4x4 scale_small_sphere;
+    gen_scale_matrix(0.33, 0.33, 0.33, scale_small_sphere);
+    Mat4x4 final_transform_small_sphere;
+    mat4x4_set_ident(final_transform_small_sphere);
+    mat4x4_mul_in_place(final_transform_small_sphere, translate_small_sphere, final_transform_small_sphere);
+    mat4x4_mul_in_place(final_transform_small_sphere, scale_small_sphere, final_transform_small_sphere);
+    mat4x4_copy(final_transform_small_sphere, small_sphere->transform);
+
+    material small_sphere_material = create_material_default();
+    small_sphere_material.color = create_point(1.0, 0.8f, 0.1);
+    small_sphere_material.diffuse = 0.7;
+    small_sphere_material.specular = 0.3;
+    small_sphere->material = small_sphere_material;
+
+    // putting geometry together
+    small_sphere->next = NULL;
+    right_sphere->next = small_sphere;
+    middle_sphere->next = right_sphere;
+    right_wall->next = middle_sphere;
+    left_wall->next = right_wall;
+    floor->next = left_wall;
+    w.objects = floor;
+
+    assert(equal(w.objects->material.color.x, 1.0));
+    assert(equal(w.objects->material.color.y, 0.9));
+    assert(equal(w.objects->material.color.z, 0.9));
+    assert(equal(w.objects->material.specular, 0.0));
+
+    assert(equal(w.objects->material.ambient, 0.1));
+    assert(equal(w.objects->material.diffuse, 0.9));
+
+    // Ensure the values here have not changed after stringing together the objects
+
+    shape* test_object = w.objects; // floor
+
+    assert(equal(test_object->transform[0][0], 10.0));
+    assert(equal(test_object->transform[1][1], 0.01));
+    assert(equal(test_object->transform[2][2], 10.0));
+    assert(equal(test_object->transform[3][3], 1.0));
+
+    test_object = test_object->next; // left wall
+
+    assert(equal(test_object->transform[0][0], 7.071067812000001));
+    assert(equal(test_object->transform[1][0], 0.0));
+    assert(equal(test_object->transform[2][0], 7.071067812000001));
+    assert(equal(test_object->transform[3][0], 0.0));
+
+    assert(equal(test_object->transform[0][1], -.007071067670578643));
+    assert(equal(test_object->transform[1][1], 0.0));
+    assert(equal(test_object->transform[2][1], .007071067670578643));
+    assert(equal(test_object->transform[3][1], 0.0));
+
+    assert(equal(test_object->transform[0][2], 0.0));
+    assert(equal(test_object->transform[1][2], -10.0));
+    assert(equal(test_object->transform[2][2], 0.0));
+    assert(equal(test_object->transform[3][2], 0.0));
+
+    assert(equal(test_object->transform[0][3], 0.0));
+    assert(equal(test_object->transform[1][3], 0.0));
+    assert(equal(test_object->transform[2][3], 5.0));
+    assert(equal(test_object->transform[3][3], 1.0));
+
+    // lighting
+    tuple light_position = create_point(-10.0, 10.0, -10.0);
+    tuple light_intensity = create_point(1.0, 1.0, 1.0);
+    *w.lights = create_point_light(light_position, light_intensity);
+
+    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, M_PI / 3.0);
+    tuple from = create_point(0.0, 1.5, -5.0);
+    tuple to = create_point(0.0, 1.0, 0.0);
+    tuple up = create_vector(0.0, 1.0, 0.0);
+    view_transform(from, to, up, c->view_transform);
+
+    render(c, &w);
+
+    free(c);
+    free(floor);
+    free(left_wall);
+    free(right_wall);
+    free(middle_sphere);
+    free(right_sphere);
+    free(small_sphere);
+}
+
+// 125 Render complete world with plane
+void render_complete_world_with_plane() {
+    world w = create_default_world();
+
+    shape* floor = create_shape(PLANE);
+    material floor_material = create_material_default();
+    floor_material.color = create_point(1.0, 1.0, 1.0); // white
+    floor_material.specular = 0.0;
+    //floor_material.pattern = ring_pattern(create_point(0.8f, 1.0, 0.8f), create_point(1.0, 1.0, 1.0));
+    //floor_material.has_pattern = true;
+    floor_material.reflective = 0.0;
+    floor_material.transparency = 0.0;
+    floor->material = floor_material;
+
+    shape* right_wall = create_shape(PLANE);
+    Mat4x4 rot_wall_mat;
+    gen_rotate_matrix_Z(M_PI / 2.0, rot_wall_mat);
+
+    Mat4x4 trans_wall_mat;
+    gen_translate_matrix(0.0, -8.25, 0.0, trans_wall_mat);
+    //mat4x4_mul_in_place(trans_wall_mat, rot_wall_mat, trans_wall_mat);
+    mat4x4_copy(rot_wall_mat, right_wall->transform);
+    floor_material.color = create_point(0.0, 0.0, 1.0); // blue
+    right_wall->material = floor_material;
+
+    shape* left_wall = create_shape(PLANE);
+    floor_material.color = create_point(1.0, 0.0, 0.0); // red
+    gen_rotate_matrix_X(-M_PI / 2.0, rot_wall_mat);
+
+    gen_translate_matrix(0.0, 0.0, -2.75, trans_wall_mat);
+    mat4x4_mul_in_place(rot_wall_mat, trans_wall_mat, rot_wall_mat);
+    mat4x4_copy(rot_wall_mat, left_wall->transform);
+    left_wall->material = floor_material;
+
+    shape* glass_sphere = create_glass_sphere();
+    Mat4x4 front_transform;
+    gen_translate_matrix(-7.0, 1.0, -8.0, front_transform);
+
+    mat4x4_copy(front_transform, glass_sphere->transform);
+
+    glass_sphere->material.diffuse = 0.0;
+    glass_sphere->material.refractive_index = 1.5;
+    glass_sphere->material.transparency = 0.9;
+    glass_sphere->material.reflective = 0.2;
+
+    //material front_material = create_material_default();
+    //front_material.color = create_point(0.1, 0.0, 0.45);
+    //front_material.ambient = 0.0;
+    //front_material.diffuse = 0.0;
+    //front_material.specular = 0.0;
+    //front_material.shininess = 200.0;
+    //front_material.reflective = 0.2;
+    //front_material.transparency = 0.8f;
+    //front_material.has_pattern = false;
+    /*
+    m.ambient = 0.1;
+    m.diffuse = 0.9;
+    m.specular = 0.9;
+    m.shininess = 200.0;
+    m.reflective = 0.0;
+    m.transparency = 0.0;
+    m.refractive_index = 1.0;
+    */
+    //front_material.transparency = 1.0;
+
+    //glass_sphere->material = front_material;
+
+    shape* middle_sphere = create_shape(SHAPE);
+    Mat4x4 middle_transform;
+    gen_translate_matrix(-3.5, 1.0, -3.0, middle_transform);
+
+    mat4x4_copy(middle_transform, middle_sphere->transform);
+
+    material middle_material = create_material_default();
+    middle_material.color = create_point(0.1, 1.0, 0.5);
+    middle_material.diffuse = 0.7;
+    middle_material.specular = 0.3;
+    middle_material.transparency = 0.0;
+
+    tuple light = create_point(1.0, 1.0, 1.0);
+    tuple dark = create_point(0.439, 0.305, 0.827); // purple
+    pattern pat = stripe_pattern(light, dark);
+
+    Mat4x4 scale_pattern;
+    gen_scale_matrix(0.175, 0.175, 0.175, scale_pattern);
+
+    set_pattern_transform(&pat, scale_pattern);
+    middle_material.pattern = pat;
+    middle_material.has_pattern = true;
+
+    middle_sphere->material = middle_material;
+
+    shape* right_sphere = create_shape(SHAPE);
+    Mat4x4 translate_right_sphere;
+    gen_translate_matrix(-1.95, 1.0, -5.5, translate_right_sphere);
+    Mat4x4 scale_right_sphere;
+    gen_scale_matrix(0.5, 0.5, 0.5, scale_right_sphere);
+    Mat4x4 final_transform_right_sphere;
+    mat4x4_set_ident(final_transform_right_sphere);
+
+    mat4x4_mul_in_place(final_transform_right_sphere, translate_right_sphere, final_transform_right_sphere);
+    mat4x4_mul_in_place(final_transform_right_sphere, scale_right_sphere, final_transform_right_sphere);
+    mat4x4_copy(final_transform_right_sphere, right_sphere->transform);
+
+    material right_sphere_material = create_material_default();
+    right_sphere_material.color = create_point(0.0, 0.0, 0.0);
+    right_sphere_material.diffuse = 0.7;
+    right_sphere_material.specular = 0.3;
+    right_sphere_material.reflective = 1.0;
+    right_sphere_material.transparency = 0.0;
+    //right_sphere_material.has_pattern = true;
+    //tuple white = create_point(1.0, 1.0, 1.0);
+    //tuple black = create_point(0.0, 0.0, 0.0);
+    //right_sphere_material.pattern = gradiant_pattern(white, black);
+    right_sphere->material = right_sphere_material;
+
+    shape* origin_sphere = create_shape(SHAPE);
+    origin_sphere->material.color.z = 0.0; // green color
+    origin_sphere->material.color.x = 0.0;
+
+    shape* small_sphere = create_shape(SHAPE);
+    Mat4x4 translate_small_sphere;
+    gen_translate_matrix(-6.5, 0.33, -2.75, translate_small_sphere);
+    Mat4x4 scale_small_sphere;
+    gen_scale_matrix(0.33, 0.33, 0.33, scale_small_sphere);
+    Mat4x4 final_transform_small_sphere;
+    mat4x4_set_ident(final_transform_small_sphere);
+    mat4x4_mul_in_place(final_transform_small_sphere, translate_small_sphere, final_transform_small_sphere);
+    mat4x4_mul_in_place(final_transform_small_sphere, scale_small_sphere, final_transform_small_sphere);
+    mat4x4_copy(final_transform_small_sphere, small_sphere->transform);
+    material small_sphere_material = create_material_default();
+    small_sphere_material.color = create_point(1.0, 0.8f, 0.1);
+    small_sphere_material.diffuse = 0.7;
+    small_sphere_material.specular = 0.3;
+    small_sphere_material.shininess = 100.0;
+    tuple small_sphere_light = create_point(0.2, 0.2, 0.2);
+    tuple small_sphere_dark = create_point(0.0, 0.0, 0.0);
+    pattern small_sphere_pat = stripe_pattern(small_sphere_light, small_sphere_dark);
+    Mat4x4 small_sphere_scale_pattern;
+    gen_scale_matrix(0.07, 0.07, 0.07, small_sphere_scale_pattern);
+    set_pattern_transform(&small_sphere_pat, small_sphere_scale_pattern);
+    small_sphere_material.pattern = small_sphere_pat;
+    small_sphere_material.has_pattern = true;
+    small_sphere->material = small_sphere_material;
+
+    /*
+    origin_sphere->next = NULL;
+    left_wall->next = origin_sphere;
+    right_wall->next = left_wall;
+    floor->next = right_wall;
+    w.objects = floor;
+    */
+    // putting geometry together
+
+    origin_sphere->next = NULL;
+    small_sphere->next = origin_sphere;
+    right_sphere->next = small_sphere;
+    middle_sphere->next = right_sphere;
+    glass_sphere->next = middle_sphere;
+    left_wall->next = glass_sphere;
+    right_wall->next = left_wall;
+    floor->next = right_wall;
+    w.objects = floor;
+
+    // lighting
+    tuple light_position = create_point(-10.0, 10.0, -10.0);
+    tuple light_intensity = create_point(1.0, 1.0, 1.0);
+    *w.lights = create_point_light(light_position, light_intensity);
+
+    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, M_PI / 3.0);
+    tuple from = create_point(-10.0, 1.5, -10.0);
+    tuple to = create_point(0.0, 0.0, 0.0);
+    tuple up = create_vector(0.0, 1.0, 0.0);
+    view_transform(from, to, up, c->view_transform);
+
+    render(c, &w);
+
+    free(c);
+    free(floor);
+    free(middle_sphere);
+    free(right_sphere);
+    free(origin_sphere);
+}
+
+// extra rendering of dual spheres refracting on floor
+void render_dual_spheres_refracting_on_floor() {
+    world w = create_world();
+
+    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, 0.45);
+    tuple from = create_point(0.0, 0.0, -5.0);
+    tuple to = create_point(0.0, 0.0, 0.0);
+    tuple up = create_vector(0.0, 1.0, 0.0);
+    view_transform(from, to, up, c->view_transform);
+
+    tuple light_position = create_point(2.0, 10.0, -5.0);
+    tuple light_intensity = create_point(0.9, 0.9, 0.9);
+    *w.lights = create_point_light(light_position, light_intensity);
+
+    shape* wall = create_shape(PLANE);
+
+    Mat4x4 wall_rotate_transform;
+    gen_rotate_matrix_X(M_PI / 2.0, wall_rotate_transform);
+    Mat4x4 wall_position_transform;
+    gen_translate_matrix(0.0, 0.0, 10.0, wall_position_transform);
+    mat4x4_mul_in_place(wall_position_transform, wall_rotate_transform, wall_position_transform);
+    mat4x4_copy(wall_position_transform, wall->transform);
+
+    material wall_material = create_material_default();
+    tuple from_color = create_point(0.15, 0.15, 0.15);
+    tuple to_color = create_point(0.85, 0.85, 0.85);
+    pattern checkers = checkers_pattern(from_color, to_color);
+    wall_material.has_pattern = true;
+    wall_material.pattern = checkers;
+    wall_material.ambient = 0.8f;
+    wall_material.diffuse = 0.2;
+    wall_material.specular = 0.0;
+
+    wall->material = wall_material;
+
+    shape* outer_sphere = create_shape(SPHERE);
+    material sphere_material = create_material_default();
+
+    sphere_material.ambient = 0.0;
+    sphere_material.color = create_point(1.0, 1.0, 1.0);
+    sphere_material.diffuse = 0.0;
+    sphere_material.specular = 0.9;
+    sphere_material.shininess = 300.0;
+    sphere_material.reflective = 0.9;
+    sphere_material.transparency = 0.9;
+    sphere_material.refractive_index = 1.5;
+    outer_sphere->material = sphere_material;
+
+    shape* hollow_center = create_shape(SPHERE);
+    Mat4x4 hollow_center_transform;
+    gen_scale_matrix(0.5, 0.5, 0.5, hollow_center_transform);
+    mat4x4_copy(hollow_center_transform, hollow_center->transform);
+
+    material hollow_sphere_material = create_material_default();
+
+    hollow_sphere_material.ambient = 0.0;
+    hollow_sphere_material.color = create_point(1.0, 1.0, 1.0);
+    hollow_sphere_material.diffuse = 0.0;
+    hollow_sphere_material.specular = 0.9;
+    hollow_sphere_material.shininess = 300.0;
+    hollow_sphere_material.reflective = 0.9;
+    hollow_sphere_material.transparency = 0.9;
+    hollow_sphere_material.refractive_index = 1.0000034;
+    hollow_center->material = hollow_sphere_material;
+
+    add_shape_to_world(hollow_center, &w);
+    add_shape_to_world(outer_sphere, &w);
+    add_shape_to_world(wall, &w);
+    world_print(w);
+    camera_print(c);
+    render(c, &w);
+}
+
 int main() {
 
   contents = containers_create();
-
 #if defined _DEBUG
   clock_t start_unit_tests = clock();
   unit_test("Create Point Test", create_point_test());
@@ -5882,10 +5858,10 @@ int main() {
   clock_t start_render = clock();
 
   printf("Starting Render Process\n");
-  //render_sphere();
-  //render_complete_world();
+  render_sphere();
+  render_complete_world();
   render_dual_spheres_refracting_on_floor();
-  //render_complete_world_with_plane();
+  render_complete_world_with_plane();
 
   clock_t end_render = clock();
   float seconds_render = (float)(end_render - start_render) / CLOCKS_PER_SEC;
