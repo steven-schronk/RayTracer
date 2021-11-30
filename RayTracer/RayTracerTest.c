@@ -30,8 +30,8 @@ Copyright 2021 Steven Ray Schronk
 // remaining number of iterations when calculating reflection
 #define RECURSION_DEPTH 5
 
-#define VERTICAL_SIZE   120
-#define HORIZONTAL_SIZE 120
+#define VERTICAL_SIZE   480
+#define HORIZONTAL_SIZE 480
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -5687,6 +5687,204 @@ void render_dual_spheres_refracting_on_floor() {
     render(c, &w);
 }
 
+void render_refraction_scene() {
+    world w = create_world();
+
+    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, 0.5);
+    tuple from = create_point(-4.5, 0.85, -4);
+    tuple to = create_point(0.0, 0.85, 0.0);
+    tuple up = create_vector(0.0, 1.0, 0.0);
+    view_transform(from, to, up, c->view_transform);
+
+    tuple light_position = create_point(-4.9, 4.9, 1);
+    tuple light_intensity = create_point(1, 1, 1);
+    *w.lights = create_point_light(light_position, light_intensity);
+
+    // Wall Material is Reused Several Places
+    material wall_material = create_material_default();
+    tuple wall_material_from_color = create_point(0.0, 0.0, 0.0);
+    tuple wall_material_to_color = create_point(0.75, 0.75, 0.75);
+    pattern wall_material_checkers = checkers_pattern(wall_material_from_color, wall_material_to_color);
+    wall_material.has_pattern = true;
+    wall_material.pattern = wall_material_checkers;
+    wall_material.specular = 0;
+
+    shape* floor = create_shape(PLANE);
+    Mat4x4 floor_rotate_transform;
+    gen_rotate_matrix_Y( 0.31415, floor_rotate_transform);
+    mat4x4_copy(floor_rotate_transform, floor->transform);
+    material floor_material = create_material_default();
+    tuple from_color = create_point(0.0, 0.0, 0.0);
+    tuple to_color = create_point(0.75, 0.75, 0.75);
+    pattern checkers = checkers_pattern(from_color, to_color);
+    floor_material.has_pattern = true;
+    floor_material.pattern = checkers;
+    floor_material.ambient = 0.5;
+    floor_material.diffuse = 0.4;
+    floor_material.specular = 0.8;
+    floor_material.reflective = 0.5;
+    floor->material = floor_material;
+
+    shape* west_wall = create_shape(PLANE);
+    Mat4x4 translate_west;
+    gen_translate_matrix(-5.0, 0.0, 0.0, translate_west);
+    Mat4x4 rotate_y_west;
+    gen_rotate_matrix_Y(1.5708, rotate_y_west);
+    Mat4x4 rotate_z_west;
+    gen_rotate_matrix_Z(1.5708, rotate_z_west);
+    Mat4x4 scale_west;
+    gen_scale_matrix(10.0, 0.01, 10.0, scale_west);
+    Mat4x4 final_transform_west;
+    mat4x4_set_ident(final_transform_west);
+    mat4x4_mul_in_place(translate_west, final_transform_west, final_transform_west);
+    mat4x4_copy(final_transform_west, west_wall->transform);
+    west_wall->material = wall_material;
+
+    shape* east_wall = create_shape(PLANE);
+    Mat4x4 translate_east;
+    gen_translate_matrix(5.0, 0.0, 0.0, translate_east);
+    Mat4x4 rotate_y_east;
+    gen_rotate_matrix_Y(1.5708, rotate_y_east);
+    Mat4x4 rotate_z_east;
+    gen_rotate_matrix_Z(1.5708, rotate_z_east);
+    Mat4x4 final_transform_east;
+    mat4x4_set_ident(final_transform_east);
+    mat4x4_mul_in_place(rotate_y_east, final_transform_east, final_transform_east);
+    mat4x4_mul_in_place(rotate_z_east, final_transform_east, final_transform_east);
+    mat4x4_mul_in_place(translate_east, final_transform_east, final_transform_east);
+    mat4x4_copy(final_transform_east, east_wall->transform);
+    east_wall->material = wall_material;
+
+    shape* north_wall = create_shape(PLANE);
+    Mat4x4 translate_north;
+    gen_translate_matrix(0.0, 0.0, 5.0, translate_north);
+    Mat4x4 rotate_x_north;
+    gen_rotate_matrix_X(1.5708, rotate_x_north);
+    Mat4x4 final_transform_north;
+    mat4x4_set_ident(final_transform_north);
+    mat4x4_mul_in_place(rotate_x_north, final_transform_north, final_transform_north);
+    mat4x4_mul_in_place(translate_north, final_transform_north, final_transform_north);
+    mat4x4_copy(final_transform_north, north_wall->transform);
+    north_wall->material = wall_material;
+
+    shape* south_wall = create_shape(PLANE);
+    Mat4x4 translate_south;
+    gen_translate_matrix(0.0, 0.0, -5.0, translate_south);
+    Mat4x4 rotate_x_south;
+    gen_rotate_matrix_X(1.5708, rotate_x_south);
+    Mat4x4 final_transform_south;
+    mat4x4_set_ident(final_transform_south);
+    mat4x4_mul_in_place(rotate_x_south, final_transform_south, final_transform_south);
+    mat4x4_mul_in_place(translate_south, final_transform_south, final_transform_south);
+    mat4x4_copy(final_transform_south, south_wall->transform);
+    south_wall->material = wall_material;
+
+    shape* red_background_ball = create_shape(SHAPE);
+    Mat4x4 translate_background_ball;
+    gen_translate_matrix(4, 1, 4, translate_background_ball);
+    mat4x4_copy(translate_background_ball, red_background_ball->transform);
+    material background_ball_material = create_material_default();
+    background_ball_material.color = create_point(0.8, 0.1, 0.3);
+    red_background_ball->material = background_ball_material;
+
+    shape* blue_background_ball = create_shape(SHAPE);
+    Mat4x4 blue_background_ball_translate;
+    gen_translate_matrix(2.6, 0.6, 4.4, blue_background_ball_translate);
+    Mat4x4 blue_background_ball_scale_transform;
+    gen_scale_matrix(0.6, 0.6, 0.6, blue_background_ball_scale_transform);
+    mat4x4_mul_in_place(blue_background_ball_translate, blue_background_ball_scale_transform, blue_background_ball_translate);
+    mat4x4_copy(blue_background_ball_translate, blue_background_ball->transform);
+
+    background_ball_material = create_material_default();
+    background_ball_material.color = create_point(0.2, 0.1, 0.8);
+    background_ball_material.shininess = 10;
+    background_ball_material.specular = 0.9;
+    blue_background_ball->material = background_ball_material;
+
+    shape* green_background_ball = create_shape(SHAPE);
+    Mat4x4 green_background_ball_translate;
+    gen_translate_matrix(4.6, 0.4, 2.9, green_background_ball_translate);
+    Mat4x4 green_background_ball_scale_transform;
+    gen_scale_matrix(0.4, 0.4, 0.4, green_background_ball_scale_transform);
+    mat4x4_mul_in_place(green_background_ball_translate, green_background_ball_scale_transform, green_background_ball_translate);
+    mat4x4_copy(green_background_ball_translate, green_background_ball->transform);
+
+    background_ball_material = create_material_default();
+    background_ball_material.color = create_point(0.1, 0.8, 0.2);
+    background_ball_material.shininess = 200;
+    green_background_ball->material = background_ball_material;
+
+    shape* glass_ball = create_shape(SHAPE);
+    Mat4x4 translate_glass_ball;
+    gen_translate_matrix(0.10, 1.0, 0, translate_glass_ball);
+    Mat4x4 scale_glass_ball;
+    gen_scale_matrix(0.85, 0.85, 0.85, scale_glass_ball);
+    Mat4x4 final_transform_glass_ball;
+    mat4x4_set_ident(final_transform_glass_ball);
+
+    mat4x4_mul_in_place(final_transform_glass_ball, translate_glass_ball, final_transform_glass_ball);
+    mat4x4_mul_in_place(final_transform_glass_ball, scale_glass_ball, final_transform_glass_ball);
+    mat4x4_copy(final_transform_glass_ball, glass_ball->transform);
+
+    material glass_ball_material = create_material_default();
+    glass_ball_material.color = create_point(0.8, 0.8, 0.9);
+    glass_ball_material.ambient = 0;
+    glass_ball_material.diffuse = 0.2;
+    glass_ball_material.specular = 0.9;
+    glass_ball_material.shininess = 300;
+    glass_ball_material.transparency = 0.8;
+    glass_ball_material.refractive_index = 1.57;
+    glass_ball->material = glass_ball_material;
+
+    shape* mirror_ball = create_shape(SHAPE);
+    Mat4x4 translate_mirror_ball;
+    gen_translate_matrix(2.2, 0.6, 0.0, translate_mirror_ball);
+    Mat4x4 scale_mirror_ball;
+    gen_scale_matrix(0.5, 0.5, 0.5, scale_mirror_ball);
+    Mat4x4 final_transform_mirror_ball;
+    mat4x4_set_ident(final_transform_mirror_ball);
+
+    mat4x4_mul_in_place(final_transform_mirror_ball, translate_mirror_ball, final_transform_mirror_ball);
+    mat4x4_mul_in_place(final_transform_mirror_ball, scale_mirror_ball, final_transform_mirror_ball);
+    mat4x4_copy(final_transform_mirror_ball, mirror_ball->transform);
+
+    material mirror_ball_material = create_material_default();
+    mirror_ball_material.color = create_point(0.0, 0.0, 0.0);
+    mirror_ball_material.ambient = 0;
+    mirror_ball_material.diffuse = 0.0;
+    mirror_ball_material.specular = 0.9;
+    mirror_ball_material.shininess = 300;
+    mirror_ball_material.transparency = 0.0;
+    mirror_ball_material.refractive_index = 0.0;
+    mirror_ball_material.reflective = 1.0;
+    mirror_ball->material = mirror_ball_material;
+
+    add_shape_to_world(floor, &w);
+    add_shape_to_world(west_wall, &w);
+    add_shape_to_world(east_wall, &w);
+    add_shape_to_world(north_wall, &w);
+    add_shape_to_world(south_wall, &w);
+    add_shape_to_world(red_background_ball, &w);
+    add_shape_to_world(blue_background_ball, &w);
+    add_shape_to_world(green_background_ball, &w);
+    add_shape_to_world(glass_ball, &w);
+    add_shape_to_world(mirror_ball, &w);
+
+    render(c, &w);
+
+    free(c);
+    free(floor);
+    free(west_wall);
+    free(east_wall);
+    free(north_wall);
+    free(south_wall);
+    free(red_background_ball);
+    free(blue_background_ball);
+    free(green_background_ball);
+    free(glass_ball);
+    free(mirror_ball);
+}
+
 int main() {
 
   contents = containers_create();
@@ -5858,10 +6056,11 @@ int main() {
   clock_t start_render = clock();
 
   printf("Starting Render Process\n");
-  render_sphere();
-  render_complete_world();
-  render_dual_spheres_refracting_on_floor();
-  render_complete_world_with_plane();
+  //render_sphere();
+  //render_complete_world();
+  //render_dual_spheres_refracting_on_floor();
+  //render_complete_world_with_plane();
+  render_refraction_scene();
 
   clock_t end_render = clock();
   float seconds_render = (float)(end_render - start_render) / CLOCKS_PER_SEC;
