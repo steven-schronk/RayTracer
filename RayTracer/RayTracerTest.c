@@ -30,8 +30,8 @@ Copyright 2021 Steven Ray Schronk
 // remaining number of iterations when calculating reflection
 #define RECURSION_DEPTH 5
 
-#define VERTICAL_SIZE   480
-#define HORIZONTAL_SIZE 480
+#define VERTICAL_SIZE   120
+#define HORIZONTAL_SIZE 120
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
