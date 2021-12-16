@@ -5952,19 +5952,25 @@ void render_refraction_scene() {
 void render_some_triangles() {
     world w = create_world();
     camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, 0.5);
-    tuple from = create_point(20.0, 20.0, 20.0);
+    tuple from = create_point(10.0, 10.0, -5.0);
     tuple to = create_point(0.0, 0.0, 0.0);
     tuple up = create_vector(0.0, 1.0, 0.0);
     view_transform(from, to, up, c->view_transform);
 
-    tuple light_position = create_point(-100, 100, 100);
-    tuple light_intensity = create_point(1, 1, 1);
+    tuple light_position = create_point(2.0, 10.0, -5.0);
+    tuple light_intensity = create_point(0.9, 0.9, 0.9);
     *w.lights = create_point_light(light_position, light_intensity);
 
-    shape* tri1 = create_triangle(create_point(0.0, 0.0, 0.0), create_point(-10.0, 10.0, 0.0), create_point(10.0, -10.0, 0.0));
-    shape* tri2 = create_triangle(create_point(0.0, 0.0, 0.0), create_point(-10.0, 10.0, 0.0), create_point(10.0, -10.0, 0.0));
+    //shape* tri1 = create_triangle(create_point(0.0, 0.0, 0.0), create_point(-10.0, 10.0, 0.0), create_point(-5.0, -5.0, 0.0));
+    //shape* tri2 = create_triangle(create_point(0.0, 0.0, 0.0), create_point(-10.0, 10.0, 0.0), create_point(-5.0, -5.0, 0.0));
+
+    shape* tri1 = create_triangle(create_point(0.0, 0.0, 0.0), create_point(-3, 3, 0.0), create_point(3, 3, 0.0));
+    shape* tri2 = create_triangle(create_point(0.0, 0.0, 0.0), create_point(-3, 3, 0.0), create_point(3, 3, 0.0));
     add_shape_to_world(tri1, &w);
     add_shape_to_world(tri2, &w);
+
+    //shape* outer_sphere = create_shape(SPHERE);
+    //add_shape_to_world(outer_sphere, &w);
 
     render(c, &w);
 }
