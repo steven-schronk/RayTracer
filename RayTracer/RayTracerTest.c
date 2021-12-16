@@ -47,23 +47,40 @@ typedef struct { tuple color; double ambient; double diffuse; double specular; d
 
 typedef struct { tuple position; tuple intensity; struct point_light* next; } point_light;
 
-enum shape_type { SHAPE, PLANE, SPHERE };
-
-typedef struct _shape { tuple location; double t; Mat4x4 transform; material material; struct _shape* next; enum shape_type type; } shape;
-
 typedef struct { tuple origin_point; tuple direction_vector; } ray;
 
-typedef struct { double t; shape* object_id; } intersection;
+
+typedef struct { double t; struct _shape* object_id; } intersection;
+
+#define INTERSECTIONS_SIZE 100
+
+typedef struct { intersection itersection[INTERSECTIONS_SIZE]; int count; } intersections;
+
+enum shape_type { SHAPE, PLANE, SPHERE, TRIANGLE };
+
+typedef struct _shape {
+    tuple location;
+    tuple p1;
+    tuple p2;
+    tuple p3;
+    tuple e1;
+    tuple e2;
+    tuple normal;
+    double t;
+    Mat4x4 transform;
+    material material;
+    struct _shape* next;
+    enum shape_type type;
+    tuple(*normal_at)(struct _shape* shape, tuple point);
+    void (*intersect)(struct _shape* shape, ray* r, intersections* intersects);
+} shape;
+
 
 typedef struct { struct _shape* objects; point_light* lights; } world;
 
 typedef struct { double t; shape* object; tuple point; tuple eyev; tuple normalv; bool inside; tuple over_point; tuple under_point; tuple reflectv; double n1; double n2; } comps;
 
 typedef struct { double hsize; double vsize; double field_of_view; double pixel_size; double half_width; double half_height; Mat4x4 view_transform; } camera;
-
-#define INTERSECTIONS_SIZE 100
-
-typedef struct { intersection itersection[INTERSECTIONS_SIZE]; int count; } intersections;
 
 #define CONTAINERS_SIZE 100
 
@@ -668,113 +685,7 @@ material create_material_default() {
     return m;
 }
 
-shape* create_shape(enum shape_type type) {
-    shape* s = (shape*)malloc(sizeof(shape));
-    if (!s) { return NULL; }
-    s->t = 1.0;
-    s->location.x = 0.0;
-    s->location.y = 0.0;
-    s->location.z = 0.0;
-    s->location.w = 0.0;
-    mat4x4_set_ident(s->transform);
-    s->material = create_material_default();
-    s->next = NULL;
-    s->type = type;
-    return s;
-}
-
-void delete_shape(shape* s) {
-    free(s);
-}
-
-shape* create_glass_sphere() {
-    shape* sp = create_shape(SPHERE); // TODO: Might need to make adjustment for SPHERE type
-    material mt = create_material_default();
-    mt.transparency = 1.0;
-    mt.refractive_index = 1.5;
-    sp->material = mt;
-    return sp;
-}
-
-tuple position(ray r, double t) {
-    tuple pos = tuple_mult_scalar(r.direction_vector, t); 
-    pos = tuple_add(r.origin_point, pos);
-    return pos;
-}
-
-ray transform(ray* r, Mat4x4 m) {
-    ray ray_out = *r;
-    mat4x4_mul_tuple(m, r->origin_point, &ray_out.origin_point);
-    mat4x4_mul_tuple(m, r->direction_vector, &ray_out.direction_vector);
-    return ray_out;
-}
-
-void intersect(shape* sp, ray* r, intersections* intersects) {
-    assert(sp != NULL);
-    assert(r != NULL);
-    assert(intersects != NULL);
-
-    Mat4x4 inv_scale_mat;
-    mat4x4_set_ident(inv_scale_mat);
-    mat4x4_inverse(sp->transform, inv_scale_mat);
-    ray r2 = transform(r, inv_scale_mat);
-
-    switch (sp->type) {
-    case PLANE:
-        if (fabs(r2.direction_vector.y) < EPSILON) {
-            return;
-        } else {
-            double t = (-r2.origin_point.y) / r2.direction_vector.y;
-            add_intersection(intersects, t, sp);
-            return;
-        }
-    }
-
-    tuple origin = create_point(0.0, 0.0, 0.0);
-    tuple sphere_to_ray = tuple_sub(r2.origin_point, origin);
-    double a = tuple_dot(r2.direction_vector, r2.direction_vector);
-    double b = 2 * tuple_dot(r2.direction_vector, sphere_to_ray);
-    double c = tuple_dot(sphere_to_ray, sphere_to_ray) - 1.0;
-    double discriminant = b * b - 4 * a * c;
-    if (discriminant < 0) { return; }
-    double t1 = (-b - sqrt(discriminant)) / (2 * a);
-    double t2 = (-b + sqrt(discriminant)) / (2 * a);
-    if (t1 < t2) {
-        add_intersection(intersects, t1, sp);
-        add_intersection(intersects, t2, sp);
-    } else {
-        add_intersection(intersects, t2, sp);
-        add_intersection(intersects, t1, sp);
-    }
-    return;
-}
-
-bool intersects_in_order_test(intersections* intersects); // wanted test to be in debug block
-
-void intersect_world(world* w, ray* r, intersections* intersects) {
-    assert(w != NULL);
-    assert(r != NULL);
-    assert(intersects != NULL);
-    shape* sp = w->objects;
-    while (sp != NULL) {
-        intersect(sp, r, intersects);
-        sp = sp->next;
-    }
-    sort_intersects(intersects);
-    assert(intersects_in_order_test(intersects));
-    return;
-}
-
-void set_transform(shape* sp, Mat4x4 m) {
-    mat4x4_copy(m, sp->transform);
-}
-
-void set_pattern_transform(pattern* p, Mat4x4 m) {
-    mat4x4_copy(m, p->transform);
-}
-
-tuple normal_at(shape* shape, tuple point) {
-    // local_point <- inverse(shape.transform)*point
+tuple normal_at_shape_sphere_plane(shape* shape, tuple point) {
     tuple local_point = create_point(0.0, 0.0, 0.0);
     Mat4x4 inverse_shape_transform;
     mat4x4_inverse(shape->transform, inverse_shape_transform);
@@ -796,15 +707,168 @@ tuple normal_at(shape* shape, tuple point) {
         assert(0 && "Shape Type Is Not Set For Shape.");
     }
 
-    // world_normal <- trnaspose(inverse(shape.transform)) * local_normal;
     tuple world_normal;
     mat4x4_transpose(inverse_shape_transform);
     mat4x4_mul_tuple(inverse_shape_transform, local_normal, &world_normal);
 
-    // world_normal.w <- 0
     world_normal.w = 0.0;
 
     return tuple_normalize(world_normal);
+}
+
+tuple normal_at_triangle(shape* shape, tuple point) {
+    tuple normal = tuple_normalize(tuple_cross(shape->e2, shape->e1));
+    return normal;
+}
+
+ray transform(ray* r, Mat4x4 m) {
+    ray ray_out = *r;
+    mat4x4_mul_tuple(m, r->origin_point, &ray_out.origin_point);
+    mat4x4_mul_tuple(m, r->direction_vector, &ray_out.direction_vector);
+    return ray_out;
+}
+
+void intersect_all_but_triangle(shape* sp, ray* r, intersections* intersects) {
+    assert(sp != NULL);
+    assert(r != NULL);
+    assert(intersects != NULL);
+
+    Mat4x4 inv_scale_mat;
+    mat4x4_set_ident(inv_scale_mat);
+    mat4x4_inverse(sp->transform, inv_scale_mat);
+    ray r2 = transform(r, inv_scale_mat);
+
+    switch (sp->type) {
+    case PLANE:
+        if (fabs(r2.direction_vector.y) < EPSILON) {
+            return;
+        }
+        else {
+            double t = (-r2.origin_point.y) / r2.direction_vector.y;
+            add_intersection(intersects, t, sp);
+            return;
+        }
+    }
+
+    tuple origin = create_point(0.0, 0.0, 0.0);
+    tuple sphere_to_ray = tuple_sub(r2.origin_point, origin);
+    double a = tuple_dot(r2.direction_vector, r2.direction_vector);
+    double b = 2 * tuple_dot(r2.direction_vector, sphere_to_ray);
+    double c = tuple_dot(sphere_to_ray, sphere_to_ray) - 1.0;
+    double discriminant = b * b - 4 * a * c;
+    if (discriminant < 0) { return; }
+    double t1 = (-b - sqrt(discriminant)) / (2 * a);
+    double t2 = (-b + sqrt(discriminant)) / (2 * a);
+    if (t1 < t2) {
+        add_intersection(intersects, t1, sp);
+        add_intersection(intersects, t2, sp);
+    }
+    else {
+        add_intersection(intersects, t2, sp);
+        add_intersection(intersects, t1, sp);
+    }
+    return;
+}
+
+void intersect_triangle(shape* sp, ray* r, intersections* intersects) {
+    tuple dir_cross_e2 = tuple_cross(r->direction_vector, sp->e2);
+    double det = tuple_dot(sp->e1, dir_cross_e2);
+    if (fabs(det) < EPSILON) {
+        return;
+    }
+
+    double f = 1.0 / det;
+    tuple p1_to_origin = tuple_sub(r->origin_point, sp->p1);
+    double u = f * tuple_dot(p1_to_origin, dir_cross_e2);
+    if (u < 0.0 || u > 1) {
+        return;
+    }
+
+    tuple origin_cross_e1 = tuple_cross(p1_to_origin, sp->e1);
+    double v = f * tuple_dot(r->direction_vector, origin_cross_e1);
+    if (v < 0.0 || (u + v) > 1.0) {
+        return;
+    }
+
+    double t = f * tuple_dot(sp->e2, origin_cross_e1);
+    add_intersection(intersects, t, sp);
+    return;
+}
+
+shape* create_shape(enum shape_type type) {
+    shape* s = (shape*)malloc(sizeof(shape));
+    if (!s) { return NULL; }
+    s->t = 1.0;
+    s->location.x = 0.0;
+    s->location.y = 0.0;
+    s->location.z = 0.0;
+    s->location.w = 0.0;
+    mat4x4_set_ident(s->transform);
+    s->material = create_material_default();
+    s->next = NULL;
+    s->type = type;
+    s->normal_at = normal_at_shape_sphere_plane;
+    s->intersect = intersect_all_but_triangle;
+    return s;
+}
+
+shape* create_triangle(tuple p1, tuple p2, tuple p3){
+    shape* tri = create_shape(TRIANGLE);
+    if (!tri) { return NULL; }
+    tuple_copy(&p1, &tri->p1);
+    tuple_copy(&p2, &tri->p2);
+    tuple_copy(&p3, &tri->p3);
+    tri->e1 = tuple_sub(tri->p2, tri->p1);
+    tri->e2 = tuple_sub(tri->p3, tri->p1);
+    tri->normal = tuple_normalize(tuple_cross(tri->e2, tri->e1));
+    tri->type = TRIANGLE;
+    tri->normal_at = normal_at_triangle;
+    tri->intersect = intersect_triangle;
+    return tri;
+}
+
+void delete_shape(shape* s) {
+    free(s);
+}
+
+shape* create_glass_sphere() {
+    shape* sp = create_shape(SPHERE); // TODO: Might need to make adjustment for SPHERE type
+    material mt = create_material_default();
+    mt.transparency = 1.0;
+    mt.refractive_index = 1.5;
+    sp->material = mt;
+    return sp;
+}
+
+tuple position(ray r, double t) {
+    tuple pos = tuple_mult_scalar(r.direction_vector, t); 
+    pos = tuple_add(r.origin_point, pos);
+    return pos;
+}
+
+
+bool intersects_in_order_test(intersections* intersects); // wanted test to be in debug block
+
+void intersect_world(world* w, ray* r, intersections* intersects) {
+    assert(w != NULL);
+    assert(r != NULL);
+    assert(intersects != NULL);
+    shape* sp = w->objects;
+    while (sp != NULL) {
+        (*sp->intersect)(sp, r, intersects);
+        sp = sp->next;
+    }
+    sort_intersects(intersects);
+    assert(intersects_in_order_test(intersects));
+    return;
+}
+
+void set_transform(shape* sp, Mat4x4 m) {
+    mat4x4_copy(m, sp->transform);
+}
+
+void set_pattern_transform(pattern* p, Mat4x4 m) {
+    mat4x4_copy(m, p->transform);
 }
 
 tuple tuple_reflect(tuple in, tuple normal) {
@@ -1098,7 +1162,7 @@ comps prepare_computations(intersection* hit, ray* r, intersections* xs) {
     comps.object = hit->object_id;
     comps.point = position(*r, comps.t);
     comps.eyev = tuple_negate(r->direction_vector);
-    comps.normalv = normal_at(comps.object, comps.point);
+    comps.normalv = (*comps.object->normal_at)(comps.object, comps.point);
     if (tuple_dot(comps.normalv, comps.eyev) < 0.0f) {
         comps.inside = true;
         comps.normalv = tuple_negate(comps.normalv);
@@ -2534,7 +2598,7 @@ int ray_intersect_sphere_two_point_test() {
     ray r = create_ray(0.0, 0.0, -5.0, 0.0, 0.0, 1.0);
     shape* sp = create_shape(SHAPE);
     intersections inter = create_intersections();
-    intersect(sp, &r, &inter);
+    (*sp->intersect)(sp, &r, &inter);
     assert(inter.count == 2);
     assert(equal(inter.itersection[0].t, 4.0));
     assert(equal(inter.itersection[1].t, 6.0));
@@ -2547,7 +2611,7 @@ int ray_intersect_sphere_tangent_test() {
     ray r = create_ray(0.0, 1.0, -5.0, 0.0, 0.0, 1.0);
     shape* sp = create_shape(SHAPE);
     intersections inter = create_intersections();
-    intersect(sp, &r, &inter);
+    intersect_all_but_triangle(sp, &r, &inter);
     assert(inter.count == 2);
     assert(equal(inter.itersection[0].t, 5.0));
     assert(equal(inter.itersection[1].t, 5.0));
@@ -2560,7 +2624,7 @@ int ray_misses_sphere_test() {
     ray r = create_ray(0.0, 2.0, -5.0, 0.0, 0.0, 1.0);
     shape* sp = create_shape(SHAPE);
     intersections inter = create_intersections();
-    intersect(sp, &r, &inter);
+    intersect_all_but_triangle(sp, &r, &inter);
     assert(inter.count == 0);
     assert(equal(inter.itersection[0].t, 0.0)); // might as well check
     assert(equal(inter.itersection[1].t, 0.0));
@@ -2576,7 +2640,7 @@ int ray_originates_inside_sphere_test() {
     ray r = create_ray(0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
     shape* sp = create_shape(SHAPE);
     intersections inter = create_intersections();
-    intersect(sp, &r, &inter);
+    intersect_all_but_triangle(sp, &r, &inter);
     assert(inter.count == 2);
     assert(equal(inter.itersection[0].t, -1.0));
     assert(equal(inter.itersection[1].t, 1.0));
@@ -2589,7 +2653,7 @@ int sphere_is_behind_ray_test() {
     ray r = create_ray(0.0, 0.0, 5.0, 0.0, 0.0, 1.0);
     shape* sp = create_shape(SHAPE);
     intersections inter = create_intersections();
-    intersect(sp, &r, &inter);
+    intersect_all_but_triangle(sp, &r, &inter);
     assert(inter.count == 2);
     assert(equal(inter.itersection[0].t, -6.0));
     assert(equal(inter.itersection[1].t, -4.0));
@@ -2618,7 +2682,7 @@ int intersect_sets_object_on_intersection_test() {
     ray r = create_ray(0.0, 0.0, -5.0, 0.0, 0.0, 1.0);
     shape* sp = create_shape(SHAPE);
     intersections inter = create_intersections();
-    intersect(sp, &r, &inter);
+    intersect_all_but_triangle(sp, &r, &inter);
     assert(inter.count == 2);
     assert(inter.itersection[0].object_id == sp);
     assert(inter.itersection[1].object_id == sp);
@@ -2803,7 +2867,7 @@ int intersect_scaled_sphere_test() {
     assert(&sp->transform != &scale_mat);
 
     intersections inter = create_intersections();
-    intersect(sp, &r1, &inter);
+    intersect_all_but_triangle(sp, &r1, &inter);
 
     assert(inter.count == 2);
     assert(inter.itersection[0].object_id == sp);
@@ -2828,7 +2892,7 @@ int intersecting_translated_sphere_test() {
     mat4x4_inverse(sp->transform, inv_scale_mat);
     ray r2 = transform(&r1, inv_scale_mat);
     intersections inter = create_intersections();
-    intersect(sp, &r2, &inter);
+    intersect_all_but_triangle(sp, &r2, &inter);
     assert(inter.count == 0);
     free(sp);
     return 0;
@@ -2838,7 +2902,7 @@ int normals_test() {
     shape* sphere1 = create_shape(SHAPE);
     // 78 The normal on a sphere at a point on the X axis.
     tuple location1 = create_point(1.0, 0.0, 0.0);
-    tuple n = normal_at(sphere1, location1);
+    tuple n = (*sphere1->normal_at)(sphere1, location1);
     assert(equal(n.x, 1.0));
     assert(equal(n.y, 0.0));
     assert(equal(n.z, 0.0));
@@ -2846,7 +2910,7 @@ int normals_test() {
 
     // 78 The normal on a sphere at a point on the Y axis.
     tuple location2 = create_point(0.0, 1.0, 0.0);
-    n = normal_at(sphere1, location2);
+    n = (*sphere1->normal_at)(sphere1, location2);
     assert(equal(n.x, 0.0));
     assert(equal(n.y, 1.0));
     assert(equal(n.z, 0.0));
@@ -2854,7 +2918,7 @@ int normals_test() {
 
     // 78 The normal on a sphere at a point on the Z axis.
     tuple location3 = create_point(0.0, 0.0, 1.0);
-    n = normal_at(sphere1, location3);
+    n = (*sphere1->normal_at)(sphere1, location3);
     assert(equal(n.x, 0.0));
     assert(equal(n.y, 0.0));
     assert(equal(n.z, 1.0));
@@ -2863,7 +2927,7 @@ int normals_test() {
     // 78 The normal on a sphere at a nonaxial point.
     double nonaxial = sqrt(3) / 3.0;
     tuple location4 = create_point(nonaxial, nonaxial, nonaxial);
-    n = normal_at(sphere1, location4);
+    n = (*sphere1->normal_at)(sphere1, location4);
     assert(equal(n.x, nonaxial));
     assert(equal(n.y, nonaxial));
     assert(equal(n.z, nonaxial));
@@ -2877,7 +2941,7 @@ int normal_is_normal_test() {
     shape* sp = create_shape(SHAPE);
     double nonaxial = sqrt(3) / 3.0;
     tuple location1 = create_point(nonaxial, nonaxial, nonaxial);
-    tuple n = normal_at(sp, location1);
+    tuple n = (*sp->normal_at)(sp, location1);
     tuple nn = tuple_normalize(n);
     assert(equal(n.x, nn.x));
     assert(equal(n.y, nn.y));
@@ -2892,7 +2956,7 @@ int compute_normal_on_sphere_test() {
     tuple vec1 = create_vector(0.0, sqrt(2) / 2, -sqrt(2) / 2);
     shape* sp = create_shape(SHAPE);
     gen_translate_matrix(0.0, 1.0, 0.0, sp->transform);
-    tuple n = normal_at(sp, vec1);
+    tuple n = (*sp->normal_at)(sp, vec1);
     assert(equal(n.x, 0.0));
     assert(equal(n.y, sqrt(2) / 2));
     assert(equal(n.z, -sqrt(2) / 2));
@@ -2912,7 +2976,7 @@ int compute_normal_on_transformed_sphere_test(){
     mat4x4_mul_in_place(scale_mat, rot_mat, translate_mat);
     set_transform(sp, translate_mat);
     tuple point = create_point(0.0, sqrt(2) / 2.0, -sqrt(2) / 2);
-    tuple norm_at = normal_at(sp, point);
+    tuple norm_at = (*sp->normal_at)(sp, point);
     assert(equal(norm_at.x, 0.0));
     assert(equal(norm_at.y, 0.97014250014533188f));
     assert(equal(norm_at.z, -0.24253562503633294));
@@ -4088,21 +4152,21 @@ int assigning_material_to_a_shape() {
 int normal_of_plane_is_const_everywhere_test() {
     shape* pl = create_shape(PLANE);
     tuple point = create_point(0.0, 0.0, 0.0);
-    tuple n1 = normal_at(pl, point);
+    tuple n1 = (*pl->normal_at)(pl, point);
     assert(equal(n1.x, 0.0));
     assert(equal(n1.y, 1.0));
     assert(equal(n1.z, 0.0));
     
     point.x = 10.0;
     point.z = -10.0;
-    tuple n2 = normal_at(pl, point);
+    tuple n2 = (*pl->normal_at)(pl, point);
     assert(equal(n2.x, 0.0));
     assert(equal(n2.y, 1.0));
     assert(equal(n2.z, 0.0));
 
     point.x = -5.0;
     point.z = 150;
-    tuple n3 = normal_at(pl, point);
+    tuple n3 = (*pl->normal_at)(pl, point);
     assert(equal(n3.x, 0.0));
     assert(equal(n3.y, 1.0));
     assert(equal(n3.z, 0.0));
@@ -4116,7 +4180,7 @@ int intersect_ray_parallel_to_plane_test() {
     shape* pl = create_shape(PLANE);
     ray r = create_ray(0.0, 10.0, 0.0, 0.0, 0.0, 1.0);
     intersections inter = create_intersections();
-    intersect(pl, &r, &inter);
+    intersect_all_but_triangle(pl, &r, &inter);
     assert(inter.count == 0);
     free(pl);
     return 0;
@@ -4127,7 +4191,7 @@ int intersect_coplanar_ray_test() {
     shape* pl = create_shape(PLANE);
     ray r = create_ray(0.0, 00.0, 0.0, 0.0, 0.0, 1.0);
     intersections inter = create_intersections();
-    intersect(pl, &r, &inter);
+    intersect_all_but_triangle(pl, &r, &inter);
     assert(inter.count == 0);
     free(pl);
     return 0;
@@ -4138,7 +4202,7 @@ int intersect_ray_plane_above_test() {
     shape* pl = create_shape(PLANE);
     ray r = create_ray(0.0, 1.0, 0.0, 0.0, -1.0, 0.0);
     intersections inter = create_intersections();
-    intersect(pl, &r, &inter);
+    intersect_all_but_triangle(pl, &r, &inter);
     assert(inter.count == 1);
     assert(equal(inter.itersection[0].t, 1.0));
     assert(inter.itersection[0].object_id == pl);
@@ -4151,7 +4215,7 @@ int intersect_ray_plane_below_test() {
     shape* pl = create_shape(PLANE);
     ray r = create_ray(0.0, -1.0, 0.0, 0.0, 1.0, 0.0);
     intersections inter = create_intersections();
-    intersect(pl, &r, &inter);
+    intersect_all_but_triangle(pl, &r, &inter);
     assert(inter.count == 1);
     assert(equal(inter.itersection[0].t, 1.0));
     assert(inter.itersection[0].object_id == pl);
@@ -5035,11 +5099,11 @@ void render_sphere() {
             ray ray_to_draw = create_ray(ray_origin.x, ray_origin.y, ray_origin.z, normRayOrigin.x, normRayOrigin.y, normRayOrigin.z);
             ray_to_draw.direction_vector = tuple_normalize(ray_to_draw.direction_vector);
             intersections inter = create_intersections();
-            intersect(sphere1, &ray_to_draw, &inter);
+            intersect_all_but_triangle(sphere1, &ray_to_draw, &inter);
             intersection* hit_intersection = hit(&inter);
             if (hit_intersection) {
                 tuple point2 = position(ray_to_draw, hit_intersection->t);
-                tuple normal = normal_at(hit_intersection->object_id, point2);
+                tuple normal = (*hit_intersection->object_id->normal_at)(hit_intersection->object_id, point2);
                 tuple eye = tuple_negate(ray_to_draw.direction_vector);
                 tuple pix_color = lighting(hit_intersection->object_id->material, sh, &p_light, point2, eye, normal, true);
                 assert(pix_color.x <= 255 && pix_color.x >= 0);
@@ -5885,11 +5949,136 @@ void render_refraction_scene() {
     free(mirror_ball);
 }
 
+void render_some_triangles() {
+    world w = create_world();
+    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, 0.5);
+    tuple from = create_point(20.0, 20.0, 20.0);
+    tuple to = create_point(0.0, 0.0, 0.0);
+    tuple up = create_vector(0.0, 1.0, 0.0);
+    view_transform(from, to, up, c->view_transform);
+
+    tuple light_position = create_point(-100, 100, 100);
+    tuple light_intensity = create_point(1, 1, 1);
+    *w.lights = create_point_light(light_position, light_intensity);
+
+    shape* tri1 = create_triangle(create_point(0.0, 0.0, 0.0), create_point(-10.0, 10.0, 0.0), create_point(10.0, -10.0, 0.0));
+    shape* tri2 = create_triangle(create_point(0.0, 0.0, 0.0), create_point(-10.0, 10.0, 0.0), create_point(10.0, -10.0, 0.0));
+    add_shape_to_world(tri1, &w);
+    add_shape_to_world(tri2, &w);
+
+    render(c, &w);
+}
+
+// 208 constructing a triangle test
+int construct_triangle_test() {
+    shape* tri = create_triangle(create_point(0.0,1.0,0.0), create_point(-1.0, 0.0, 0.0), create_point(1.0, 0.0 , 0.0));
+    assert(equal(tri->p1.x, 0.0));
+    assert(equal(tri->p1.y, 1.0));
+    assert(equal(tri->p1.z, 0.0));
+
+    assert(equal(tri->p2.x, -1.0));
+    assert(equal(tri->p2.y, 0.0));
+    assert(equal(tri->p2.z, 0.0));
+
+    assert(equal(tri->p3.x, 1.0));
+    assert(equal(tri->p3.y, 0.0));
+    assert(equal(tri->p3.z, 0.0));
+
+    assert(equal(tri->e1.x, -1.0));
+    assert(equal(tri->e1.y, -1.0));
+    assert(equal(tri->e1.z, 0.0));
+    assert(equal(tri->e1.w, 0.0));
+
+    assert(equal(tri->e2.x, 1.0));
+    assert(equal(tri->e2.y, -1.0));
+    assert(equal(tri->e2.z, 0.0));
+    assert(equal(tri->e2.w, 0.0));
+
+    assert(equal(tri->normal.x, 0.0));
+    assert(equal(tri->normal.y, 0.0));
+    assert(equal(tri->normal.z, -1.0));
+    assert(equal(tri->normal.w, 0.0));
+    return 0;
+}
+
+// 209 norlmal vector for a triangle test
+int finding_normal_on_triangle_test() {
+    shape *tri = create_triangle(create_point(0.0, 1.0, 0.0), create_point(-1.0, 0.0, 0.0), create_point(1.0, 0.0, 0.0));
+    tuple n1 = (*tri->normal_at)(tri, create_point(0.0, 0.5, 0.0));
+    tuple n2 = (*tri->normal_at)(tri, create_point(-0.5, 0.75, 0.0));
+    tuple n3 = (*tri->normal_at)(tri, create_point(0.5, 0.25, 0.0));
+    assert(equal(n1.x, tri->normal.x));
+    assert(equal(n1.y, tri->normal.y));
+    assert(equal(n1.z, tri->normal.z));
+
+    assert(equal(n2.x, tri->normal.x));
+    assert(equal(n2.y, tri->normal.y));
+    assert(equal(n2.z, tri->normal.z));
+
+    assert(equal(n3.x, tri->normal.x));
+    assert(equal(n3.y, tri->normal.y));
+    assert(equal(n3.z, tri->normal.z));
+
+    return 0;
+}
+
+// 210 intersecting a ray parallel to the triangle test
+int intersecting_ray_parallel_to_triangle_test() {
+    shape* tri = create_triangle(create_point(0.0, 1.0, 0.0), create_point(-1.0, 0.0, 0.0), create_point(1.0, 0.0, 0.0));
+    ray r = create_ray(0.0, -1.0, 0.0, 0.0, 1.0, 0.0);
+    intersections intersects = create_intersections();
+    (*tri->intersect)(tri, &r, &intersects);
+    assert(intersects.count == 0);
+    return 0;
+}
+
+// 210 a ray misses the p1 p3 edge test
+int ray_misses_p1_p3_edge_test() {
+    shape* tri = create_triangle(create_point(0.0, 1.0, 0.0), create_point(-1.0, 0.0, 0.0), create_point(1.0, 0.0, 0.0));
+    ray r = create_ray(1.0, 1.0, -2.0, 0.0, 0.0, 1.0);
+    intersections intersects = create_intersections();
+    (*tri->intersect)(tri, &r, &intersects);
+    assert(intersects.count == 0);
+    return 0;
+}
+
+// 211 ray misses the p1 p2 edge test
+int ray_misses_p1_p2_edge_test() {
+    shape* tri = create_triangle(create_point(0.0, 1.0, 0.0), create_point(-1.0, 0.0, 0.0), create_point(1.0, 0.0, 0.0));
+    ray r = create_ray(-1.0, 1.0, -2.0, 0.0, 0.0, 1.0);
+    intersections intersects = create_intersections();
+    (*tri->intersect)(tri, &r, &intersects);
+    assert(intersects.count == 0);
+    return 0;
+}
+
+// 211 ray misses the p2 p3 edge test
+int ray_misses_p2_p3_edge_test() {
+    shape* tri = create_triangle(create_point(0.0, 1.0, 0.0), create_point(-1.0, 0.0, 0.0), create_point(1.0, 0.0, 0.0));
+    ray r = create_ray(0.0, -1.0, -2.0, 0.0, 0.0, 1.0);
+    intersections intersects = create_intersections();
+    (*tri->intersect)(tri, &r, &intersects);
+    assert(intersects.count == 0);
+    return 0;
+}
+
+// 211 ray strikes triangle test
+int ray_strikes_triangle_test() {
+    shape* tri = create_triangle(create_point(0.0, 1.0, 0.0), create_point(-1.0, 0.0, 0.0), create_point(1.0, 0.0, 0.0));
+    ray r = create_ray(0.0, 0.5, -2.0, 0.0, 0.0, 1.0);
+    intersections intersects = create_intersections();
+    (*tri->intersect)(tri, &r, &intersects);
+    assert(intersects.count == 1);
+    assert(equal(intersects.itersection[0].t, 2.0));
+    return 0;
+}
+
 int main() {
 
   contents = containers_create();
 #if defined _DEBUG
   clock_t start_unit_tests = clock();
+  /*
   unit_test("Create Point Test", create_point_test());
   unit_test("Create Vector Test", create_vector_test());
   unit_test("Tuple With 0 Is A Point Test", tuple_with_W_0_is_point_test());
@@ -6048,10 +6237,18 @@ int main() {
   unit_test("Schlick Approximation With Small Angle N2 > N1 Test", schlick_approximation_with_small_angle_n2_gt_n1_test());
   unit_test("Add Shape To World Tests", add_shape_to_world_tests());
   unit_test("Shade Hit With Reflective Transparent Material Test", shade_hit_with_reflective_transparent_material_test());
+  unit_test("Construct Triangle Test", construct_triangle_test());
+  unit_test("Normal Vector For Triangle Test", finding_normal_on_triangle_test());
+  unit_test("Intersecting Ray Parallel To Triangle Test", intersecting_ray_parallel_to_triangle_test());
+  unit_test("Ray Misses P1 And P3 Edge Test", ray_misses_p1_p3_edge_test());
+  unit_test("Ray Misses P1 P2 Edge Test", ray_misses_p1_p2_edge_test());
+  unit_test("Ray Misses P2 P3 Edge Test", ray_misses_p2_p3_edge_test());
+  unit_test("Ray Strikes Triangle Test", ray_strikes_triangle_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
   clock_t end_unit_tests = clock();
   float seconds_unit_test = (float)(end_unit_tests - start_unit_tests) / CLOCKS_PER_SEC;
   printf("\nUnit Tests Took %f Seconds\n", seconds_unit_test);
+  */
 #endif
   clock_t start_render = clock();
 
@@ -6060,7 +6257,8 @@ int main() {
   //render_complete_world();
   //render_dual_spheres_refracting_on_floor();
   //render_complete_world_with_plane();
-  render_refraction_scene();
+  //render_refraction_scene();
+  render_some_triangles();
 
   clock_t end_render = clock();
   float seconds_render = (float)(end_render - start_render) / CLOCKS_PER_SEC;
