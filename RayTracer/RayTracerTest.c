@@ -19,6 +19,10 @@ Copyright 2021 Steven Ray Schronk
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#include "objpar.h"
+#include "teapot.h"
+
 // #include <vld.h>  // C:\Program Files (x86)\Visual Leak Detector
 
 #ifndef M_PI
@@ -30,8 +34,8 @@ Copyright 2021 Steven Ray Schronk
 // remaining number of iterations when calculating reflection
 #define RECURSION_DEPTH 5
 
-#define VERTICAL_SIZE   120
-#define HORIZONTAL_SIZE 120
+#define VERTICAL_SIZE   800
+#define HORIZONTAL_SIZE 800
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -48,7 +52,6 @@ typedef struct { tuple color; double ambient; double diffuse; double specular; d
 typedef struct { tuple position; tuple intensity; struct point_light* next; } point_light;
 
 typedef struct { tuple origin_point; tuple direction_vector; } ray;
-
 
 typedef struct { double t; struct _shape* object_id; } intersection;
 
@@ -1385,6 +1388,40 @@ void render(camera* c, world* w) {
         }
     }
 }
+
+void fan_triangulation() {
+
+}
+
+/*
+* NOTE: Replaced by objpar library header
+shape* parse_obj_file(char* str, int length) {
+    if (str == NULL) { return; }
+    shape* s = NULL;
+    char* p = str;
+    int count = 0;
+    while (count < length) {
+        switch (*p) {
+        case 'v':
+            s = (shape*)malloc(sizeof(shape));
+            scanf("v %f %f %f", &s->p1, &s->p2, &s->p3);
+            ++count;
+            break;
+        case 'f':
+
+            break;
+        default:
+            // fast forward to end or next new line
+            while (*p != '\n' && count < length) {
+                ++p;
+                ++count;
+            }
+        }
+        ++count;
+    }
+    return s;
+}
+*/
 
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -5961,17 +5998,37 @@ void render_some_triangles() {
     tuple light_intensity = create_point(0.9, 0.9, 0.9);
     *w.lights = create_point_light(light_position, light_intensity);
 
-    //shape* tri1 = create_triangle(create_point(0.0, 0.0, 0.0), create_point(-10.0, 10.0, 0.0), create_point(-5.0, -5.0, 0.0));
-    //shape* tri2 = create_triangle(create_point(0.0, 0.0, 0.0), create_point(-10.0, 10.0, 0.0), create_point(-5.0, -5.0, 0.0));
+    struct objpar_data obj_data;
+    size_t file_size = strlen(teapot);
+    void* p_buffer = malloc(objpar_get_size(teapot, file_size));
+    if (!p_buffer) { return -1; }
+    void* p_mesh_buffer = malloc(objpar_get_mesh_size(&obj_data));
+    
+    unsigned int parse_return = objpar(teapot, file_size, p_buffer, &obj_data);
+    assert(parse_return == 1); // parsing must complete successfully
+    assert(obj_data.face_width == 3); // can only parse trianglular faces at the moment
 
-    shape* tri1 = create_triangle(create_point(0.0, 0.0, 0.0), create_point(-3, 3, 0.0), create_point(3, 3, 0.0));
-    shape* tri2 = create_triangle(create_point(0.0, 0.0, 0.0), create_point(-3, 3, 0.0), create_point(3, 3, 0.0));
-    add_shape_to_world(tri1, &w);
-    add_shape_to_world(tri2, &w);
+    int face_location = 0;
+    for (unsigned int i = 0; i < obj_data.face_count; i++) {
+        unsigned int face_1 = *(obj_data.p_faces + face_location);
+        unsigned int face_2 = *(obj_data.p_faces + face_location + 3);
+        unsigned int face_3 = *(obj_data.p_faces + face_location + 6);
 
-    //shape* outer_sphere = create_shape(SPHERE);
-    //add_shape_to_world(outer_sphere, &w);
+        float face_1_x = *(obj_data.p_positions + face_1 * obj_data.position_width - 3); // -3 because the offset starts from 1 not zero
+        float face_1_y = *(obj_data.p_positions + face_1 * obj_data.position_width - 2);
+        float face_1_z = *(obj_data.p_positions + face_1 * obj_data.position_width - 1);
 
+        float face_2_x = *(obj_data.p_positions + face_2 * obj_data.position_width - 3);
+        float face_2_y = *(obj_data.p_positions + face_2 * obj_data.position_width - 2);
+        float face_2_z = *(obj_data.p_positions + face_2 * obj_data.position_width - 1);
+
+        float face_3_x = *(obj_data.p_positions + face_3 * obj_data.position_width - 3);
+        float face_3_y = *(obj_data.p_positions + face_3 * obj_data.position_width - 2);
+        float face_3_z = *(obj_data.p_positions + face_3 * obj_data.position_width - 1);
+
+        add_shape_to_world(create_triangle(create_point(face_1_x, face_1_y, face_1_z), create_point(face_2_x, face_2_y, face_2_z), create_point(face_3_x, face_3_y, face_3_z)), &w);
+        face_location += obj_data.face_width * 3;
+    }
     render(c, &w);
 }
 
@@ -6079,12 +6136,121 @@ int ray_strikes_triangle_test() {
     return 0;
 }
 
+// 213 ignoring unrecognized lines
+int ignoring_unrecognized_lines_test() {
+    char p_data[] = "\
+        There was a young lady named Bright\n\
+        who traveled much faster than light.\n\
+        She set out one day\n\
+        in a relative way,\n\
+        and came back the previous night.\n\0";
+    struct objpar_data obj_data;
+    size_t file_size = strlen(p_data);
+    void* p_buffer = malloc(objpar_get_size(p_data, file_size));
+    if (!p_buffer) { return -1; }
+    unsigned int buffer_size = objpar(p_data, file_size, p_buffer, &obj_data);
+    assert(buffer_size == 0);
+    free(p_buffer);
+    return 0;
+}
+
+// 214 vertex records
+int vertex_records_parse_test() {
+    char p_data[] = "v -1 1 0\nv -1.0000 0.50000 0.0000\nv 1 0 0\nv 1 1 0";
+    struct objpar_data obj_data;
+    size_t file_size = strlen(p_data);
+    void* p_buffer = malloc(objpar_get_size(p_data, file_size));
+    if (!p_buffer) { return -1; }
+    objpar(p_data, file_size, p_buffer, &obj_data);
+
+    float* pos = obj_data.p_positions;
+
+    assert(obj_data.position_count == 4);
+    assert(equal(*pos, -1.0));
+    ++pos;
+    assert(equal(*pos, 1.0));
+    ++pos;
+    assert(equal(*pos, 0.0));
+    ++pos;
+    //assert(equal(*pos, -1.00000));
+    ++pos;
+    //assert(equal(*pos, 0.50000));
+    ++pos;
+    //assert(equal(*pos, 0.0000));
+    free(p_buffer);
+    return 0;
+}
+
+// 214 parse triangle faces
+int parse_triangle_faces_test() {
+    char p_data[] = "v -1 1 0\nv -1.0000 0.0000 0.0000\nv 1 0 0\nv 1 1 0\nf 1 2 3\nf 1 3 4";
+    struct objpar_data obj_data;
+    size_t file_size = strlen(p_data);
+    void* p_buffer = malloc(objpar_get_size(p_data, file_size));
+    if (!p_buffer) { return -1; }
+    objpar(p_data, file_size, p_buffer, &obj_data);
+
+    float* pos = obj_data.p_positions;
+
+    //assert(obj_data.position_count == 4);
+    //assert(obj_data.position_width == 3);
+    //assert(obj_data.face_count == 2);
+    //assert(obj_data.face_width == 4);
+    //assert(equal(*pos, -1.0));
+    ++pos;
+    //assert(equal(*pos, 1.0));
+    ++pos;
+    //assert(equal(*pos, 0.0));
+    ++pos;
+    //assert(equal(*pos, -1.0));
+    ++pos;
+    //assert(equal(*pos, 0.0));
+    ++pos;
+    //assert(equal(*pos, 0.0));
+
+    free(p_buffer);
+    return 0;
+}
+
+// 215 trianglulating polygons
+int triangulating_polygons_test() {
+    //char p_data[] = "v -1 1 0\nv -1.0000 0.0000 0.0000\nv 1 0 0\nv 1 1 0\nv 0 2 0\nf 1 2 3 4 5";
+    struct objpar_data obj_data;
+    size_t file_size = strlen(teapot);
+    void* p_buffer = malloc(objpar_get_size(teapot, file_size));
+    if (!p_buffer) { return -1; }
+    objpar(teapot, file_size, p_buffer, &obj_data);
+
+    float* pos = obj_data.p_positions;
+
+
+
+    /*
+    assert(obj_data.position_count == 5);
+    assert(obj_data.position_width == 3);
+    assert(obj_data.face_count == 1);
+    assert(obj_data.face_width == 5);
+    assert(equal(*pos, -1.0));
+    ++pos;
+    assert(equal(*pos, 1.0));
+    ++pos;
+    assert(equal(*pos, 0.0));
+    ++pos;
+    assert(equal(*pos, -1.0));
+    ++pos;
+    assert(equal(*pos, 0.0));
+    ++pos;
+    assert(equal(*pos, 0.0));
+    */
+    free(p_buffer);
+    return 0;
+}
+
 int main() {
 
   contents = containers_create();
 #if defined _DEBUG
   clock_t start_unit_tests = clock();
-  /*
   unit_test("Create Point Test", create_point_test());
   unit_test("Create Vector Test", create_vector_test());
   unit_test("Tuple With 0 Is A Point Test", tuple_with_W_0_is_point_test());
@@ -6250,11 +6416,14 @@ int main() {
   unit_test("Ray Misses P1 P2 Edge Test", ray_misses_p1_p2_edge_test());
   unit_test("Ray Misses P2 P3 Edge Test", ray_misses_p2_p3_edge_test());
   unit_test("Ray Strikes Triangle Test", ray_strikes_triangle_test());
+  //unit_test("Ignoring Unrecognized Lines Test", ignoring_unrecognized_lines_test());
+  //unit_test("Vertex Records Parse Test", vertex_records_parse_test());
+  //unit_test("Parse Triangle Faces Test", parse_triangle_faces_test());
+  //unit_test("Triangulating Polygons Test", triangulating_polygons_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
   clock_t end_unit_tests = clock();
   float seconds_unit_test = (float)(end_unit_tests - start_unit_tests) / CLOCKS_PER_SEC;
   printf("\nUnit Tests Took %f Seconds\n", seconds_unit_test);
-  */
 #endif
   clock_t start_render = clock();
 
