@@ -34,8 +34,8 @@ Copyright 2021 Steven Ray Schronk
 // remaining number of iterations when calculating reflection
 #define RECURSION_DEPTH 5
 
-#define VERTICAL_SIZE   800
 #define HORIZONTAL_SIZE 800
+#define VERTICAL_SIZE   800
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -1389,10 +1389,6 @@ void render(camera* c, world* w) {
     }
 }
 
-void fan_triangulation() {
-
-}
-
 /*
 * NOTE: Replaced by objpar library header
 shape* parse_obj_file(char* str, int length) {
@@ -1422,6 +1418,93 @@ shape* parse_obj_file(char* str, int length) {
     return s;
 }
 */
+
+int load_model_file(char* filename, world* w) {
+    assert(filename);
+    assert(w);
+
+    char* buffer = NULL;
+    size_t file_size, read_size;
+    FILE* file;
+    file = fopen(filename, "r");
+    assert(file);
+
+    fseek(file, 0, SEEK_END);
+    file_size = ftell(file);
+    rewind(file);
+    buffer = (char*)malloc(sizeof(char) * (file_size + 1));
+    read_size = fread(buffer, sizeof(char), file_size, file);
+    buffer[file_size] = '\0';
+
+    if (file_size != read_size)
+    {
+        free(buffer);
+        buffer = NULL;
+        assert(false && "Cannot read model file.\n");
+    }
+
+    struct objpar_data obj_data;
+    void* p_buffer = malloc(objpar_get_size(buffer, file_size));
+    if (!p_buffer) { return -1; }
+    void* p_mesh_buffer = malloc(objpar_get_mesh_size(&obj_data));
+
+    unsigned int parse_return = objpar(buffer, file_size, p_buffer, &obj_data);
+    assert(parse_return == 1); // parsing must complete successfully
+    int face_location = 0;
+    if (obj_data.face_width == 3) {
+        for (unsigned int i = 0; i < obj_data.face_count; i++) {
+            unsigned int face_1 = *(obj_data.p_faces + face_location);
+            unsigned int face_2 = *(obj_data.p_faces + face_location + 3);
+            unsigned int face_3 = *(obj_data.p_faces + face_location + 6);
+
+            float face_1_x = *(obj_data.p_positions + face_1 * obj_data.position_width - 3); // -3 because the offset starts from 1 not zero
+            float face_1_y = *(obj_data.p_positions + face_1 * obj_data.position_width - 2);
+            float face_1_z = *(obj_data.p_positions + face_1 * obj_data.position_width - 1);
+
+            float face_2_x = *(obj_data.p_positions + face_2 * obj_data.position_width - 3);
+            float face_2_y = *(obj_data.p_positions + face_2 * obj_data.position_width - 2);
+            float face_2_z = *(obj_data.p_positions + face_2 * obj_data.position_width - 1);
+
+            float face_3_x = *(obj_data.p_positions + face_3 * obj_data.position_width - 3);
+            float face_3_y = *(obj_data.p_positions + face_3 * obj_data.position_width - 2);
+            float face_3_z = *(obj_data.p_positions + face_3 * obj_data.position_width - 1);
+
+            add_shape_to_world(create_triangle(create_point(face_1_x, face_1_y, face_1_z), create_point(face_2_x, face_2_y, face_2_z), create_point(face_3_x, face_3_y, face_3_z)), w);
+            face_location += obj_data.face_width * 3;
+        }
+    }
+    else if (obj_data.face_width == 4) {
+        for (unsigned int i = 0; i < obj_data.face_count; i++) {
+            unsigned int face_1 = *(obj_data.p_faces + face_location);
+            unsigned int face_2 = *(obj_data.p_faces + face_location + 3);
+            unsigned int face_3 = *(obj_data.p_faces + face_location + 6);
+            unsigned int face_4 = *(obj_data.p_faces + face_location + 9);
+
+            float face_1_x = *(obj_data.p_positions + face_1 * obj_data.position_width - 3); // -3 because the offset starts from 1 not zero
+            float face_1_y = *(obj_data.p_positions + face_1 * obj_data.position_width - 2);
+            float face_1_z = *(obj_data.p_positions + face_1 * obj_data.position_width - 1);
+
+            float face_2_x = *(obj_data.p_positions + face_2 * obj_data.position_width - 3);
+            float face_2_y = *(obj_data.p_positions + face_2 * obj_data.position_width - 2);
+            float face_2_z = *(obj_data.p_positions + face_2 * obj_data.position_width - 1);
+
+            float face_3_x = *(obj_data.p_positions + face_3 * obj_data.position_width - 3);
+            float face_3_y = *(obj_data.p_positions + face_3 * obj_data.position_width - 2);
+            float face_3_z = *(obj_data.p_positions + face_3 * obj_data.position_width - 1);
+
+            float face_4_x = *(obj_data.p_positions + face_4 * obj_data.position_width - 3);
+            float face_4_y = *(obj_data.p_positions + face_4 * obj_data.position_width - 2);
+            float face_4_z = *(obj_data.p_positions + face_4 * obj_data.position_width - 1);
+
+            add_shape_to_world(create_triangle(create_point(face_1_x, face_1_y, face_1_z), create_point(face_2_x, face_2_y, face_2_z), create_point(face_3_x, face_3_y, face_3_z)), w);
+            add_shape_to_world(create_triangle(create_point(face_1_x, face_1_y, face_1_z), create_point(face_3_x, face_3_y, face_3_z), create_point(face_4_x, face_4_y, face_4_z)), w);
+
+            face_location += obj_data.face_width * 3;
+        }
+    }
+    fclose(file);
+
+}
 
 /*------------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -6001,7 +6084,7 @@ void render_some_triangles() {
     struct objpar_data obj_data;
     size_t file_size = strlen(teapot);
     void* p_buffer = malloc(objpar_get_size(teapot, file_size));
-    if (!p_buffer) { return -1; }
+    if (!p_buffer) { return; }
     void* p_mesh_buffer = malloc(objpar_get_mesh_size(&obj_data));
     
     unsigned int parse_return = objpar(teapot, file_size, p_buffer, &obj_data);
@@ -6029,6 +6112,22 @@ void render_some_triangles() {
         add_shape_to_world(create_triangle(create_point(face_1_x, face_1_y, face_1_z), create_point(face_2_x, face_2_y, face_2_z), create_point(face_3_x, face_3_y, face_3_z)), &w);
         face_location += obj_data.face_width * 3;
     }
+    render(c, &w);
+}
+
+void render_lighthouse_scene() {
+    world w = create_world();
+    camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, 0.5);
+    tuple from = create_point(12.0, 7.0, -5.0);
+    tuple to = create_point(0.0, 2.1, 0.0);
+    tuple up = create_vector(0.0, 1.0, 0.0);
+    view_transform(from, to, up, c->view_transform);
+
+    tuple light_position = create_point(2.0, 10.0, -5.0);
+    tuple light_intensity = create_point(0.9, 0.9, 0.9);
+    *w.lights = create_point_light(light_position, light_intensity);
+
+    load_model_file("models/lighthouse_larger_2.obj", &w);
     render(c, &w);
 }
 
@@ -6222,8 +6321,6 @@ int triangulating_polygons_test() {
     objpar(teapot, file_size, p_buffer, &obj_data);
 
     float* pos = obj_data.p_positions;
-
-
 
     /*
     assert(obj_data.position_count == 5);
@@ -6433,7 +6530,8 @@ int main() {
   //render_dual_spheres_refracting_on_floor();
   //render_complete_world_with_plane();
   //render_refraction_scene();
-  render_some_triangles();
+  //render_some_triangles();
+  render_lighthouse_scene();
 
   clock_t end_render = clock();
   float seconds_render = (float)(end_render - start_render) / CLOCKS_PER_SEC;
