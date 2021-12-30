@@ -34,8 +34,8 @@ Copyright 2021 Steven Ray Schronk
 // remaining number of iterations when calculating reflection
 #define RECURSION_DEPTH 5
 
-#define HORIZONTAL_SIZE 800
-#define VERTICAL_SIZE   800
+#define HORIZONTAL_SIZE 120
+#define VERTICAL_SIZE   120
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -1419,7 +1419,7 @@ shape* parse_obj_file(char* str, int length) {
 }
 */
 
-int load_model_file(char* filename, world* w) {
+void load_model_file(char* filename, world* w) {
     assert(filename);
     assert(w);
 
@@ -1502,8 +1502,9 @@ int load_model_file(char* filename, world* w) {
             face_location += obj_data.face_width * 3;
         }
     }
+    free(file);
+    free(p_mesh_buffer);
     fclose(file);
-
 }
 
 /*------------------------------------------------------------------------------------------------------------------*/
