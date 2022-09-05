@@ -34,12 +34,14 @@ Copyright 2021 Steven Ray Schronk
 // remaining number of iterations when calculating reflection
 #define RECURSION_DEPTH 5
 
-#define HORIZONTAL_SIZE 120
-#define VERTICAL_SIZE   120
+#define HORIZONTAL_SIZE 240
+#define VERTICAL_SIZE   240
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
 typedef double Mat4x4[4][4];
+
+typedef struct { double min, max; } pair;
 
 typedef struct { double x, y, z, w; } tuple;
 
@@ -59,7 +61,7 @@ typedef struct { double t; struct _shape* object_id; } intersection;
 
 typedef struct { intersection itersection[INTERSECTIONS_SIZE]; int count; } intersections;
 
-enum shape_type { SHAPE, PLANE, SPHERE, TRIANGLE };
+enum shape_type { SHAPE, PLANE, SPHERE, TRIANGLE, CUBE };
 
 typedef struct _shape {
     tuple location;
@@ -77,7 +79,6 @@ typedef struct _shape {
     tuple(*normal_at)(struct _shape* shape, tuple point);
     void (*intersect)(struct _shape* shape, ray* r, intersections* intersects);
 } shape;
-
 
 typedef struct { struct _shape* objects; point_light* lights; } world;
 
@@ -671,6 +672,22 @@ void mat4x4_reset_to_zero(Mat4x4 mat) {
     }
 }
 
+double max_of_three(double a, double b, double c) {
+    double max = -INFINITY;
+    if (a > max) { max = a; }
+    if (b > max) { max = b; }
+    if (c > max) { max = c; }
+    return max;
+}
+
+double min_of_three(double a, double b, double c) {
+    double max = INFINITY;
+    if (a < max) { max = a; }
+    if (b < max) { max = b; }
+    if (c < max) { max = c; }
+    return max;
+}
+
 material create_material_default() {
     material m;
     m.color.x = 1.0; m.color.y = 1.0; m.color.z = 1.0; m.color.w = 0.0;
@@ -705,7 +722,7 @@ tuple normal_at_shape_sphere_plane(shape* shape, tuple point) {
         break;
     case PLANE:
         local_normal = create_vector(0.0, 1.0, 0.0);
-        break;
+break;
     default:
         assert(0 && "Shape Type Is Not Set For Shape.");
     }
@@ -724,11 +741,73 @@ tuple normal_at_triangle(shape* shape, tuple point) {
     return normal;
 }
 
+tuple normal_at_cube(shape* shape, tuple point) {
+    double maxc = max_of_three(fabs(point.x), fabs(point.y), fabs(point.z));
+    tuple norm = create_point(0, 0, 0);
+    if (equal(maxc, fabs(point.x))) {
+        norm.x = point.x;
+        norm.y = 0;
+        norm.z = 0;
+        return norm;
+    } else if(equal(maxc, fabs(point.y))) {
+        norm.x = 0;
+        norm.y = point.y;
+        norm.z = 0;
+        return norm;
+    }
+    norm.x = 0;
+    norm.y = 0;
+    norm.z = point.z;
+    return norm;
+}
+
 ray transform(ray* r, Mat4x4 m) {
     ray ray_out = *r;
     mat4x4_mul_tuple(m, r->origin_point, &ray_out.origin_point);
     mat4x4_mul_tuple(m, r->direction_vector, &ray_out.direction_vector);
     return ray_out;
+}
+
+pair check_axis(double origin, double direction) {
+    pair ans = { 0, 0 };
+    double tmin_numerator = -1 - origin;
+    double tmax_numerator = 1 - origin;
+
+    double tmin = 0;
+    double tmax = 0;
+    if (fabs(direction) >= DBL_EPSILON) {
+        tmin = tmin_numerator / direction;
+        tmax = tmax_numerator / direction;
+    }
+    else {
+        tmin = tmin_numerator * DBL_MAX;
+        tmax = tmax_numerator * DBL_MAX;
+    }
+
+    if (tmin > tmax) {
+        double ttemp = tmin;
+        tmin = tmax;
+        tmax = ttemp;
+    }
+    assert(tmin <= tmax);
+    ans.min = tmin;
+    ans.max = tmax;
+    return ans;
+}
+
+void intersect_cube(shape* sp, ray* r, intersections* intersects) {
+    pair xt = check_axis(r->origin_point.x, r->direction_vector.x);
+    pair yt = check_axis(r->origin_point.y, r->direction_vector.y);
+    pair zt = check_axis(r->origin_point.z, r->direction_vector.z);
+
+    double tmin = max_of_three(xt.min, yt.min, zt.min);
+    double tmax = min_of_three(xt.max, yt.max, zt.max);
+
+    if (tmin >= tmax) { return; }
+
+    add_intersection(intersects, tmin, sp);
+    add_intersection(intersects, tmax, sp);
+    return;
 }
 
 void intersect_all_but_triangle(shape* sp, ray* r, intersections* intersects) {
@@ -751,6 +830,9 @@ void intersect_all_but_triangle(shape* sp, ray* r, intersections* intersects) {
             add_intersection(intersects, t, sp);
             return;
         }
+    case CUBE:
+        intersect_cube(sp, &r2, intersects);
+        return;
     }
 
     tuple origin = create_point(0.0, 0.0, 0.0);
@@ -810,7 +892,11 @@ shape* create_shape(enum shape_type type) {
     s->material = create_material_default();
     s->next = NULL;
     s->type = type;
-    s->normal_at = normal_at_shape_sphere_plane;
+    if (type == CUBE) {
+        s->normal_at = normal_at_cube;
+    } else {
+        s->normal_at = normal_at_shape_sphere_plane;
+    }
     s->intersect = intersect_all_but_triangle;
     return s;
 }
@@ -848,7 +934,6 @@ tuple position(ray r, double t) {
     pos = tuple_add(r.origin_point, pos);
     return pos;
 }
-
 
 bool intersects_in_order_test(intersections* intersects); // wanted test to be in debug block
 
@@ -5180,6 +5265,158 @@ int shade_hit_with_reflective_transparent_material_test() {
     return 0;
 }
 
+// 168 ray intersects cube
+int ray_intersects_cube_test() {
+    shape* cu = create_shape(CUBE);
+    intersections inter = create_intersections();
+
+    ray r_px = create_ray(5.0, 0.5, 0.0, -1.0, 0.0, 0.0);
+    intersect_cube(cu, &r_px, &inter);
+    assert(inter.count == 2);
+    assert(equal(inter.itersection[0].t, 4));
+    assert(equal(inter.itersection[1].t, 6));
+    clear_intersections(&inter);
+
+    ray r_nx = create_ray(-5.0, 0.5, 0.0, 1.0, 0.0, 0.0);
+    intersect_cube(cu, &r_nx, &inter);
+    assert(inter.count == 2);
+    assert(equal(inter.itersection[0].t, 4));
+    assert(equal(inter.itersection[1].t, 6));
+    clear_intersections(&inter);
+
+    ray r_py = create_ray(0.5, 5.0, 0.0, 0.0, -1.0, 0.0);
+    intersect_cube(cu, &r_py, &inter);
+    assert(inter.count == 2);
+    assert(equal(inter.itersection[0].t, 4));
+    assert(equal(inter.itersection[1].t, 6));
+    clear_intersections(&inter);
+
+    ray r_ny = create_ray(0.5, -5.0, 0.0, 0.0, 1.0, 0.0);
+    intersect_cube(cu, &r_ny, &inter);
+    assert(inter.count == 2);
+    assert(equal(inter.itersection[0].t, 4));
+    assert(equal(inter.itersection[1].t, 6));
+    clear_intersections(&inter);
+
+    ray r_pz = create_ray(0.5, 0.0, 5., 0.0, 0.0, -1.0);
+    intersect_cube(cu, &r_pz, &inter);
+    assert(inter.count == 2);
+    assert(equal(inter.itersection[0].t, 4));
+    assert(equal(inter.itersection[1].t, 6));
+    clear_intersections(&inter);
+
+    ray r_nz = create_ray(0.5, 0.0, -5.0, 0.0, 0.0, 1.0);
+    intersect_cube(cu, &r_nz, &inter);
+    assert(inter.count == 2);
+    assert(equal(inter.itersection[0].t, 4));
+    assert(equal(inter.itersection[1].t, 6));
+    clear_intersections(&inter);
+
+    ray r_inside = create_ray(0.0, 0.5, 0.0, 0.0, 0.0, 1.0);
+    intersect_cube(cu, &r_inside, &inter);
+    assert(inter.count == 2);
+    assert(equal(inter.itersection[0].t, -1));
+    assert(equal(inter.itersection[1].t, 1));
+    clear_intersections(&inter);
+
+    free(cu);
+    return 0;
+}
+
+// 172 A ray misses a cube
+int ray_misses_cube_test() {
+    shape* cu = create_shape(CUBE);
+    intersections inter = create_intersections();
+
+    ray r1 = create_ray(-2.0, 0.0, 0.0, 0.2673, 0.5345, 0.8018);
+    intersect_cube(cu, &r1, &inter);
+    assert(inter.count == 0);
+    clear_intersections(&inter);
+
+    ray r2 = create_ray(0.0, -2.0, 0.0, 0.8018, 0.2673, 0.5345);
+    intersect_cube(cu, &r2, &inter);
+    assert(inter.count == 0);
+    clear_intersections(&inter);
+
+    ray r3 = create_ray(-0.0, 0.0, -2.0, 0.5345, 0.8018, 0.2673);
+    intersect_cube(cu, &r3, &inter);
+    assert(inter.count == 0);
+    clear_intersections(&inter);
+
+    ray r4 = create_ray(2.0, 0.0, 2.0, 0.0, 0.0, -1.0);
+    intersect_cube(cu, &r4, &inter);
+    assert(inter.count == 0);
+    clear_intersections(&inter);
+
+    ray r5 = create_ray(0.0, 2.0, 2.0, 0.0, -1.0, 0.0);
+    intersect_cube(cu, &r5, &inter);
+    assert(inter.count == 0);
+    clear_intersections(&inter);
+
+    ray r6 = create_ray(2.0, 2.0, 0.0, -1.0, 0.0, 0.0);
+    intersect_cube(cu, &r6, &inter);
+    assert(inter.count == 0);
+    clear_intersections(&inter);
+
+    free(cu);
+    return 0;
+}
+
+// 173 Normal on the surface of a cube
+int normal_on_surface_of_cube_test() {
+    shape* cu = create_shape(CUBE);
+    tuple p = create_point(1.0, 0.5, -0.8);
+    tuple norm = normal_at_cube(cu, p);
+    assert(equal(norm.x, 1.0));
+    assert(equal(norm.y, 0.0));
+    assert(equal(norm.z, 0.0));
+
+    p.x = -1.0; p.y = -0.2; p.z = 0.9;
+    norm = normal_at_cube(cu, p);
+    assert(equal(norm.x,-1.0));
+    assert(equal(norm.y, 0.0));
+    assert(equal(norm.z, 0.0));
+
+    p.x = -0.4; p.y = 1.0; p.z = -0.1;
+    norm = normal_at_cube(cu, p);
+    assert(equal(norm.x, 0.0));
+    assert(equal(norm.y, 1.0));
+    assert(equal(norm.z, 0.0));
+
+    p.x = 0.3; p.y = -1.0; p.z = -0.7;
+    norm = normal_at_cube(cu, p);
+    assert(equal(norm.x, 0.0));
+    assert(equal(norm.y, -1.0));
+    assert(equal(norm.z, 0.0));
+
+    p.x = -0.6; p.y = 0.3; p.z = 1.0;
+    norm = normal_at_cube(cu, p);
+    assert(equal(norm.x, 0.0));
+    assert(equal(norm.y, 0.0));
+    assert(equal(norm.z, 1.0));
+
+    p.x = 0.4; p.y = 0.4; p.z = -1.0;
+    norm = normal_at_cube(cu, p);
+    assert(equal(norm.x, 0.0));
+    assert(equal(norm.y, 0.0));
+    assert(equal(norm.z, -1.0));
+
+    p.x = 1.0; p.y = 1.0; p.z = 1.0;
+    norm = normal_at_cube(cu, p);
+    assert(equal(norm.x, 1.0));
+    assert(equal(norm.y, 0.0));
+    assert(equal(norm.z, 0.0));
+
+    p.x = -1.0; p.y = -1.0; p.z = -1.0;
+    norm = normal_at_cube(cu, p);
+    assert(equal(norm.x, -1.0));
+    assert(equal(norm.y, 0.0));
+    assert(equal(norm.z, 0.0));
+
+    free(cu);
+    return 0;
+}
+
 #endif
 
 /*------------------------------------------------------------------------------------------------------------------*/
@@ -6044,6 +6281,24 @@ void render_refraction_scene() {
     mirror_ball_material.reflective = 1.0;
     mirror_ball->material = mirror_ball_material;
 
+    shape* cube = create_shape(CUBE);
+    Mat4x4 translate_cube;
+    gen_translate_matrix(-1.5, .5, -0.5, translate_cube);
+    Mat4x4 scale_cube;
+    gen_scale_matrix(0.125, 0.125, 0.125, scale_cube);
+
+    Mat4x4 rotate_cube;
+    gen_rotate_matrix_X(M_PI / 2.4, rotate_cube);
+    Mat4x4 final_transform_cube;
+    mat4x4_set_ident(final_transform_cube);
+
+    mat4x4_mul_in_place(final_transform_cube, translate_cube, final_transform_cube);
+    mat4x4_mul_in_place(final_transform_cube, rotate_cube, final_transform_cube);
+    mat4x4_mul_in_place(final_transform_cube, scale_cube, final_transform_cube);
+    mat4x4_copy(final_transform_cube, cube->transform);
+
+    cube->material = glass_ball_material;
+
     add_shape_to_world(floor, &w);
     add_shape_to_world(west_wall, &w);
     add_shape_to_world(east_wall, &w);
@@ -6054,6 +6309,7 @@ void render_refraction_scene() {
     add_shape_to_world(green_background_ball, &w);
     add_shape_to_world(glass_ball, &w);
     add_shape_to_world(mirror_ball, &w);
+    add_shape_to_world(cube, &w);
 
     render(c, &w);
 
@@ -6068,6 +6324,7 @@ void render_refraction_scene() {
     free(green_background_ball);
     free(glass_ball);
     free(mirror_ball);
+    free(cube);
 }
 
 void render_some_triangles() {
@@ -6128,7 +6385,7 @@ void render_lighthouse_scene() {
     tuple light_intensity = create_point(0.9, 0.9, 0.9);
     *w.lights = create_point_light(light_position, light_intensity);
 
-    load_model_file("models/lighthouse_larger_2.obj", &w);
+    load_model_file("models/full_scene_001.obj", &w);
     render(c, &w);
 }
 
@@ -6344,6 +6601,53 @@ int triangulating_polygons_test() {
     return 0;
 }
 
+// extra test
+int max_of_three_test() {
+    assert(max_of_three(0, 0, 0) == 0);
+
+    assert(max_of_three(1, 0, 0) == 1);
+    assert(max_of_three(0, 1, 0) == 1);
+    assert(max_of_three(0, 0, 1) == 1);
+
+    assert(max_of_three(-1, 0, 0) == 0);
+    assert(max_of_three(0, -1, 0) == 0);
+    assert(max_of_three(0, 0, -1) == 0);
+
+    assert(max_of_three(1, 1, 0) == 1);
+    assert(max_of_three(0, 1, 1) == 1);
+
+    assert(equal(max_of_three(0.000, 0.000001, .0000001), .000001));
+    assert(equal(max_of_three(0.000001, .0000001, 0.000), .000001));
+    assert(equal(max_of_three(0.000001, 0.000, .0000001), .000001));
+
+    assert(equal(max_of_three(DBL_MAX, DBL_MIN, DBL_MAX - DBL_EPSILON), DBL_MAX));
+    assert(equal(max_of_three(DBL_MIN, DBL_MAX - DBL_EPSILON, DBL_MAX), DBL_MAX));
+    assert(equal(max_of_three(DBL_MIN, DBL_MAX, DBL_MAX - DBL_EPSILON), DBL_MAX));
+
+    assert(max_of_three(INFINITY, DBL_MIN, INFINITY - DBL_EPSILON) == INFINITY);
+    assert(max_of_three(DBL_MIN, INFINITY - DBL_EPSILON, INFINITY) == INFINITY);
+    assert(max_of_three(DBL_MIN, INFINITY, INFINITY - DBL_EPSILON) == INFINITY);
+
+    return 0;
+}
+
+// extra test
+int min_of_three_test() {
+    assert(min_of_three(0, 0, 0) == 0);
+
+    assert(min_of_three(1, 0, 0) == 0);
+    assert(min_of_three(0, 1, 0) == 0);
+    assert(min_of_three(0, 0, 1) == 0);
+
+    assert(min_of_three(-1, 0, 0) == -1);
+    assert(min_of_three(0, -1, 0) == -1);
+    assert(min_of_three(0, 0, -1) == -1);
+
+    assert(min_of_three(1, 1, 0) == 0);
+    assert(min_of_three(0, 1, 1) == 0);
+    return 0;
+}
+
 int main() {
 
   contents = containers_create();
@@ -6519,6 +6823,11 @@ int main() {
   //unit_test("Parse Triangle Faces Test", parse_triangle_faces_test());
   //unit_test("Triangulating Polygons Test", triangulating_polygons_test());
   //unit_test("Render A World With Camera Test", render_a_world_with_camera_test());
+  unit_test("Max Of Three Test", max_of_three_test());
+  unit_test("Min Of Three Test", min_of_three_test());
+  unit_test("Ray Intersects Cube Test", ray_intersects_cube_test());
+  unit_test("Ray Intersects Misses Cube Test", ray_misses_cube_test());
+  unit_test("Normal On Surface Of Cube Test", normal_on_surface_of_cube_test());
   clock_t end_unit_tests = clock();
   float seconds_unit_test = (float)(end_unit_tests - start_unit_tests) / CLOCKS_PER_SEC;
   printf("\nUnit Tests Took %f Seconds\n", seconds_unit_test);
@@ -6530,9 +6839,10 @@ int main() {
   //render_complete_world();
   //render_dual_spheres_refracting_on_floor();
   //render_complete_world_with_plane();
-  //render_refraction_scene();
+  render_refraction_scene();
   //render_some_triangles();
-  render_lighthouse_scene();
+  //render_lighthouse_scene();
+  //render_cubes();
 
   clock_t end_render = clock();
   float seconds_render = (float)(end_render - start_render) / CLOCKS_PER_SEC;
