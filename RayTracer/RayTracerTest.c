@@ -34,8 +34,8 @@ Copyright 2021 Steven Ray Schronk
 // remaining number of iterations when calculating reflection
 #define RECURSION_DEPTH 5
 
-#define HORIZONTAL_SIZE 120
-#define VERTICAL_SIZE   120
+#define HORIZONTAL_SIZE 500
+#define VERTICAL_SIZE   500
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -768,6 +768,17 @@ tuple normal_at_cylinder(shape* shape, tuple point) {
     return create_vector(point.x, 0, point.z);
 }
 
+tuple normal_at_end_cap(shape* shape, tuple point) {
+    double dist = pow(point.x, 2) + pow(point.z, 2);
+    if (dist < 1 && point.y >= shape->maximum - EPSILON) {
+        return create_vector(0, 1, 0);
+    }
+    else if (dist < 1 && point.y <= shape->minimum + EPSILON) {
+        return create_vector(0, -1, 0);
+    }
+    return create_vector(point.x, 0, point.z);
+}
+
 ray transform(ray* r, Mat4x4 m) {
     ray ray_out = *r;
     mat4x4_mul_tuple(m, r->origin_point, &ray_out.origin_point);
@@ -840,28 +851,30 @@ void intersect_caps(shape* sp, ray* r, intersections* intersects) {
 
 void intersect_cylinder(shape* sp, ray* r, intersections* intersects) {
     double a = pow(r->direction_vector.x, 2) + pow(r->direction_vector.z, 2);
-    if (equal(a, 0.0)) { return; }
-    double b = 2.0 * r->origin_point.x * r->direction_vector.x +
-        2.0 * r->origin_point.z * r->direction_vector.z;
-    double c = pow(r->origin_point.x, 2) + pow(r->origin_point.z, 2) - 1.0;
-    double disc = pow(b, 2) - 4.0 * a * c;
-    if (disc < 0) { return; }
-    double t0 = (-b - (sqrt(disc))) / (2 * a);
-    double t1 = (-b + (sqrt(disc))) / (2 * a);
-    if (t0 > t1) {
-        double ttemp = t0;
-        t0 = t1;
-        t1 = ttemp;
+    if (!equal(a, 0.0)) {
+        double b = 2.0 * r->origin_point.x * r->direction_vector.x +
+            2.0 * r->origin_point.z * r->direction_vector.z;
+        double c = pow(r->origin_point.x, 2) + pow(r->origin_point.z, 2) - 1.0;
+        double disc = pow(b, 2) - 4.0 * a * c;
+        if (disc < 0) { return; }
+        double t0 = (-b - (sqrt(disc))) / (2 * a);
+        double t1 = (-b + (sqrt(disc))) / (2 * a);
+        if (t0 > t1) {
+            double ttemp = t0;
+            t0 = t1;
+            t1 = ttemp;
+        }
+        //assert(t0 <= t1);
+        double y0 = r->origin_point.y + t0 * r->direction_vector.y;
+        if (sp->minimum < y0 && y0 < sp->maximum) {
+            add_intersection(intersects, t0, sp);
+        }
+        double y1 = r->origin_point.y + t1 * r->direction_vector.y;
+        if (sp->minimum < y1 && y1 < sp->maximum) {
+            add_intersection(intersects, t1, sp);
+        }
     }
-    assert(t0 <= t1);
-    double y0 = r->origin_point.y + t0 * r->direction_vector.y;
-    if (sp->minimum < y0 && y0 < sp->maximum) {
-        add_intersection(intersects, t0, sp);
-    }
-    double y1 = r->origin_point.y + t1 * r->direction_vector.y;
-    if (sp->minimum < y1 && y1 < sp->maximum) {
-        add_intersection(intersects, t1, sp);
-    }
+    intersect_caps(sp, r, intersects);
     return;
 }
 
@@ -5642,19 +5655,108 @@ int intersecting_caps_of_closed_cylinder_test() {
     r.origin_point.x = 0.0; r.origin_point.y = 3.0; r.origin_point.z = 0.0;
     direction.x = 0.0; direction.y = -1.0; direction.z = 0.0;
     direction = tuple_normalize(direction);
-    r.direction_vector.x = direction.x; r.direction_vector.y = direction.x; r.direction_vector.x = direction.z;
+    r.direction_vector.x = direction.x; r.direction_vector.y = direction.y; r.direction_vector.z = direction.z;
     intersect_cylinder(cyl, &r, &inter);
-    //assert(inter.count == 2);
+    assert(inter.count == 2);
     clear_intersections(&inter);
 
-    /*
-Extra tests not in book for:
-Intersecting the caps of a closed cylinder
- # Cylinder lid size
-    | 6 | point(0, 0.5, 0.999) | vector(0, 1, 0) | 2     |
-    | 7 | point(0, 0.5, 1.001) | vector(0, 1, 0) | 0     |
+    r.origin_point.x = 0.0; r.origin_point.y = 3.0; r.origin_point.z = -2.0;
+    direction.x = 0.0; direction.y = -1.0; direction.z = 2.0;
+    direction = tuple_normalize(direction);
+    r.direction_vector.x = direction.x; r.direction_vector.y = direction.y; r.direction_vector.z = direction.z;
+    intersect_cylinder(cyl, &r, &inter);
+    assert(inter.count == 2);
+    clear_intersections(&inter);
 
-*/
+    r.origin_point.x = 0.0; r.origin_point.y = 4.0; r.origin_point.z = -2.0;
+    direction.x = 0.0; direction.y = -1.0; direction.z = 1.0;
+    direction = tuple_normalize(direction);
+    r.direction_vector.x = direction.x; r.direction_vector.y = direction.y; r.direction_vector.z = direction.z;
+    intersect_cylinder(cyl, &r, &inter);
+    assert(inter.count == 2);
+    clear_intersections(&inter);
+
+    r.origin_point.x = 0.0; r.origin_point.y = 0.0; r.origin_point.z = -2.0;
+    direction.x = 0.0; direction.y = 1.0; direction.z = 2.0;
+    direction = tuple_normalize(direction);
+    r.direction_vector.x = direction.x; r.direction_vector.y = direction.y; r.direction_vector.z = direction.z;
+    intersect_cylinder(cyl, &r, &inter);
+    assert(inter.count == 2);
+    clear_intersections(&inter);
+
+    r.origin_point.x = 0.0; r.origin_point.y = -1.0; r.origin_point.z = -2.0;
+    direction.x = 0.0; direction.y = 1.0; direction.z = 1.0;
+    direction = tuple_normalize(direction);
+    r.direction_vector.x = direction.x; r.direction_vector.y = direction.y; r.direction_vector.z = direction.z;
+    intersect_cylinder(cyl, &r, &inter);
+    assert(inter.count == 2);
+    clear_intersections(&inter);
+
+    /* extra test */
+    r.origin_point.x = 0.0; r.origin_point.y = 0.5; r.origin_point.z = 0.999;
+    direction.x = 0.0; direction.y = 1.0; direction.z = 0.0;
+    direction = tuple_normalize(direction);
+    r.direction_vector.x = direction.x; r.direction_vector.y = direction.y; r.direction_vector.z = direction.z;
+    intersect_cylinder(cyl, &r, &inter);
+    assert(inter.count == 2);
+    clear_intersections(&inter);
+
+    /* extra test */
+    r.origin_point.x = 0.0; r.origin_point.y = 0.5; r.origin_point.z = 1.001;
+    direction.x = 0.0; direction.y = 1.0; direction.z = 0.0;
+    direction = tuple_normalize(direction);
+    r.direction_vector.x = direction.x; r.direction_vector.y = direction.y; r.direction_vector.z = direction.z;
+    intersect_cylinder(cyl, &r, &inter);
+    assert(inter.count == 0);
+    clear_intersections(&inter);
+
+    free(cyl);
+    return 0;
+}
+
+// 187 The normal vector on a cylinder's end caps
+int normal_vector_on_end_caps_test() {
+    shape* cyl = create_shape(CYLINDER);
+    cyl->minimum = 1.0;
+    cyl->maximum = 2.0;
+    cyl->closed = true;
+    tuple point = create_vector(0.1, 1.0, 0.0);
+    tuple n;
+
+    n = normal_at_end_cap(cyl, point);
+    assert(n.x == 0);
+    assert(n.y == -1);
+    assert(n.z == 0);
+
+    point.x = 0.5; point.y = 1.0; point.z = 0.0;
+    n = normal_at_end_cap(cyl, point);
+    assert(n.x == 0);
+    assert(n.y == -1);
+    assert(n.z == 0);
+
+    point.x = 0.0; point.y = 1.0; point.z = 0.5;
+    n = normal_at_end_cap(cyl, point);
+    assert(n.x == 0);
+    assert(n.y == -1);
+    assert(n.z == 0);
+
+    point.x = 0.0; point.y = 2.0; point.z = 0.0;
+    n = normal_at_end_cap(cyl, point);
+    assert(n.x == 0);
+    assert(n.y == 1);
+    assert(n.z == 0);
+
+    point.x = 0.5; point.y = 2.0; point.z = 0.0;
+    n = normal_at_end_cap(cyl, point);
+    assert(n.x == 0);
+    assert(n.y == 1);
+    assert(n.z == 0);
+
+    point.x = 0.0; point.y = 2.0; point.z = 0.5;
+    n = normal_at_end_cap(cyl, point);
+    assert(n.x == 0);
+    assert(n.y == 1);
+    assert(n.z == 0);
 
     free(cyl);
     return 0;
@@ -6543,7 +6645,7 @@ void render_refraction_scene() {
     cube->material = glass_ball_material;
 
     shape* cylinder = create_shape(CYLINDER);
-
+    /*
     add_shape_to_world(floor, &w);
     add_shape_to_world(west_wall, &w);
     add_shape_to_world(east_wall, &w);
@@ -6555,6 +6657,7 @@ void render_refraction_scene() {
     add_shape_to_world(glass_ball, &w);
     add_shape_to_world(mirror_ball, &w);
     add_shape_to_world(cube, &w);
+    */
     add_shape_to_world(cylinder, &w);
 
     render(c, &w);
@@ -7077,7 +7180,8 @@ int main() {
   unit_test("Ray Strikes Cylinder Test", ray_strikes_cylinder_test());
   unit_test("Normal Vector On Cylinder Test", normal_vector_on_cylinder_test());
   unit_test("Intersecting Constrained Cylinder Test", intersecting_constrained_cylinder());
-  //unit_test("Intersecting Caps Of Closed Cylinder Test()", intersecting_caps_of_closed_cylinder_test());
+  unit_test("Intersecting Caps Of Closed Cylinder Test", intersecting_caps_of_closed_cylinder_test());
+  unit_test("Normal Vector On End Of Caps Test", normal_vector_on_end_caps_test());
   clock_t end_unit_tests = clock();
   float seconds_unit_test = (float)(end_unit_tests - start_unit_tests) / CLOCKS_PER_SEC;
   printf("\nUnit Tests Took %f Seconds\n", seconds_unit_test);
