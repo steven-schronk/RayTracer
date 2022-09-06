@@ -101,17 +101,17 @@ typedef struct objpar_mesh
 } objpar_mesh_t;
 
 /* Declaration */
-static unsigned int objpar(const char* p_string, unsigned int string_size, void* p_buffer, struct objpar_data* p_data);
+static unsigned int objpar(const char* p_string, size_t string_size, void* p_buffer, struct objpar_data* p_data);
 static unsigned int objpar_build_mesh(const struct objpar_data* p_data, void* p_buffer, struct objpar_mesh* p_mesh);
-static unsigned int objpar_internal_v(const char* p_string, unsigned int* p_index, unsigned int string_size, float** pp_vbuff, unsigned int vertex_width);
-static unsigned int objpar_internal_vn(const char* p_string, unsigned int* p_index, unsigned int string_size, float** pp_nbuff, unsigned int normal_width);
-static unsigned int objpar_internal_vt(const char* p_string, unsigned int* p_index, unsigned int string_size, float** pp_tbuff, unsigned int texcoord_width);
-static unsigned int objpar_internal_f(const char* p_string, unsigned int* p_index, unsigned int string_size, unsigned int** pp_fbuff, unsigned int face_width);
-static unsigned int objpar_internal_comment(const char* p_string, unsigned int* p_index, unsigned int string_size);
-static unsigned int objpar_internal_newline(const char* p_string, unsigned int* p_index, unsigned int string_size, unsigned int* p_space_count);
+static unsigned int objpar_internal_v(const char* p_string, unsigned int* p_index, size_t string_size, float** pp_vbuff, unsigned int vertex_width);
+static unsigned int objpar_internal_vn(const char* p_string, unsigned int* p_index, size_t  string_size, float** pp_nbuff, unsigned int normal_width);
+static unsigned int objpar_internal_vt(const char* p_string, unsigned int* p_index, size_t  string_size, float** pp_tbuff, unsigned int texcoord_width);
+static unsigned int objpar_internal_f(const char* p_string, unsigned int* p_index, size_t  string_size, unsigned int** pp_fbuff, unsigned int face_width);
+static unsigned int objpar_internal_comment(const char* p_string, unsigned int* p_index, size_t  string_size);
+static unsigned int objpar_internal_newline(const char* p_string, unsigned int* p_index, size_t  string_size, unsigned int* p_space_count);
 
 /* Definition */
-unsigned int objpar(const char* p_string, unsigned int string_size, void* p_buffer, struct objpar_data* p_data)
+unsigned int objpar(const char* p_string, size_t string_size, void* p_buffer, struct objpar_data* p_data)
 {
     unsigned int index;
     unsigned int vertex_count;
@@ -384,7 +384,7 @@ unsigned int objpar_build_mesh(const struct objpar_data* p_data, void* p_buffer,
     return 1;
 }
 
-unsigned int objpar_internal_v(const char* p_string, unsigned int* p_index, unsigned int string_size, float** pp_vbuff, unsigned int vertex_width)
+unsigned int objpar_internal_v(const char* p_string, unsigned int* p_index, size_t string_size, float** pp_vbuff, unsigned int vertex_width)
 {
     char str[32];
     unsigned int index;
@@ -445,7 +445,7 @@ unsigned int objpar_internal_v(const char* p_string, unsigned int* p_index, unsi
     return 0;
 }
 
-unsigned int objpar_internal_vn(const char* p_string, unsigned int* p_index, unsigned int string_size, float** pp_nbuff, unsigned int normal_width)
+unsigned int objpar_internal_vn(const char* p_string, unsigned int* p_index, size_t string_size, float** pp_nbuff, unsigned int normal_width)
 {
     char str[32];
     unsigned int index;
@@ -506,7 +506,7 @@ unsigned int objpar_internal_vn(const char* p_string, unsigned int* p_index, uns
     return 0;
 }
 
-unsigned int objpar_internal_vt(const char* p_string, unsigned int* p_index, unsigned int string_size, float** pp_tbuff, unsigned int texcoord_width)
+unsigned int objpar_internal_vt(const char* p_string, unsigned int* p_index, size_t string_size, float** pp_tbuff, unsigned int texcoord_width)
 {
     char str[32];
     unsigned int index;
@@ -567,7 +567,7 @@ unsigned int objpar_internal_vt(const char* p_string, unsigned int* p_index, uns
     return 0;
 }
 
-unsigned int objpar_internal_f(const char* p_string, unsigned int* p_index, unsigned int string_size, unsigned int** pp_fbuff, unsigned int face_width)
+unsigned int objpar_internal_f(const char* p_string, unsigned int* p_index, size_t string_size, unsigned int** pp_fbuff, unsigned int face_width)
 {
     char str[32];
     unsigned int index;
@@ -639,7 +639,7 @@ unsigned int objpar_internal_f(const char* p_string, unsigned int* p_index, unsi
     return 0;
 }
 
-unsigned int objpar_internal_comment(const char* p_string, unsigned int* p_index, unsigned int string_size)
+unsigned int objpar_internal_comment(const char* p_string, unsigned int* p_index, size_t string_size)
 {
     unsigned int index;
     char c;
@@ -659,7 +659,7 @@ unsigned int objpar_internal_comment(const char* p_string, unsigned int* p_index
     return 0;
 }
 
-unsigned int objpar_internal_newline(const char* p_string, unsigned int* p_index, unsigned int string_size, unsigned int* p_space_count)
+unsigned int objpar_internal_newline(const char* p_string, unsigned int* p_index, size_t string_size, unsigned int* p_space_count)
 {
     unsigned int index;
     unsigned int space_count;
