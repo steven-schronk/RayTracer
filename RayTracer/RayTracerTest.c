@@ -773,7 +773,7 @@ tuple normal_at_end_cap(shape* shape, tuple point) {
     if (dist < 1 && point.y >= shape->maximum - EPSILON) {
         return create_vector(0, 1, 0);
     }
-    else if (dist < 1 && point.y <= shape->minimum + EPSILON) {
+    if (dist < 1 && point.y <= shape->minimum + EPSILON) {
         return create_vector(0, -1, 0);
     }
     return create_vector(point.x, 0, point.z);
@@ -832,7 +832,7 @@ void intersect_cube(shape* sp, ray* r, intersections* intersects) {
 bool check_cap(ray* r, double t) {
     double x = r->origin_point.x + t * r->direction_vector.x;
     double z = r->origin_point.z + t * r->direction_vector.z;
-    if (sqrt(x) + sqrt(z) <= 1) return true;
+    if (pow(x,2) + pow(z,2) <= 1) return true;
     return false;
 }
 
@@ -852,7 +852,7 @@ void intersect_caps(shape* sp, ray* r, intersections* intersects) {
 
 void intersect_cylinder(shape* sp, ray* r, intersections* intersects) {
     double a = pow(r->direction_vector.x, 2) + pow(r->direction_vector.z, 2);
-    if (!equal(a, 0.0)) {
+    if (!a<EPSILON) {
         double b = 2.0 * r->origin_point.x * r->direction_vector.x +
             2.0 * r->origin_point.z * r->direction_vector.z;
         double c = pow(r->origin_point.x, 2) + pow(r->origin_point.z, 2) - 1.0;
@@ -1166,7 +1166,8 @@ tuple pattern_at(struct pattern* pat, tuple* point) {
         }
         return pat->to;
     case CHECKER:
-        if ((int)(floor(point->x) + floor(point->y) + floor(point->z)) % 2 == 0) {
+        int position = (int)(floor(abs(point->x)) + floor(abs(point->y)) + floor(abs(point->z)));
+        if (position % 2 == 0) {
             return pat->from;
         }
         return pat->to;
@@ -6213,6 +6214,14 @@ void render_complete_world_with_plane() {
     //floor_material.has_pattern = true;
     floor_material.reflective = 0.0;
     floor_material.transparency = 0.0;
+    
+
+    tuple from_color = create_point(0.15, 0.15, 0.15);
+    tuple to_color = create_point(0.85, 0.85, 0.85);
+    pattern checkers = checkers_pattern(from_color, to_color);
+    floor_material.has_pattern = true;
+    floor_material.pattern = checkers;
+
     floor->material = floor_material;
 
     shape* right_wall = create_shape(PLANE);
@@ -6462,28 +6471,23 @@ void render_refraction_scene() {
     world w = create_world();
 
     camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, 0.5);
-    tuple from = create_point(-6.5, 4.85, -6.5);
+    tuple from = create_point(-4.5, 1.75, -4);
     tuple to = create_point(0.0, 0.85, 0.0);
     tuple up = create_vector(0.0, 1.0, 0.0);
     view_transform(from, to, up, c->view_transform);
 
-    tuple light_position = create_point(-4.9, 4.9, 1);
+    tuple light_position = create_point(-3.0, 3.0, 1);
     tuple light_intensity = create_point(1, 1, 1);
     *w.lights = create_point_light(light_position, light_intensity);
 
-    // Wall Material is Reused Several Places
-    material wall_material = create_material_default();
-    tuple wall_material_from_color = create_point(0.0, 0.0, 0.0);
-    tuple wall_material_to_color = create_point(0.75, 0.75, 0.75);
-    pattern wall_material_checkers = checkers_pattern(wall_material_from_color, wall_material_to_color);
-    wall_material.has_pattern = true;
-    wall_material.pattern = wall_material_checkers;
-    wall_material.specular = 0;
-
     shape* floor = create_shape(PLANE);
-    Mat4x4 floor_rotate_transform;
-    gen_rotate_matrix_Y( 0.31415, floor_rotate_transform);
-    mat4x4_copy(floor_rotate_transform, floor->transform);
+    Mat4x4 translate_floor;
+    gen_translate_matrix(0.0, 0.1, 0.0, translate_floor);
+    Mat4x4 final_transform_floor;
+    mat4x4_set_ident(final_transform_floor);
+    mat4x4_mul_in_place(final_transform_floor, translate_floor, final_transform_floor);
+    mat4x4_copy(final_transform_floor, floor->transform);
+
     material floor_material = create_material_default();
     tuple from_color = create_point(0.0, 0.0, 0.0);
     tuple to_color = create_point(0.75, 0.75, 0.75);
@@ -6496,59 +6500,53 @@ void render_refraction_scene() {
     floor_material.reflective = 0.5;
     floor->material = floor_material;
 
-    shape* west_wall = create_shape(PLANE);
-    Mat4x4 translate_west;
-    gen_translate_matrix(-5.0, 0.0, 0.0, translate_west);
-    Mat4x4 rotate_y_west;
-    gen_rotate_matrix_Y(1.5708, rotate_y_west);
-    Mat4x4 rotate_z_west;
-    gen_rotate_matrix_Z(1.5708, rotate_z_west);
-    Mat4x4 scale_west;
-    gen_scale_matrix(10.0, 0.01, 10.0, scale_west);
-    Mat4x4 final_transform_west;
-    mat4x4_set_ident(final_transform_west);
-    mat4x4_mul_in_place(translate_west, final_transform_west, final_transform_west);
-    mat4x4_copy(final_transform_west, west_wall->transform);
-    west_wall->material = wall_material;
+    // Wall Material is Reused Several Places
+    material wall_material = create_material_default();
+    tuple wall_material_from_color = create_point(0.0, 0.0, 0.0);
+    tuple wall_material_to_color = create_point(0.75, 0.75, 0.75);
+    pattern wall_material_checkers = checkers_pattern(wall_material_from_color, wall_material_to_color);
+    wall_material.has_pattern = true;
+    wall_material.pattern = wall_material_checkers;
+    wall_material.specular = 0;
 
-    shape* east_wall = create_shape(PLANE);
-    Mat4x4 translate_east;
-    gen_translate_matrix(5.0, 0.0, 0.0, translate_east);
-    Mat4x4 rotate_y_east;
-    gen_rotate_matrix_Y(1.5708, rotate_y_east);
-    Mat4x4 rotate_z_east;
-    gen_rotate_matrix_Z(1.5708, rotate_z_east);
-    Mat4x4 final_transform_east;
-    mat4x4_set_ident(final_transform_east);
-    mat4x4_mul_in_place(rotate_y_east, final_transform_east, final_transform_east);
-    mat4x4_mul_in_place(rotate_z_east, final_transform_east, final_transform_east);
-    mat4x4_mul_in_place(translate_east, final_transform_east, final_transform_east);
-    mat4x4_copy(final_transform_east, east_wall->transform);
-    east_wall->material = wall_material;
+    shape* right_wall = create_shape(PLANE);
+    Mat4x4 translate_right;
+    gen_translate_matrix(5.0, 0.0, 0.0, translate_right);
+    Mat4x4 rotate_y_right;
+    gen_rotate_matrix_Y(1.5708, rotate_y_right);
+    Mat4x4 rotate_z_right;
+    gen_rotate_matrix_Z(1.5708, rotate_z_right);
+    Mat4x4 final_transform_right;
+    mat4x4_set_ident(final_transform_right);
+    mat4x4_mul_in_place(rotate_y_right, final_transform_right, final_transform_right);
+    mat4x4_mul_in_place(rotate_z_right, final_transform_right, final_transform_right);
+    mat4x4_mul_in_place(translate_right, final_transform_right, final_transform_right);
+    mat4x4_copy(final_transform_right, right_wall->transform);
+    right_wall->material = wall_material;
 
-    shape* north_wall = create_shape(PLANE);
-    Mat4x4 translate_north;
-    gen_translate_matrix(0.0, 0.0, 5.0, translate_north);
-    Mat4x4 rotate_x_north;
-    gen_rotate_matrix_X(1.5708, rotate_x_north);
-    Mat4x4 final_transform_north;
-    mat4x4_set_ident(final_transform_north);
-    mat4x4_mul_in_place(rotate_x_north, final_transform_north, final_transform_north);
-    mat4x4_mul_in_place(translate_north, final_transform_north, final_transform_north);
-    mat4x4_copy(final_transform_north, north_wall->transform);
-    north_wall->material = wall_material;
+    shape* left_wall = create_shape(PLANE);
+    Mat4x4 translate_left;
+    gen_translate_matrix(0.0, 0.0, 5.0, translate_left);
+    Mat4x4 rotate_x_left;
+    gen_rotate_matrix_X(1.5708, rotate_x_left);
+    Mat4x4 final_transform_left;
+    mat4x4_set_ident(final_transform_left);
+    mat4x4_mul_in_place(rotate_x_left, final_transform_left, final_transform_left);
+    mat4x4_mul_in_place(translate_left, final_transform_left, final_transform_left);
+    mat4x4_copy(final_transform_left, left_wall->transform);
+    left_wall->material = wall_material;
 
-    shape* south_wall = create_shape(PLANE);
-    Mat4x4 translate_south;
-    gen_translate_matrix(0.0, 0.0, -5.0, translate_south);
-    Mat4x4 rotate_x_south;
-    gen_rotate_matrix_X(1.5708, rotate_x_south);
-    Mat4x4 final_transform_south;
-    mat4x4_set_ident(final_transform_south);
-    mat4x4_mul_in_place(rotate_x_south, final_transform_south, final_transform_south);
-    mat4x4_mul_in_place(translate_south, final_transform_south, final_transform_south);
-    mat4x4_copy(final_transform_south, south_wall->transform);
-    south_wall->material = wall_material;
+    shape* right_behind_wall = create_shape(PLANE);
+    Mat4x4 translate_right_behind;
+    gen_translate_matrix(0.0, 0.0, -5.0, translate_right_behind);
+    Mat4x4 rotate_x_right_behind;
+    gen_rotate_matrix_X(1.5708, rotate_x_right_behind);
+    Mat4x4 final_transform_right_behind;
+    mat4x4_set_ident(final_transform_right_behind);
+    mat4x4_mul_in_place(rotate_x_right_behind, final_transform_right_behind, final_transform_right_behind);
+    mat4x4_mul_in_place(translate_right_behind, final_transform_right_behind, final_transform_right_behind);
+    mat4x4_copy(final_transform_right_behind, right_behind_wall->transform);
+    right_behind_wall->material = wall_material;
 
     shape* red_background_ball = create_shape(SHAPE);
     Mat4x4 translate_background_ball;
@@ -6632,59 +6630,71 @@ void render_refraction_scene() {
 
     shape* cube = create_shape(CUBE);
     Mat4x4 translate_cube;
-    gen_translate_matrix(-1.5, .5, -0.5, translate_cube);
+    gen_translate_matrix(-1.55, .25, -0.55, translate_cube);
     Mat4x4 scale_cube;
     gen_scale_matrix(0.125, 0.125, 0.125, scale_cube);
 
-    //Mat4x4 rotate_cube;
-    //gen_rotate_matrix_X(.25, rotate_cube);
-    //Mat4x4 final_transform_cube;
-    //mat4x4_set_ident(final_transform_cube);
+    Mat4x4 rotate_cube;
+    gen_rotate_matrix_X(.25, rotate_cube);
+    Mat4x4 final_transform_cube;
+    mat4x4_set_ident(final_transform_cube);
 
-    //mat4x4_mul_in_place(final_transform_cube, translate_cube, final_transform_cube);
+    mat4x4_mul_in_place(final_transform_cube, translate_cube, final_transform_cube);
     //mat4x4_mul_in_place(final_transform_cube, rotate_cube, final_transform_cube);
-    //mat4x4_mul_in_place(final_transform_cube, scale_cube, final_transform_cube);
-    //mat4x4_copy(final_transform_cube, cube->transform);
+    mat4x4_mul_in_place(final_transform_cube, scale_cube, final_transform_cube);
+    mat4x4_copy(final_transform_cube, cube->transform);
 
-    cube->material = glass_ball_material;
+    cube->material = background_ball_material;
 
     shape* cylinder = create_shape(CYLINDER);
-    cylinder->maximum = 0.5;
+    cylinder->maximum = 0.20;
     cylinder->minimum = 0.0;
-    cylinder->closed = true;
+    cylinder->closed = false;
+
+    Mat4x4 translate_cyl;
+    gen_translate_matrix(-0.5, .21, -0.5, translate_cyl);
+    //gen_translate_matrix(-1.7, .21, -1.7, translate_cyl);
 
     //Mat4x4 rotate_cyl;
-    //gen_rotate_matrix_X(M_PI / 2.4, rotate_cyl);
-    //Mat4x4 final_transform_cyl;
-    //mat4x4_set_ident(final_transform_cyl);
-    //mat4x4_mul_in_place(final_transform_cyl, rotate_cyl, final_transform_cyl);
-    //mat4x4_copy(final_transform_cyl, cylinder->transform);
-    cylinder->material.color.x = 0.3;
+    //gen_rotate_matrix_X(-.375, rotate_cyl);
 
-    /*
+    Mat4x4 scale_cyl;
+    gen_scale_matrix(0.175, 0.25, 0.175, scale_cyl);
+
+    Mat4x4 final_transform_cyl;
+    mat4x4_set_ident(final_transform_cyl);
+    mat4x4_mul_in_place(final_transform_cyl, translate_cyl, final_transform_cyl);
+    mat4x4_mul_in_place(final_transform_cyl, scale_cyl, final_transform_cyl);
+
+    mat4x4_copy(final_transform_cyl, cylinder->transform);
+    cylinder->material.color.x = 1.000;
+    cylinder->material.color.y = 0.766;
+    cylinder->material.color.z = 0.336;
+    cylinder->material.shininess = 300;
+    cylinder->material.reflective = 1.0;
+    cylinder->material.ambient = 0.25;
+
+    //cylinder->material = glass_ball_material;
+    
     add_shape_to_world(floor, &w);
-    add_shape_to_world(west_wall, &w);
-    add_shape_to_world(east_wall, &w);
-    add_shape_to_world(north_wall, &w);
-    add_shape_to_world(south_wall, &w);
+    add_shape_to_world(right_wall, &w);
+    add_shape_to_world(left_wall, &w);
+    add_shape_to_world(right_behind_wall, &w);
     add_shape_to_world(red_background_ball, &w);
     add_shape_to_world(blue_background_ball, &w);
     add_shape_to_world(green_background_ball, &w);
     add_shape_to_world(glass_ball, &w);
     add_shape_to_world(mirror_ball, &w);
     add_shape_to_world(cube, &w);
-     */
-    
     add_shape_to_world(cylinder, &w);
 
     render(c, &w);
 
     free(c);
     free(floor);
-    free(west_wall);
-    free(east_wall);
-    free(north_wall);
-    free(south_wall);
+    free(right_wall);
+    free(left_wall);
+    free(right_behind_wall);
     free(red_background_ball);
     free(blue_background_ball);
     free(green_background_ball);
