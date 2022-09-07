@@ -34,8 +34,8 @@ Copyright 2021 Steven Ray Schronk
 // remaining number of iterations when calculating reflection
 #define RECURSION_DEPTH 5
 
-#define HORIZONTAL_SIZE 500
-#define VERTICAL_SIZE   500
+#define HORIZONTAL_SIZE 120
+#define VERTICAL_SIZE   120
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -1166,7 +1166,7 @@ tuple pattern_at(struct pattern* pat, tuple* point) {
         }
         return pat->to;
     case CHECKER:
-        int position = (int)(floor(abs(point->x)) + floor(abs(point->y)) + floor(abs(point->z)));
+        int position = (int)(floor(abs((int)point->x)) + floor(abs((int)point->y)) + floor(abs((int)point->z)));
         if (position % 2 == 0) {
             return pat->from;
         }
@@ -3006,7 +3006,7 @@ int too_many_intersections_test() {
 }
 
 // 64  NOTE: All hit tests have been put together
-int hit_tests(){
+int hit_test(){
     intersections intersects = create_intersections();
     shape* sp = create_shape(SHAPE);
 
@@ -4962,7 +4962,7 @@ int helper_for_producing_sphere_with_glassy_material_test() {
     return 0;
 }
 
-int containers_tests() {
+int containers_test() {
     containers test_containers = containers_create();
 
     shape* pl1 = create_shape(PLANE);
@@ -5275,7 +5275,7 @@ int schlick_approximation_with_small_angle_n2_gt_n1_test() {
 }
 
 // Extra tests for add_shape_to_world
-int add_shape_to_world_tests() {
+int add_shape_to_world_test() {
     world w = create_default_world();
 
     shape* sh1 = create_shape(PLANE);
@@ -5530,7 +5530,6 @@ int ray_strikes_cylinder_test() {
     tuple direction = create_vector(0.0, 0.0, 0.0);
     ray r = create_ray(0, 0, 0, 0, 0, 0);
     intersections inter = create_intersections();
-    tuple origin = create_point(0.0, 0.0, 0.0);
 
     r.origin_point.x = 1.0; r.origin_point.y = 0.0; r.origin_point.z = -5.0;
     direction.x = 0.0; direction.y = 0.0; direction.z = 1.0;
@@ -7092,7 +7091,7 @@ int main() {
   unit_test("Intersect Sets Object On Intersection Test", intersect_sets_object_on_intersection_test());
   unit_test("Clear Intersections Test", clear_intersections_test());
   unit_test("Too Many Intersections Test", too_many_intersections_test());
-  unit_test("Hit Test", hit_tests());
+  unit_test("Hit Test", hit_test());
   unit_test("Change Sphere Transform Test", change_sphere_transform_test());
   unit_test("Intersect Scaled Sphere With Ray Test", intersect_scaled_sphere_test());
   unit_test("Translating A Ray Test", translating_ray_test());
@@ -7173,7 +7172,7 @@ int main() {
   unit_test("Color At With Mutually Reflective Surfaces Test", color_at_with_mutually_reflective_surfaces_test());
   unit_test("Reflected Color At Max Recursive Depth Test", reflected_color_at_max_recursive_depth_test());
   unit_test("Helper For Producing Sphere With Glassy Material Test", helper_for_producing_sphere_with_glassy_material_test());
-  unit_test("Containers Tests", containers_tests());
+  unit_test("Containers Test", containers_test());
   unit_test("Finding N1 And N2 At Various Intersections Test", finding_n1_and_n2_at_various_intersections_test());
   unit_test("Under Point Is Offset Below The Suface Test", under_point_is_offset_below_the_suface_test());
   unit_test("Refracted Color With Opaque Surface Test", refracted_color_with_opaque_surface_test());
@@ -7184,7 +7183,7 @@ int main() {
   unit_test("Schlick Approximation Under Total Internal Reflection Test", schlick_approximation_under_total_internal_reflection_test());
   unit_test("Schlick Approximation With Perpedicular Viewing Angle Test", schlick_approximation_with_perpedicular_viewing_angle_test());
   unit_test("Schlick Approximation With Small Angle N2 > N1 Test", schlick_approximation_with_small_angle_n2_gt_n1_test());
-  unit_test("Add Shape To World Tests", add_shape_to_world_tests());
+  unit_test("Add Shape To World Test", add_shape_to_world_test());
   unit_test("Shade Hit With Reflective Transparent Material Test", shade_hit_with_reflective_transparent_material_test());
   unit_test("Construct Triangle Test", construct_triangle_test());
   unit_test("Normal Vector For Triangle Test", finding_normal_on_triangle_test());
