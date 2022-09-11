@@ -34,8 +34,10 @@ Copyright 2021 Steven Ray Schronk
 // remaining number of iterations when calculating reflection
 #define RECURSION_DEPTH 5
 
-#define HORIZONTAL_SIZE 120
-#define VERTICAL_SIZE   120
+// 71 x 40
+// 142 x 80
+#define HORIZONTAL_SIZE 142
+#define VERTICAL_SIZE   80
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -1141,6 +1143,8 @@ tuple test_pattern_at(struct pattern* pat, tuple* point) {
 tuple pattern_at(struct pattern* pat, tuple* point) {
     tuple color = create_point(0.0, 0.0, 0.0);
     tuple distance;
+    int ring_location;
+    int position;
     switch (pat->type) {
     case TEST:
         return create_point(point->x, point->y, point->z);
@@ -1160,13 +1164,13 @@ tuple pattern_at(struct pattern* pat, tuple* point) {
         double fraction = point->x - floor(point->x);
         return tuple_add(pat->from, tuple_mult_scalar(distance, fraction));
     case RING:
-        int ring_location = (int)floor(sqrt(point->x * point->x + point->z * point->z)) % 2 == 0;
+        ring_location = (int)floor(sqrt(point->x * point->x + point->z * point->z)) % 2 == 0;
         if (ring_location) {
             return pat->from;
         }
         return pat->to;
     case CHECKER:
-        int position = (int)(floor(abs((int)point->x)) + floor(abs((int)point->y)) + floor(abs((int)point->z)));
+        position = (int)(floor(abs((int)point->x)) + floor(abs((int)point->y)) + floor(abs((int)point->z)));
         if (position % 2 == 0) {
             return pat->from;
         }
@@ -6470,7 +6474,7 @@ void render_refraction_scene() {
     world w = create_world();
 
     camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, 0.5);
-    tuple from = create_point(-4.5, 1.75, -4);
+    tuple from = create_point(-4.5, 1.75, -4.7);
     tuple to = create_point(0.0, 0.85, 0.0);
     tuple up = create_vector(0.0, 1.0, 0.0);
     view_transform(from, to, up, c->view_transform);
@@ -6496,7 +6500,7 @@ void render_refraction_scene() {
     floor_material.ambient = 0.5;
     floor_material.diffuse = 0.4;
     floor_material.specular = 0.8;
-    floor_material.reflective = 0.5;
+    floor_material.reflective = 0.2;
     floor->material = floor_material;
 
     // Wall Material is Reused Several Places
@@ -6557,7 +6561,7 @@ void render_refraction_scene() {
 
     shape* blue_background_ball = create_shape(SHAPE);
     Mat4x4 blue_background_ball_translate;
-    gen_translate_matrix(2.6, 0.6, 4.4, blue_background_ball_translate);
+    gen_translate_matrix(2.3, 0.6, 4.4, blue_background_ball_translate);
     Mat4x4 blue_background_ball_scale_transform;
     gen_scale_matrix(0.6, 0.6, 0.6, blue_background_ball_scale_transform);
     mat4x4_mul_in_place(blue_background_ball_translate, blue_background_ball_scale_transform, blue_background_ball_translate);
@@ -6629,7 +6633,7 @@ void render_refraction_scene() {
 
     shape* cube = create_shape(CUBE);
     Mat4x4 translate_cube;
-    gen_translate_matrix(-1.55, .25, -0.55, translate_cube);
+    gen_translate_matrix(-0.60, 0.25, 0.80, translate_cube);
     Mat4x4 scale_cube;
     gen_scale_matrix(0.125, 0.125, 0.125, scale_cube);
 
@@ -6643,7 +6647,9 @@ void render_refraction_scene() {
     mat4x4_mul_in_place(final_transform_cube, scale_cube, final_transform_cube);
     mat4x4_copy(final_transform_cube, cube->transform);
 
-    cube->material = background_ball_material;
+    material cube_material = create_material_default();
+
+    cube->material = cube_material;
 
     shape* cylinder = create_shape(CYLINDER);
     cylinder->maximum = 0.20;
@@ -6651,7 +6657,7 @@ void render_refraction_scene() {
     cylinder->closed = false;
 
     Mat4x4 translate_cyl;
-    gen_translate_matrix(-0.5, .21, -0.5, translate_cyl);
+    gen_translate_matrix(.65, .21, -0.75, translate_cyl);
     //gen_translate_matrix(-1.7, .21, -1.7, translate_cyl);
 
     //Mat4x4 rotate_cyl;
@@ -6672,8 +6678,6 @@ void render_refraction_scene() {
     cylinder->material.shininess = 300;
     cylinder->material.reflective = 1.0;
     cylinder->material.ambient = 0.25;
-
-    //cylinder->material = glass_ball_material;
     
     add_shape_to_world(floor, &w);
     add_shape_to_world(right_wall, &w);
@@ -6682,7 +6686,7 @@ void render_refraction_scene() {
     add_shape_to_world(red_background_ball, &w);
     add_shape_to_world(blue_background_ball, &w);
     add_shape_to_world(green_background_ball, &w);
-    add_shape_to_world(glass_ball, &w);
+    //add_shape_to_world(glass_ball, &w);
     add_shape_to_world(mirror_ball, &w);
     add_shape_to_world(cube, &w);
     add_shape_to_world(cylinder, &w);
@@ -6750,7 +6754,7 @@ void render_some_triangles() {
 void render_lighthouse_scene() {
     world w = create_world();
     camera* c = create_camera(HORIZONTAL_SIZE, VERTICAL_SIZE, 0.5);
-    tuple from = create_point(12.0, 7.0, -5.0);
+    tuple from = create_point(24.0, 18.0, -5.0);
     tuple to = create_point(0.0, 2.1, 0.0);
     tuple up = create_vector(0.0, 1.0, 0.0);
     view_transform(from, to, up, c->view_transform);
