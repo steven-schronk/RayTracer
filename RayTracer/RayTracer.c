@@ -34,8 +34,8 @@ Copyright 2021 Steven Ray Schronk
 // remaining number of iterations when calculating reflection
 #define RECURSION_DEPTH 5
 
-#define HORIZONTAL_SIZE 100
-#define VERTICAL_SIZE   100
+#define HORIZONTAL_SIZE 4
+#define VERTICAL_SIZE   4
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -1309,12 +1309,12 @@ int color_convert(double x) {
 
 #pragma warning(disable:4996)
 
-int write_canvas_to_file() {
-  FILE* fp;
-  fp = fopen("canvas.ppm", "w");
+void write_canvas_to_file() {
+  FILE* fp = fopen("canvas.ppm", "w");
   fprintf(fp, "P3\n");
   fprintf(fp, "%d %d\n255\n", HORIZONTAL_SIZE, VERTICAL_SIZE);
   for (int col = 0; col < VERTICAL_SIZE; ++col) {
+    printf("column\n");
     for (int row = 0; row < HORIZONTAL_SIZE; ++row) {
       int color = color_convert(canvas[row][col].x);
       fprintf(fp, "%d ", color);
@@ -1322,9 +1322,10 @@ int write_canvas_to_file() {
       fprintf(fp, "%d ", color);
       color = color_convert(canvas[row][col].z);
       fprintf(fp, "%d \n", color);
+      printf("row\t");
     }
   }
-  return 1;
+  fclose(fp);
 }
 
 comps create_comp() {
