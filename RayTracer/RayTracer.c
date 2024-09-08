@@ -34,10 +34,8 @@ Copyright 2021 Steven Ray Schronk
 // remaining number of iterations when calculating reflection
 #define RECURSION_DEPTH 5
 
-// 71 x 40
-// 142 x 80
-#define HORIZONTAL_SIZE 142
-#define VERTICAL_SIZE   80
+#define HORIZONTAL_SIZE 100
+#define VERTICAL_SIZE   100
 
 typedef double Mat2x2[2][2];
 typedef double Mat3x3[3][3];
@@ -84,6 +82,7 @@ typedef struct _shape {
   tuple(*normal_at)(struct _shape* shape, tuple point);
   void (*intersect)(struct _shape* shape, ray* r, intersections* intersects);
 } shape;
+
 
 typedef struct { struct _shape* objects; point_light* lights; } world;
 
@@ -1019,6 +1018,7 @@ tuple position(ray r, double t) {
   return pos;
 }
 
+
 bool intersects_in_order_test(intersections* intersects); // wanted test to be in debug block
 
 void intersect_world(world* w, ray* r, intersections* intersects) {
@@ -1680,6 +1680,7 @@ int load_model_file(char* filename, world* w) {
     }
   }
   free(p_buffer);
+  free(file);
   fclose(file);
   return 0;
 }
@@ -3500,7 +3501,9 @@ int sort_intersects_test() {
 
   intersection i1 = { -22.23821, NULL };
   intersection i2 = { -1.3210377, NULL };
-
+  intersection i3 = { -1.8887736, NULL };
+  intersection i4 = { -0.567737, NULL };
+  intersection i5 = { -1.058888f, NULL };
   intersection i6 = { 0.0, NULL };
   intersection i7 = { 0.0000000000001, NULL };
   intersection i8 = { 0.0000000000002, NULL };
@@ -6774,7 +6777,7 @@ void render_lighthouse_scene() {
   tuple light_intensity = create_point(0.9, 0.9, 0.9);
   *w.lights = create_point_light(light_position, light_intensity);
 
-  load_model_file("models/full_scene_001.obj", &w);
+  load_model_file("models/lighthouse_larger_2.obj", &w);
   render(c, &w);
 }
 
@@ -7234,10 +7237,9 @@ int main() {
   //render_complete_world();
   //render_dual_spheres_refracting_on_floor();
   //render_complete_world_with_plane();
-  render_refraction_scene();
+  //render_refraction_scene();
   //render_some_triangles();
-  //render_lighthouse_scene();
-  //render_cubes();
+  render_lighthouse_scene();
 
   clock_t end_render = clock();
   float seconds_render = (float)(end_render - start_render) / CLOCKS_PER_SEC;
