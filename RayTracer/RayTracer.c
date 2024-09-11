@@ -1018,8 +1018,16 @@ tuple position(ray r, double t) {
   return pos;
 }
 
-
-bool intersects_in_order_test(intersections* intersects); // wanted test to be in debug block
+bool intersects_in_order_test(intersections* intersects) {
+  assert(intersects != NULL);
+  if (intersects->count <= 1) { return true; }
+  for (int i = 0; i < intersects->count - 1; i++) {
+    if (intersects->itersection[i].t > intersects->itersection[i + 1].t) {
+      return false;
+    }
+  }
+  return true;
+}
 
 void intersect_world(world* w, ray* r, intersections* intersects) {
   assert(w != NULL);
@@ -4235,18 +4243,6 @@ int render_a_world_with_camera_test() {
   free_default_world(&w);
   free(c);
   return 0;
-}
-
-// extra
-bool intersects_in_order_test(intersections* intersects) {
-  assert(intersects != NULL);
-  if (intersects->count <= 1) { return true; }
-  for (int i = 0; i < intersects->count - 1; i++) {
-    if (intersects->itersection[i].t > intersects->itersection[i + 1].t) {
-      return false;
-    }
-  }
-  return true;
 }
 
 // 110 Lighting with the surface in shadow
