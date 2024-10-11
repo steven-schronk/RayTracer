@@ -146,7 +146,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="RayTracer.c" />
-    <ClCompile Include="RayTracerTest.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="objpar.h" />
